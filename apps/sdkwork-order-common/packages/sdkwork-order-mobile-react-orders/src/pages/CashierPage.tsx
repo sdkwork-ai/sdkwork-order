@@ -18,11 +18,13 @@ import { PageLayout, showToast } from "@sdkwork/ui-mobile-react";
 import {
   formatAmountCny,
   OrderService,
+  ORDER_PAYMENT_METHOD_LABELS,
   resolveAvailablePaymentMethods,
   type Order,
   type OrderPaymentMethod,
   type PaymentSession,
 } from "../services/OrderService";
+import { toUserErrorMessage } from "../services/errorMessage";
 import {
   CASHIER_POLL_INTERVAL_MS,
   computeCashierRemainingSeconds,
@@ -53,10 +55,6 @@ import {
   resolveHostRoutePath,
 } from "../routes";
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /** Host-overridable order route templates (paths with `:orderId`). */
 export interface CashierPageProps {
   orderDetailPath?: string;
@@ -65,13 +63,38 @@ export interface CashierPageProps {
 
 /** Brand presentation per payment method (badge mark + label/desc keys). */
 const PAYMENT_METHOD_META: Readonly<
-  Record<OrderPaymentMethod, { badge: string; badgeClass: string; descKey: string }>
+  Record<OrderPaymentMethod, { badge: string; badgeClass: string; descKey: string; descDefault: string }>
 > = {
-  wechat_pay: { badge: "微", badgeClass: "bg-[#07C160]", descKey: "orders.payment_method_desc_wechat_pay" },
-  wechat_jsapi: { badge: "微", badgeClass: "bg-[#07C160]", descKey: "orders.payment_method_desc_wechat_pay" },
-  alipay: { badge: "支", badgeClass: "bg-[#1677FF]", descKey: "orders.payment_method_desc_alipay" },
-  alipay_wap: { badge: "支", badgeClass: "bg-[#1677FF]", descKey: "orders.payment_method_desc_alipay" },
-  balance: { badge: "余", badgeClass: "bg-orange-500", descKey: "orders.payment_method_desc_balance" },
+  wechat_pay: {
+    badge: "微",
+    badgeClass: "bg-[#07C160]",
+    descKey: "orders.payment_method_desc_wechat_pay",
+    descDefault: "微信扫码支付",
+  },
+  wechat_jsapi: {
+    badge: "微",
+    badgeClass: "bg-[#07C160]",
+    descKey: "orders.payment_method_desc_wechat_pay",
+    descDefault: "微信扫码支付",
+  },
+  alipay: {
+    badge: "支",
+    badgeClass: "bg-[#1677FF]",
+    descKey: "orders.payment_method_desc_alipay",
+    descDefault: "支付宝扫码支付",
+  },
+  alipay_wap: {
+    badge: "支",
+    badgeClass: "bg-[#1677FF]",
+    descKey: "orders.payment_method_desc_alipay",
+    descDefault: "支付宝扫码支付",
+  },
+  balance: {
+    badge: "余",
+    badgeClass: "bg-orange-500",
+    descKey: "orders.payment_method_desc_balance",
+    descDefault: "余额直接支付",
+  },
 };
 
 export function CashierPage({
@@ -80,7 +103,7 @@ export function CashierPage({
 }: CashierPageProps) {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   /** Payment environment is stable for the page lifetime (UA-based). */
@@ -313,7 +336,7 @@ export function CashierPage({
     } catch (error) {
       // Payment creation failed: stay on the cashier UI so the payer can
       // switch method or retry. The provider error surfaces as a toast.
-      const message = errorMessage(error);
+      const message = toUserErrorMessage(t, error);
       setErrorMessageText(message);
       setPaymentSession(null);
       setQrDataUrl(null);
@@ -323,7 +346,7 @@ export function CashierPage({
       showToast(message);
       stopCashier("pending");
     }
-  }, [environment, handlePaymentSession, stopCashier]);
+  }, [environment, handlePaymentSession, stopCashier, t]);
 
   useEffect(() => {
     if (!orderId) {
@@ -358,7 +381,7 @@ export function CashierPage({
         }
       } catch (error) {
         if (!cancelled) {
-          setErrorMessageText(errorMessage(error));
+          setErrorMessageText(toUserErrorMessage(t, error));
           setPhase("failed");
         }
       }
@@ -367,7 +390,7 @@ export function CashierPage({
       cancelled = true;
       clearTimers();
     };
-  }, [orderId, clearTimers, createPayment, availableMethods]);
+  }, [orderId, clearTimers, createPayment, availableMethods, t]);
 
   const changePaymentMethod = (method: OrderPaymentMethod) => {
     if (phase !== "pending" || !orderId) {
@@ -502,7 +525,11 @@ export function CashierPage({
                 {t("orders.cashier_amount_label", "支付金额")}
               </span>
               <span className="text-[30px] font-bold text-text-main mb-4">
-                {formatAmountCny(paymentSession?.amount ?? order.totalAmount, order.currencyCode)}
+                {formatAmountCny(
+                  paymentSession?.amount ?? order.totalAmount,
+                  order.currencyCode,
+                  i18n.language,
+                )}
               </span>
 
               <div className="flex items-center gap-1 text-text-sub mb-4">
@@ -612,7 +639,10 @@ export function CashierPage({
                       <span className="flex-1 min-w-0">
                         <span className="flex items-center gap-1.5">
                           <span className="text-[14px] text-text-main">
-                            {t(`orders.payment_method_${method}`, method)}
+                            {t(
+                              `orders.payment_method_${method}`,
+                              ORDER_PAYMENT_METHOD_LABELS[method] ?? method,
+                            )}
                           </span>
                           {index === 0 && (
                             <span className="text-[10px] text-[#FA5151] bg-[#FA5151]/10 rounded-full px-1.5 py-0.5">
@@ -621,7 +651,7 @@ export function CashierPage({
                           )}
                         </span>
                         <span className="block text-[12px] text-text-sub truncate">
-                          {t(meta.descKey)}
+                          {t(meta.descKey, meta.descDefault)}
                         </span>
                       </span>
                       <input

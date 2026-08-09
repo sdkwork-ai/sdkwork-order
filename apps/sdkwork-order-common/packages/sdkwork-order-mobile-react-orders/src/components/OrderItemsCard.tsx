@@ -8,7 +8,7 @@ interface OrderItemsCardProps {
 }
 
 export const OrderItemsCard: React.FC<OrderItemsCardProps> = ({ order }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <div className="bg-white dark:bg-[#1E1E1E] rounded-xl p-4 shadow-sm flex flex-col gap-4">
       <div className="flex items-center gap-1.5">
@@ -31,7 +31,7 @@ export const OrderItemsCard: React.FC<OrderItemsCardProps> = ({ order }) => {
                 </h4>
                 <div className="flex flex-col items-end shrink-0">
                   <span className="text-[14px] font-medium text-text-main">
-                    {formatAmountCny(item.unitPrice, order.currencyCode)}
+                    {formatAmountCny(item.unitPrice, order.currencyCode, i18n.language)}
                   </span>
                   <span className="text-[12px] text-text-sub mt-0.5">
                     x{item.quantity}

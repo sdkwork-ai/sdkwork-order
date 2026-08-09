@@ -8,14 +8,11 @@ import { OrderActionButtons } from "../components/OrderActionButtons";
 import { OrderInfoCards } from "../components/OrderInfoCards";
 import { OrderItemsCard } from "../components/OrderItemsCard";
 import { OrderService, type Order } from "../services/OrderService";
+import { toUserErrorMessage } from "../services/errorMessage";
 import {
   ORDER_MOBILE_ROUTE_DEFINITIONS,
   resolveHostRoutePath,
 } from "../routes";
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** Host-overridable order route template (path with `:orderId`). */
 export interface OrderDetailProps {
@@ -49,12 +46,12 @@ export function OrderDetail({
         setNotFound(true);
       }
     } catch (error) {
-      showToast(errorMessage(error));
+      showToast(toUserErrorMessage(t, error));
       setNotFound(true);
     } finally {
       setIsLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, t]);
 
   useEffect(() => {
     void loadOrder();
@@ -92,7 +89,7 @@ export function OrderDetail({
                     : "text-[13px] font-medium text-text-sub"
                 }
               >
-                {order.statusText}
+                {t(`orders.status_${order.status}`, order.statusText)}
               </span>
             </div>
 

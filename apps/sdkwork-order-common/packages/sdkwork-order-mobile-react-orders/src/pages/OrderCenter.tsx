@@ -13,21 +13,28 @@ import {
   type OrderTab,
   type OrderTabId,
 } from "../services/OrderService";
+import { toUserErrorMessage } from "../services/errorMessage";
 import {
   ORDER_MOBILE_ROUTE_DEFINITIONS,
   resolveHostRoutePath,
   resolveOrderRoutePath,
 } from "../routes";
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /** Host-overridable order route templates (paths with `:orderId`). */
 export interface OrderCenterProps {
   orderDetailPath?: string;
   orderCashierPath?: string;
 }
+
+/** Readable tab label fallbacks when a host ships no `orders.tab_*` resource. */
+const TAB_LABEL_FALLBACKS: Readonly<Record<string, string>> = {
+  "orders.tab_all": "全部",
+  "orders.tab_pending_payment": "待付款",
+  "orders.tab_paid": "待发货",
+  "orders.tab_fulfilled": "待收货",
+  "orders.tab_completed": "已完成",
+  "orders.tab_cancelled": "已取消",
+};
 
 function isOrderTabId(value: string | null | undefined): value is OrderTabId {
   return value === "all"
@@ -62,11 +69,11 @@ export function OrderCenter({
       setOrders(await OrderService.getOrders(tabId));
     } catch (error) {
       setOrders([]);
-      showToast(errorMessage(error));
+      showToast(toUserErrorMessage(t, error));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadOrders(activeTab);
@@ -91,7 +98,7 @@ export function OrderCenter({
   };
 
   const tabLabel = (tab: OrderTab) => {
-    const label = t(tab.labelKey, tab.labelKey.replace("orders.tab_", ""));
+    const label = t(tab.labelKey, TAB_LABEL_FALLBACKS[tab.labelKey] ?? tab.labelKey);
     if (tab.id === "pending_payment" && pendingPaymentCount !== null && pendingPaymentCount > 0) {
       return `${label} ${pendingPaymentCount}`;
     }

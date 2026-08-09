@@ -16,7 +16,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   onClick,
   renderActionButtons,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const pending = order.status === "pending_payment";
   return (
     <motion.div
@@ -42,7 +42,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             pending ? "text-primary-blue" : "text-text-sub",
           )}
         >
-          {order.statusText}
+          {t(`orders.status_${order.status}`, order.statusText)}
         </span>
       </div>
 
@@ -60,7 +60,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                 </h4>
                 <div className="flex flex-col items-end shrink-0">
                   <span className="text-[13px] font-medium text-text-main">
-                    {formatAmountCny(item.unitPrice, order.currencyCode)}
+                    {formatAmountCny(item.unitPrice, order.currencyCode, i18n.language)}
                   </span>
                   <span className="text-[12px] text-text-sub mt-0.5">
                     x{item.quantity}
@@ -81,7 +81,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
           {t("orders.payable", "实付款")}
         </span>
         <span className="text-[15px] font-bold text-text-main">
-          {formatAmountCny(order.totalAmount, order.currencyCode)}
+          {formatAmountCny(order.totalAmount, order.currencyCode, i18n.language)}
         </span>
       </div>
 

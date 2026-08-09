@@ -3,7 +3,9 @@ import React from "react";
 import { showToast } from "@sdkwork/ui-mobile-react";
 import {
   formatAmountCny,
+  ORDER_PAYMENT_METHOD_LABELS,
   type Order,
+  type OrderPaymentMethod,
 } from "../services/OrderService";
 
 interface OrderInfoCardsProps {
@@ -11,7 +13,7 @@ interface OrderInfoCardsProps {
 }
 
 export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const payable = order.paidAmount ?? order.totalAmount;
 
   const copyOrderId = async () => {
@@ -79,7 +81,10 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
               {t("orders.payment_method", "支付方式")}
             </span>
             <span className="text-[13px] text-text-main">
-              {t(`orders.payment_method_${order.paymentMethod}`, order.paymentMethod)}
+              {t(
+                `orders.payment_method_${order.paymentMethod}`,
+                ORDER_PAYMENT_METHOD_LABELS[order.paymentMethod as OrderPaymentMethod] ?? order.paymentMethod,
+              )}
             </span>
           </div>
         )}
@@ -91,7 +96,7 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
             {t("orders.goods_total", "商品总价")}
           </span>
           <span className="text-[13px] text-text-main">
-            {formatAmountCny(order.totalAmount, order.currencyCode)}
+            {formatAmountCny(order.totalAmount, order.currencyCode, i18n.language)}
           </span>
         </div>
         {order.discountAmount && Number(order.discountAmount) > 0 && (
@@ -100,7 +105,7 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
               {t("orders.discount", "优惠金额")}
             </span>
             <span className="text-[13px] text-text-main text-[#FA5151]">
-              -{formatAmountCny(order.discountAmount, order.currencyCode)}
+              -{formatAmountCny(order.discountAmount, order.currencyCode, i18n.language)}
             </span>
           </div>
         )}
@@ -109,7 +114,7 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
             {t("orders.payable", "实付款")}
           </span>
           <span className="text-[18px] font-bold text-[#FA5151]">
-            {formatAmountCny(payable, order.currencyCode)}
+            {formatAmountCny(payable, order.currencyCode, i18n.language)}
           </span>
         </div>
       </div>

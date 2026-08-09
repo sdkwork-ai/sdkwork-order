@@ -42,6 +42,19 @@ export const ORDER_PAYMENT_METHODS: readonly OrderPaymentMethod[] = [
 ];
 
 /**
+ * Readable payment method labels used as inline i18n fallbacks. Hosts ship
+ * the canonical `orders.payment_method_*` resources; these defaults keep the
+ * UI readable when a resource is missing.
+ */
+export const ORDER_PAYMENT_METHOD_LABELS: Readonly<Record<OrderPaymentMethod, string>> = {
+  wechat_pay: "微信支付",
+  wechat_jsapi: "微信支付",
+  alipay: "支付宝",
+  alipay_wap: "支付宝",
+  balance: "余额",
+};
+
+/**
  * Overseas cashier defaults. The order backend only accepts the CN wire
  * methods today, so overseas deployments inherit them until their gateway
  * configures paypal/card providers; hosts may override the whole matrix
