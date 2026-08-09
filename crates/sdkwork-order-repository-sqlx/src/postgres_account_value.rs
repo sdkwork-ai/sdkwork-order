@@ -1,5 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use chrono::{SecondsFormat, Utc};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     AccountValueAssetCode, AccountValueCatalogListQuery, AccountValueFuture,
@@ -1409,6 +1410,7 @@ impl PostgresCommerceRechargeStore {
         owner_user_id: &str,
         idempotency_key: &str,
     ) -> Result<Option<CreateAccountRechargeOrderOutcome>, CommerceServiceError> {
+        let organization_id = normalize_organization_scope(organization_id);
         let row = sqlx::query(
             r#"
             SELECT
@@ -1436,7 +1438,7 @@ impl PostgresCommerceRechargeStore {
             "#,
         )
         .bind(tenant_id)
-        .bind(organization_id)
+        .bind(&organization_id)
         .bind(owner_user_id)
         .bind(idempotency_key)
         .fetch_optional(self.pool())
@@ -1497,6 +1499,7 @@ async fn insert_account_value_order(
     coupon_code: Option<&str>,
 ) -> Result<(), CommerceServiceError> {
     let title = account_value_order_title(command.subject);
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     sqlx::query(
         r#"
         INSERT INTO commerce_order
@@ -1510,7 +1513,7 @@ async fn insert_account_value_order(
     )
     .bind(&command.order_id)
     .bind(&command.tenant_id)
-    .bind(command.organization_id.as_deref())
+    .bind(&organization_id)
     .bind(&command.owner_user_id)
     .bind(&command.order_no)
     .bind(command.subject.as_str())
@@ -1553,7 +1556,7 @@ async fn insert_account_value_order(
     insert_account_value_amount_breakdown(
         tx,
         &command.tenant_id,
-        command.organization_id.as_deref(),
+        Some(&organization_id),
         &command.order_id,
         command.amount.as_str(),
         &command.currency_code,
@@ -1566,7 +1569,8 @@ async fn insert_coupon_recharge_order(
     tx: &mut Transaction<'_, Postgres>,
     command: &CreateCouponRechargeOrderCommand,
 ) -> Result<(), CommerceServiceError> {
-    let now = current_command_timestamp();
+    let now = rfc3339_command_timestamp();
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let expires_at = if command.payment_required {
         Some(now.clone())
     } else {
@@ -1595,7 +1599,7 @@ async fn insert_coupon_recharge_order(
     )
     .bind(&command.order_id)
     .bind(&command.tenant_id)
-    .bind(command.organization_id.as_deref())
+    .bind(&organization_id)
     .bind(&command.owner_user_id)
     .bind(&command.order_no)
     .bind(order_status)
@@ -1649,7 +1653,7 @@ async fn insert_coupon_recharge_order(
     insert_account_value_amount_breakdown(
         tx,
         &command.tenant_id,
-        command.organization_id.as_deref(),
+        Some(&organization_id),
         &command.order_id,
         command.amount.as_str(),
         &command.currency_code,
@@ -1709,7 +1713,7 @@ async fn insert_account_value_amount_breakdown(
             (id, tenant_id, organization_id, order_id, order_item_id, allocation_type,
              original_amount, discount_amount, payable_amount, currency_code, created_at)
         VALUES
-            ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, NULL, 'order_total', $5, '0', $6, $7, $8)
+            ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, NULL, 'order_total', $5, '0', $6, $7, CAST($8 AS timestamptz))
         "#,
     )
     .bind(format!("{order_id}-amount"))
@@ -2050,6 +2054,26 @@ fn current_command_timestamp() -> String {
         .unwrap_or(0);
     seconds.to_string()
 }
+
+/// RFC3339 timestamp for columns typed `timestamptz` (e.g.
+/// `commerce_order_amount_breakdown.created_at`); `current_command_timestamp`
+/// returns Unix seconds which PostgreSQL cannot cast to timestamptz.
+fn rfc3339_command_timestamp() -> String {
+    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
+/// Platform orders persist the sentinel organization scope (`"0"`) so that
+/// list/status queries that normalize an empty organization to the sentinel
+/// stay consistent with the stored row (same convention as recharge.rs).
+fn normalize_organization_scope(organization_id: Option<&str>) -> String {
+    organization_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(PLATFORM_ORGANIZATION_SCOPE_SENTINEL)
+        .to_owned()
+}
+
+const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 
 fn store_error(context: &str, error: sqlx::Error) -> CommerceServiceError {
     crate::sql_store_error::map_sqlx_store_error(context, error)

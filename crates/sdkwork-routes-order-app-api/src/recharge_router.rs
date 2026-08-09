@@ -1654,9 +1654,11 @@ async fn pay_coupon_recharge_order(
 ) -> Response {
     let callback_payload = coupon_recharge_callback_payload(command, payment_password);
     let persisted_order_id = outcome.order_id.clone();
+    let persisted_organization_id =
+        points_recharge_organization_scope(subject.organization_id.as_deref());
     let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: subject.tenant_id.clone(),
-        organization_id: subject.organization_id.clone(),
+        organization_id: Some(persisted_organization_id.clone()),
         owner_user_id: subject.user_id.clone(),
         order_id: persisted_order_id.clone(),
         payment_method: method.to_owned(),
@@ -1804,9 +1806,11 @@ async fn pay_account_value_order(
 ) -> Response {
     let callback_payload = account_value_callback_payload(command, payment_password);
     let persisted_order_id = outcome.order_id.clone();
+    let persisted_organization_id =
+        points_recharge_organization_scope(subject.organization_id.as_deref());
     let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: subject.tenant_id.clone(),
-        organization_id: subject.organization_id.clone(),
+        organization_id: Some(persisted_organization_id.clone()),
         owner_user_id: subject.user_id.clone(),
         order_id: persisted_order_id.clone(),
         payment_method: method.to_owned(),

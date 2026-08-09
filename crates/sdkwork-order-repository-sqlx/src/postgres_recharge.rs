@@ -399,8 +399,8 @@ SELECT
     COALESCE(NULLIF(o.order_no, ''), '-') AS order_no,
     COALESCE(o.subject, '') AS subject,
     COALESCE(
-      NULLIF(COALESCE(NULLIF(pa.callback_payload, ''), '{}')::jsonb ->> 'targetAsset', ''),
-      NULLIF(COALESCE(NULLIF(pa.callback_payload, ''), '{}')::jsonb ->> 'assetCode', ''),
+      NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'targetAsset', ''),
+      NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'assetCode', ''),
       NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'targetAsset', ''),
       NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'assetCode', ''),
       CASE
@@ -413,22 +413,22 @@ SELECT
     COALESCE(pi.status, '') AS payment_status,
     COALESCE(pa.status, '') AS payment_attempt_status,
     CAST(COALESCE(
-      NULLIF(COALESCE(NULLIF(pa.callback_payload, ''), '{}')::jsonb ->> 'grantAmount', ''),
-      NULLIF(COALESCE(NULLIF(pa.callback_payload, ''), '{}')::jsonb ->> 'tokenBankAmount', ''),
-      NULLIF(COALESCE(NULLIF(pa.callback_payload, ''), '{}')::jsonb ->> 'points', ''),
+      NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'grantAmount', ''),
+      NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'tokenBankAmount', ''),
+      NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'points', ''),
       NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'grantAmount', ''),
       NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'tokenBankAmount', ''),
       NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'points', ''),
       '0'
     ) AS TEXT) AS grant_amount,
     COALESCE(
-      NULLIF(COALESCE(NULLIF(pa.callback_payload, ''), '{}')::jsonb ->> 'assetUnitCode', ''),
+      NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'assetUnitCode', ''),
       NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'assetUnitCode', ''),
       CASE
         WHEN o.subject IN ('token_bank_recharge', 'token_bank_plan_purchase', 'token_bank_plan_renewal') THEN 'TOKEN_BANK'
         WHEN COALESCE(
-          NULLIF(COALESCE(NULLIF(pa.callback_payload, ''), '{}')::jsonb ->> 'targetAsset', ''),
-          NULLIF(COALESCE(NULLIF(pa.callback_payload, ''), '{}')::jsonb ->> 'assetCode', ''),
+          NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'targetAsset', ''),
+          NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'assetCode', ''),
           NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'targetAsset', ''),
           NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'assetCode', ''),
           ''
