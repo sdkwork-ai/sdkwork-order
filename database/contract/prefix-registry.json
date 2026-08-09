@@ -4,7 +4,7 @@
   "prefixes": [
     {
       "prefix": "commerce_",
-      "owner": "sdkwork-order",
+      "owner": "sdkwork-commerce-platform",
       "domain": "order"
     }
   ]
