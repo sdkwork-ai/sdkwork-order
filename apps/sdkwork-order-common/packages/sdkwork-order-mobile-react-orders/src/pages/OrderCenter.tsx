@@ -15,11 +15,18 @@ import {
 } from "../services/OrderService";
 import {
   ORDER_MOBILE_ROUTE_DEFINITIONS,
+  resolveHostRoutePath,
   resolveOrderRoutePath,
 } from "../routes";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Host-overridable order route templates (paths with `:orderId`). */
+export interface OrderCenterProps {
+  orderDetailPath?: string;
+  orderCashierPath?: string;
 }
 
 function isOrderTabId(value: string | null | undefined): value is OrderTabId {
@@ -31,7 +38,10 @@ function isOrderTabId(value: string | null | undefined): value is OrderTabId {
     || value === "cancelled";
 }
 
-export function OrderCenter() {
+export function OrderCenter({
+  orderDetailPath = ORDER_MOBILE_ROUTE_DEFINITIONS.orderDetail.path,
+  orderCashierPath = ORDER_MOBILE_ROUTE_DEFINITIONS.orderCashier.path,
+}: OrderCenterProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -73,11 +83,11 @@ export function OrderCenter() {
   }, []);
 
   const openOrderDetail = (order: Order) => {
-    navigate(resolveOrderRoutePath(ORDER_MOBILE_ROUTE_DEFINITIONS.orderDetail, { orderId: order.id }));
+    navigate(resolveHostRoutePath(orderDetailPath, { orderId: order.id }));
   };
 
   const openCashier = (order: Order) => {
-    navigate(resolveOrderRoutePath(ORDER_MOBILE_ROUTE_DEFINITIONS.orderCashier, { orderId: order.id }));
+    navigate(resolveHostRoutePath(orderCashierPath, { orderId: order.id }));
   };
 
   const tabLabel = (tab: OrderTab) => {

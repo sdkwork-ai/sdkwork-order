@@ -164,7 +164,7 @@ impl PostgresCommerceOrderStore {
              AND q.checkout_session_id = s.id
              AND LOWER(COALESCE(q.quote_status, '')) IN ('active', 'quoted', 'ready')
             WHERE s.tenant_id = CAST($1 AS TEXT)
-              AND ((s.organization_id = CAST($2 AS TEXT)) OR (s.organization_id IS NULL AND $3 IS NULL))
+              AND ((s.organization_id = CAST($2 AS TEXT)) OR (s.organization_id IS NULL AND $3 IS NULL) OR (s.organization_id = '0' AND $3 IS NULL))
               AND s.owner_user_id = CAST($4 AS TEXT)
               AND s.id = CAST($5 AS TEXT)
             ORDER BY q.created_at DESC, q.id DESC
@@ -403,7 +403,7 @@ async fn resolve_checkout_lines(
                    fulfillment_type, spec_json
             FROM commerce_product_sku
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND id = CAST($4 AS TEXT)
               AND LOWER(COALESCE(status, '')) = 'active'
             LIMIT 1
@@ -589,7 +589,7 @@ async fn load_checkout_session_for_quote(
         FROM commerce_checkout_session
         WHERE id = CAST($1 AS TEXT)
           AND tenant_id = CAST($2 AS TEXT)
-          AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL))
+          AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
           AND owner_user_id = CAST($5 AS TEXT)
           AND LOWER(COALESCE(status, '')) IN ('active', 'quoted', 'open')
        "#,

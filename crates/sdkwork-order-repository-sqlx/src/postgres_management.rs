@@ -69,7 +69,7 @@ LEFT JOIN commerce_payment_attempt pa
    AND pa.owner_user_id = o.owner_user_id
    AND pa.order_id = o.id
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
   AND ($3 IS NULL OR o.status = $3)
   AND (
         $4 IS NULL
@@ -180,7 +180,7 @@ impl PostgresCommerceOrderStore {
                AND pa.owner_user_id = o.owner_user_id
                AND pa.order_id = o.id
             WHERE o.tenant_id = CAST($1 AS TEXT)
-              AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
+              AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
               AND o.id = CAST($3 AS TEXT)
             "#,
         )
@@ -218,7 +218,7 @@ impl PostgresCommerceOrderStore {
             SELECT owner_user_id
             FROM commerce_order
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
               AND id = CAST($3 AS TEXT)
             "#,
         )
@@ -252,7 +252,7 @@ impl PostgresCommerceOrderStore {
             SELECT status
             FROM commerce_order
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
               AND id = CAST($3 AS TEXT)
             "#,
         )
@@ -291,7 +291,7 @@ impl PostgresCommerceOrderStore {
                 cancelled_at = $1,
                 updated_at = $2
             WHERE tenant_id = CAST($3 AS TEXT)
-              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL))
+              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
               AND id = CAST($5 AS TEXT)
               AND LOWER(COALESCE(status, '')) IN ('draft', 'pending', 'pending_payment', 'unpaid')
             "#,
@@ -311,7 +311,7 @@ impl PostgresCommerceOrderStore {
                 SELECT status
                 FROM commerce_order
                 WHERE tenant_id = CAST($1 AS TEXT)
-                  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+                  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
                   AND id = CAST($3 AS TEXT)
                 "#,
             )
@@ -391,7 +391,7 @@ impl PostgresCommerceOrderStore {
             SELECT status
             FROM commerce_order
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
               AND id = CAST($3 AS TEXT)
             "#,
         )
@@ -428,7 +428,7 @@ impl PostgresCommerceOrderStore {
             SET status = 'closed',
                 updated_at = $1
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND id = CAST($4 AS TEXT)
               AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'closed')
             "#,
@@ -447,7 +447,7 @@ impl PostgresCommerceOrderStore {
                 SELECT status
                 FROM commerce_order
                 WHERE tenant_id = CAST($1 AS TEXT)
-                  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+                  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
                   AND id = CAST($3 AS TEXT)
                 "#,
             )

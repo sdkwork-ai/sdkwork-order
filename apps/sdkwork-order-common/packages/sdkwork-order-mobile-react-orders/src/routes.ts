@@ -50,8 +50,21 @@ export function resolveOrderRoutePath(
   definition: OrderMobileRouteDefinition,
   params: { readonly orderId?: string } = {},
 ): string {
+  return resolveHostRoutePath(definition.path, params);
+}
+
+/**
+ * Resolves a host-provided route template with `:orderId` replaced. Hosts
+ * override the canonical order paths (e.g. `/me/orders/:orderId`), so pages
+ * must navigate through their injected templates instead of the canonical
+ * path constants.
+ */
+export function resolveHostRoutePath(
+  template: string,
+  params: { readonly orderId?: string } = {},
+): string {
   if (params.orderId === undefined) {
-    return definition.path;
+    return template;
   }
-  return definition.path.replace(":orderId", encodeURIComponent(params.orderId));
+  return template.replace(":orderId", encodeURIComponent(params.orderId));
 }

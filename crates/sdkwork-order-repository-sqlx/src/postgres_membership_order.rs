@@ -63,11 +63,11 @@ LEFT JOIN commerce_product_spu pr
    ) = 'active'
 WHERE (
         (p.tenant_id = CAST($1 AS TEXT) AND p.organization_id = CAST($2 AS TEXT))
-        OR (p.tenant_id = CAST($1 AS TEXT) AND p.organization_id IS NULL)
+        OR (p.tenant_id = CAST($1 AS TEXT) AND p.organization_id = '0')
       )
   AND (
         (g.tenant_id = CAST($1 AS TEXT) AND g.organization_id = CAST($2 AS TEXT))
-        OR (g.tenant_id = CAST($1 AS TEXT) AND g.organization_id IS NULL)
+        OR (g.tenant_id = CAST($1 AS TEXT) AND g.organization_id = '0')
       )
   AND CAST(p.external_id AS TEXT) = $3
   AND p.status = 'active'
@@ -75,7 +75,7 @@ WHERE (
 ORDER BY
     CASE
         WHEN p.tenant_id = CAST($1 AS TEXT) AND p.organization_id = CAST($2 AS TEXT) THEN 0
-        WHEN p.tenant_id = CAST($1 AS TEXT) AND p.organization_id IS NULL THEN 1
+        WHEN p.tenant_id = CAST($1 AS TEXT) AND p.organization_id = '0' THEN 1
         ELSE 2
     END ASC,
     COALESCE(p.sort_weight, 0) ASC,
@@ -110,9 +110,9 @@ LEFT JOIN commerce_product_spu pr
         'active'
    ) = 'active'
 WHERE p.tenant_id = '__PLATFORM_TENANT__'
-  AND (p.organization_id = '0' OR p.organization_id IS NULL)
+  AND (p.organization_id = '0' OR p.organization_id = '0')
   AND (g.tenant_id = '__PLATFORM_TENANT__' OR g.tenant_id IS NULL)
-  AND (g.organization_id = '0' OR g.organization_id IS NULL)
+  AND (g.organization_id = '0' OR g.organization_id = '0')
   AND CAST(p.external_id AS TEXT) = $1
   AND p.status = 'active'
   AND g.status = 'active'
@@ -295,7 +295,7 @@ async fn load_membership_order_in_tx(
                AND CAST(mp.external_id AS TEXT) = $2
                AND mp.status = 'active'
             WHERE o.tenant_id = CAST($4 AS TEXT)
-              AND ((o.organization_id = CAST($5 AS TEXT)) OR (o.organization_id IS NULL AND $5::text IS NULL))
+              AND ((o.organization_id = CAST($5 AS TEXT)) OR (o.organization_id IS NULL AND $5 IS NULL) OR (o.organization_id = '0' AND $5 IS NULL))
               AND o.owner_user_id = CAST($6 AS TEXT)
               AND o.subject = 'membership'
               AND (

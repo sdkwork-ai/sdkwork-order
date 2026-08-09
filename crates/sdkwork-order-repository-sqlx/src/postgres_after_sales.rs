@@ -158,7 +158,7 @@ impl PostgresCommerceOrderStore {
                    CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status
             FROM commerce_after_sales_request
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
             LIMIT 1
@@ -213,7 +213,7 @@ impl PostgresCommerceOrderStore {
                 currency_code = COALESCE($5, currency_code),
                 updated_at = $6
             WHERE tenant_id = CAST($7 AS TEXT)
-              AND ((organization_id = CAST($8 AS TEXT)) OR (organization_id IS NULL AND $9 IS NULL))
+              AND ((organization_id = CAST($8 AS TEXT)) OR (organization_id IS NULL AND $9 IS NULL) OR (organization_id = '0' AND $9 IS NULL))
               AND owner_user_id = CAST($10 AS TEXT)
               AND id = CAST($11 AS TEXT)
             "#,
@@ -273,7 +273,7 @@ impl PostgresCommerceOrderStore {
                    COUNT(*) OVER() AS total_count
             FROM commerce_after_sales_request
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND ($5 IS NULL OR order_id = CAST($6 AS TEXT))
               AND ($7 IS NULL OR after_sales_type = CAST($8 AS TEXT))
@@ -329,7 +329,7 @@ impl PostgresCommerceOrderStore {
                    COUNT(*) OVER() AS total_count
             FROM commerce_after_sales_request
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND ($4 IS NULL OR order_id = CAST($5 AS TEXT))
               AND ($6 IS NULL OR after_sales_type = CAST($7 AS TEXT))
               AND ($8 IS NULL OR status = CAST($9 AS TEXT))
@@ -382,7 +382,7 @@ impl PostgresCommerceOrderStore {
                    CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status
             FROM commerce_after_sales_request
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND id = CAST($4 AS TEXT)
             LIMIT 1
            "#,
@@ -431,7 +431,7 @@ impl PostgresCommerceOrderStore {
                 description = COALESCE($7, description),
                 updated_at = $8
             WHERE tenant_id = CAST($9 AS TEXT)
-              AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $11 IS NULL))
+              AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $11 IS NULL) OR (organization_id = '0' AND $11 IS NULL))
               AND id = CAST($12 AS TEXT)
             "#,
         )

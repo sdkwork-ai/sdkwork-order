@@ -9,12 +9,14 @@ import {
 import {
   createDefaultSubscriptionCatalogPort,
   type MembershipPackage,
+  type MembershipPackageGroup,
   type SubscriptionCatalogPort,
   type TokenBankPlan,
 } from "./SubscriptionCatalogPort";
 
 export interface SubscriptionPurchasePort {
   listMembershipPackages(): Promise<MembershipPackage[]>;
+  listMembershipPackageGroups(): Promise<MembershipPackageGroup[]>;
   listTokenBankPlans(): Promise<TokenBankPlan[]>;
   createRechargeOrder(planCode: string, paymentMethod?: string): Promise<TokenBankPayment>;
   getRechargeStatus(orderId: string): Promise<TokenBankPayment>;
@@ -94,6 +96,7 @@ export function createSubscriptionPurchaseService(
 
   return {
     listMembershipPackages: () => catalog.listMembershipPackages(),
+    listMembershipPackageGroups: () => catalog.listMembershipPackageGroups(),
     listTokenBankPlans: () => catalog.listTokenBankPlans(),
     createRechargeOrder: async (planCode, paymentMethod) => {
       const plans = await catalog.listTokenBankPlans();
@@ -104,10 +107,9 @@ export function createSubscriptionPurchaseService(
       const params = createSdkworkIdempotencyParams();
       const response = await appService.recharges.orders.create(
         {
-          subject: "token_bank_recharge",
-          targetAsset: "token_bank",
-          planCode: plan.planCode,
-          grantAmount: plan.grantAmount,
+          subject: "points_recharge",
+          targetAsset: "points",
+          packageId: plan.planCode,
           amount: plan.priceAmount,
           currencyCode: plan.currencyCode,
           paymentMethod: paymentMethod ?? "wechat_pay",

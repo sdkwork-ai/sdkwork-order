@@ -10,14 +10,21 @@ import { OrderItemsCard } from "../components/OrderItemsCard";
 import { OrderService, type Order } from "../services/OrderService";
 import {
   ORDER_MOBILE_ROUTE_DEFINITIONS,
-  resolveOrderRoutePath,
+  resolveHostRoutePath,
 } from "../routes";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function OrderDetail() {
+/** Host-overridable order route template (path with `:orderId`). */
+export interface OrderDetailProps {
+  orderCashierPath?: string;
+}
+
+export function OrderDetail({
+  orderCashierPath = ORDER_MOBILE_ROUTE_DEFINITIONS.orderCashier.path,
+}: OrderDetailProps) {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -55,7 +62,7 @@ export function OrderDetail() {
 
   const openCashier = () => {
     if (orderId) {
-      navigate(resolveOrderRoutePath(ORDER_MOBILE_ROUTE_DEFINITIONS.orderCashier, { orderId }));
+      navigate(resolveHostRoutePath(orderCashierPath, { orderId }));
     }
   };
 

@@ -30,7 +30,7 @@ impl PostgresCommerceOrderStore {
                 ON o.tenant_id = f.tenant_id
                AND o.id = f.order_id
             WHERE f.tenant_id = CAST($1 AS TEXT)
-              AND ((f.organization_id = CAST($2 AS TEXT)) OR (f.organization_id IS NULL AND $3 IS NULL))
+              AND ((f.organization_id = CAST($2 AS TEXT)) OR (f.organization_id IS NULL AND $3 IS NULL) OR (f.organization_id = '0' AND $3 IS NULL))
               AND o.owner_user_id = CAST($4 AS TEXT)
               AND ($5 IS NULL OR f.order_id = CAST($6 AS TEXT))
               AND ($7 IS NULL OR LOWER(f.status) = LOWER(CAST($8 AS TEXT)))
@@ -88,7 +88,7 @@ impl PostgresCommerceOrderStore {
                 ON o.tenant_id = f.tenant_id
                AND o.id = f.order_id
             WHERE f.tenant_id = CAST($1 AS TEXT)
-              AND ((f.organization_id = CAST($2 AS TEXT)) OR (f.organization_id IS NULL AND $3 IS NULL))
+              AND ((f.organization_id = CAST($2 AS TEXT)) OR (f.organization_id IS NULL AND $3 IS NULL) OR (f.organization_id = '0' AND $3 IS NULL))
               AND o.owner_user_id = CAST($4 AS TEXT)
               AND f.id = CAST($5 AS TEXT)
             LIMIT 1

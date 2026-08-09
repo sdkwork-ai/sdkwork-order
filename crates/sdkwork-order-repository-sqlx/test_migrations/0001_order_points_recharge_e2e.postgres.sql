@@ -9,7 +9,7 @@
 CREATE TABLE IF NOT EXISTS commerce_order (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     owner_user_id TEXT NOT NULL,
     order_no TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending_payment',
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS commerce_order_item (
 CREATE TABLE IF NOT EXISTS commerce_payment_intent (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     owner_user_id TEXT NOT NULL,
     order_id TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS commerce_payment_intent (
 CREATE TABLE IF NOT EXISTS commerce_payment_attempt (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     owner_user_id TEXT NOT NULL,
     order_id TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS commerce_payment_attempt (
 CREATE TABLE IF NOT EXISTS commerce_idempotency_key (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     scope TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
     request_hash TEXT NOT NULL,
@@ -112,7 +112,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_commerce_idempotency_key_scope
 CREATE TABLE IF NOT EXISTS commerce_after_sales_request (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     after_sales_no TEXT NOT NULL,
     order_id TEXT NOT NULL,
     owner_user_id TEXT NOT NULL,
@@ -143,7 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_after_sales_request_idempotency
 CREATE TABLE IF NOT EXISTS commerce_after_sales_request_item (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     after_sales_id TEXT NOT NULL,
     order_item_id TEXT NOT NULL,
     quantity INTEGER NOT NULL,
@@ -159,7 +159,7 @@ CREATE INDEX IF NOT EXISTS idx_after_sales_request_item_request
 CREATE TABLE IF NOT EXISTS commerce_after_sales_event (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     after_sales_id TEXT NOT NULL,
     event_no TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -179,7 +179,7 @@ CREATE INDEX IF NOT EXISTS idx_after_sales_event_request
 CREATE TABLE IF NOT EXISTS commerce_after_sales_return_shipment (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     after_sales_id TEXT NOT NULL,
     return_shipment_no TEXT NOT NULL,
     carrier_code TEXT,
@@ -198,7 +198,7 @@ CREATE INDEX IF NOT EXISTS idx_after_sales_return_shipment_idempotency
 CREATE TABLE IF NOT EXISTS commerce_order_event (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     event_no TEXT NOT NULL,
     order_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS commerce_order_cancellation (
 CREATE TABLE IF NOT EXISTS commerce_order_amount_breakdown (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     order_id TEXT NOT NULL,
     order_item_id TEXT,
     allocation_type TEXT NOT NULL DEFAULT 'order_total',
@@ -241,7 +241,7 @@ CREATE TABLE IF NOT EXISTS commerce_order_amount_breakdown (
 CREATE TABLE IF NOT EXISTS commerce_fulfillment_order (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     fulfillment_no TEXT NOT NULL,
     order_id TEXT NOT NULL,
     fulfillment_type TEXT NOT NULL,
@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS commerce_fulfillment_order (
 CREATE TABLE IF NOT EXISTS commerce_shipment (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     shipment_no TEXT NOT NULL,
     fulfillment_id TEXT NOT NULL,
     carrier_code TEXT NOT NULL,
@@ -275,7 +275,7 @@ CREATE INDEX IF NOT EXISTS idx_commerce_shipment_tenant_created
 CREATE TABLE IF NOT EXISTS commerce_shipment_package (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     shipment_id TEXT NOT NULL,
     package_no TEXT NOT NULL,
     package_type TEXT NOT NULL,
@@ -290,7 +290,7 @@ CREATE INDEX IF NOT EXISTS idx_commerce_shipment_package_shipment
 CREATE TABLE IF NOT EXISTS commerce_shipment_tracking_event (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     shipment_id TEXT NOT NULL,
     tracking_event_no TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS commerce_shipment_tracking_event (
 CREATE TABLE IF NOT EXISTS commerce_account_value_package (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     package_code TEXT NOT NULL,
     display_name TEXT NOT NULL,
     target_asset TEXT NOT NULL,
@@ -334,7 +334,7 @@ CREATE INDEX IF NOT EXISTS idx_account_value_package_list
 CREATE TABLE IF NOT EXISTS commerce_token_bank_plan (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     plan_code TEXT NOT NULL,
     display_name TEXT NOT NULL,
     plan_period TEXT NOT NULL,
@@ -364,7 +364,7 @@ CREATE INDEX IF NOT EXISTS idx_token_bank_plan_list
 CREATE TABLE IF NOT EXISTS commerce_order_refund_request (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     request_no TEXT NOT NULL,
     original_order_id TEXT NOT NULL,
     owner_user_id TEXT NOT NULL,
@@ -393,7 +393,7 @@ CREATE INDEX IF NOT EXISTS idx_order_refund_request_owner
 CREATE TABLE IF NOT EXISTS commerce_order_withdrawal_request (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     request_no TEXT NOT NULL,
     owner_user_id TEXT NOT NULL,
     target_asset TEXT NOT NULL,
@@ -422,7 +422,7 @@ CREATE INDEX IF NOT EXISTS idx_order_withdrawal_request_owner
 CREATE TABLE IF NOT EXISTS commerce_product_spu (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     spu_no TEXT NOT NULL,
     name TEXT,
     title TEXT,
@@ -435,7 +435,7 @@ CREATE TABLE IF NOT EXISTS commerce_product_spu (
 CREATE TABLE IF NOT EXISTS commerce_product_sku (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     spu_id TEXT NOT NULL,
     sku_no TEXT NOT NULL,
     name TEXT,
@@ -452,7 +452,7 @@ CREATE TABLE IF NOT EXISTS commerce_product_sku (
 CREATE TABLE IF NOT EXISTS membership_package_group (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     external_id INTEGER,
     group_no TEXT,
     name TEXT,
@@ -465,7 +465,7 @@ CREATE TABLE IF NOT EXISTS membership_package_group (
 CREATE TABLE IF NOT EXISTS membership_package (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     external_id INTEGER NOT NULL,
     package_no TEXT,
     package_group_id TEXT NOT NULL,
@@ -483,7 +483,7 @@ CREATE TABLE IF NOT EXISTS membership_package (
 CREATE TABLE IF NOT EXISTS commerce_payment_method (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     method_key TEXT NOT NULL,
     display_name TEXT NOT NULL,
     provider_code TEXT NOT NULL,

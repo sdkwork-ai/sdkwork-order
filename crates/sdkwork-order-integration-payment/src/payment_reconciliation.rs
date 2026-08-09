@@ -140,7 +140,7 @@ async fn load_candidate_postgres(
                currency_code, status
         FROM commerce_payment_attempt
         WHERE tenant_id = CAST($1 AS TEXT)
-          AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2::text IS NULL))
+          AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
           AND owner_user_id = CAST($3 AS TEXT)
           AND order_id = CAST($4 AS TEXT)
           AND deleted_at IS NULL

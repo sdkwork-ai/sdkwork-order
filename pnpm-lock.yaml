@@ -762,10 +762,41 @@ importers:
       react-i18next:
         specifier: 'catalog:'
         version: 17.0.8(i18next@26.3.4(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
+      react-router:
+        specifier: '>=7.0.0'
+        version: 7.18.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
     devDependencies:
       '@types/qrcode':
         specifier: 'catalog:'
         version: 1.5.6
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.14
+
+  apps/sdkwork-order-h5/packages/sdkwork-order-h5-withdraw:
+    dependencies:
+      '@sdkwork/order-app-sdk':
+        specifier: workspace:*
+        version: link:../../../../sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript
+      '@sdkwork/order-service':
+        specifier: workspace:*
+        version: link:../../../sdkwork-order-common/packages/sdkwork-order-service
+      '@sdkwork/ui-mobile-react':
+        specifier: workspace:*
+        version: link:../../../../../sdkwork-ui/sdkwork-ui-mobile-react
+      lucide-react:
+        specifier: 'catalog:'
+        version: 1.7.0(react@19.2.4)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.4
+      react-i18next:
+        specifier: 'catalog:'
+        version: 17.0.8(i18next@26.3.4(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
+      react-router:
+        specifier: '>=7.0.0'
+        version: 7.18.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+    devDependencies:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.14

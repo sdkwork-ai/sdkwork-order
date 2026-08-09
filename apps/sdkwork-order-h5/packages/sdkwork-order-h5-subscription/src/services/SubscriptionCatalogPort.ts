@@ -20,6 +20,14 @@ export interface MembershipPackage {
   tags?: string[];
 }
 
+/** Membership package group (billing-cycle tabs on the H5 subscription page). */
+export interface MembershipPackageGroup {
+  id: string;
+  name: string;
+  description?: string;
+  packages: MembershipPackage[];
+}
+
 export interface TokenBankPlan {
   planCode: string;
   displayName: string;
@@ -33,6 +41,7 @@ export interface TokenBankPlan {
 
 export interface SubscriptionCatalogPort {
   listMembershipPackages(): Promise<MembershipPackage[]>;
+  listMembershipPackageGroups(): Promise<MembershipPackageGroup[]>;
   listTokenBankPlans(): Promise<TokenBankPlan[]>;
 }
 
@@ -64,6 +73,32 @@ function toBoolean(value: unknown): boolean {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
+/** Normalize an `AppMembershipPackageItem` record into the UI package shape. */
+function toMembershipPackage(record: Record<string, unknown>): MembershipPackage {
+  return {
+    id: readId(record.id),
+    name: readString(record.name) ?? "",
+    price: toNumberString(record.price),
+    ...(readString(record.originalPrice) ? { originalPrice: readString(record.originalPrice) } : {}),
+    durationDays: toNumber(record.durationDays),
+    ...(readString(record.planName) ? { planName: readString(record.planName) } : {}),
+    ...(toBoolean(record.recommended) ? { recommended: true } : {}),
+    ...(Array.isArray(record.tags) ? { tags: record.tags.map(String) } : {}),
+  };
+}
+
+/** Normalize an `AppMembershipPackageGroupItem` record into the UI group shape. */
+function toMembershipPackageGroup(record: Record<string, unknown>): MembershipPackageGroup {
+  return {
+    id: readId(record.id),
+    name: readString(record.name) ?? "",
+    ...(readString(record.description) ? { description: readString(record.description) } : {}),
+    packages: Array.isArray(record.packages)
+      ? record.packages.map((item) => toMembershipPackage(item as Record<string, unknown>))
+      : [],
+  };
+}
+
 export interface CreateSubscriptionCatalogPortOptions {
   membershipAppSdkClient?: SdkworkMembershipAppClient;
   orderAppSdkClient?: SdkworkOrderAppClient;
@@ -79,35 +114,35 @@ export function createDefaultSubscriptionCatalogPort(
     async listMembershipPackages(): Promise<MembershipPackage[]> {
       const response = await membershipClient.memberships.packages.list({ page: 1, pageSize: 200 });
       const items = (response as { items?: unknown[] }).items ?? [];
-      return items.map((item) => {
-        const record = item as Record<string, unknown>;
-        return {
-          id: readId(record.id),
-          name: readString(record.name) ?? "",
-          price: toNumberString(record.price),
-          ...(readString(record.originalPrice) ? { originalPrice: readString(record.originalPrice) } : {}),
-          durationDays: toNumber(record.durationDays),
-          ...(readString(record.planName) ? { planName: readString(record.planName) } : {}),
-          ...(toBoolean(record.recommended) ? { recommended: true } : {}),
-          ...(Array.isArray(record.tags) ? { tags: record.tags.map(String) } : {}),
-        };
-      });
+      return items.map((item) => toMembershipPackage(item as Record<string, unknown>));
+    },
+
+    async listMembershipPackageGroups(): Promise<MembershipPackageGroup[]> {
+      const response = await membershipClient.memberships.packageGroups.list({ page: 1, pageSize: 200 });
+      const items = (response as { items?: unknown[] }).items ?? [];
+      return items.map((item) => toMembershipPackageGroup(item as Record<string, unknown>));
     },
 
     async listTokenBankPlans(): Promise<TokenBankPlan[]> {
-      const response = await orderClient.recharges.plans.list({ page: 1, pageSize: 200 });
+      // Token Bank 充值套餐与 CloudRouter 控制台"算力积分购买"同源：
+      // 读积分包目录（`recharges/packages`），由后端按充值 settings
+      // 计算每档到账算力积分（grant_amount / points）。
+      const response = await orderClient.recharges.packages.list({ page: 1, pageSize: 200 });
       const items = (response as { items?: unknown[] }).items ?? [];
       return items.map((item) => {
         const record = item as Record<string, unknown>;
+        const id = readString(record.id) ?? "";
+        const points = toNumber(record.points ?? record.grantAmount);
+        const bonus = toNumber(record.bonusPoints ?? 0);
         return {
-          planCode: readString(record.planCode) ?? readString(record.id) ?? "",
-          displayName: readString(record.displayName) ?? readString(record.name) ?? "",
-          planPeriod: readString(record.planPeriod) ?? "",
-          grantAmount: toNumberString(record.grantAmount),
-          bonusAmount: toNumberString(record.bonusAmount),
-          priceAmount: toNumberString(record.priceAmount),
+          planCode: id,
+          displayName: `${points} 算力积分`,
+          planPeriod: "once",
+          grantAmount: String(points),
+          bonusAmount: String(bonus),
+          priceAmount: toNumberString(record.priceAmount ?? record.price),
           currencyCode: readString(record.currencyCode) ?? "CNY",
-          renewalPolicy: readString(record.renewalPolicy) ?? "",
+          renewalPolicy: "non_renewable",
         };
       });
     },

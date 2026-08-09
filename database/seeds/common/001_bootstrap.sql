@@ -35,3 +35,33 @@ ON CONFLICT (id) DO UPDATE SET
     request_no = EXCLUDED.request_no,
     idempotency_key = EXCLUDED.idempotency_key,
     updated_at = EXCLUDED.updated_at;
+
+-- Token Bank recharge plans. Amounts are stored as major-unit decimals.
+-- These are the standard compute-credit tiers offered by the H5 Token Bank
+-- cashier (`GET /app/v3/api/recharges/plans`); the plan codes are stable
+-- references used by the recharge order flow.
+INSERT INTO commerce_token_bank_plan (
+    id, tenant_id, organization_id, plan_code, display_name, plan_period,
+    grant_amount, bonus_amount, price_amount, currency_code, renewal_policy,
+    status, sort_weight, request_no, idempotency_key, created_at, updated_at
+) VALUES
+    ('token-bank-100', '100001', '0', 'tb-100', '100 T 算力包', 'monthly', '100', '0', '10.00', 'CNY', 'non_renewable', 'active', 10, 'seed-token-bank-100', 'seed-token-bank-100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('token-bank-500', '100001', '0', 'tb-500', '500 T 算力包', 'monthly', '500', '50', '48.00', 'CNY', 'non_renewable', 'active', 20, 'seed-token-bank-500', 'seed-token-bank-500', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('token-bank-1000', '100001', '0', 'tb-1000', '1000 T 算力包', 'monthly', '1000', '120', '95.00', 'CNY', 'non_renewable', 'active', 30, 'seed-token-bank-1000', 'seed-token-bank-1000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('token-bank-5000', '100001', '0', 'tb-5000', '5000 T 算力包', 'monthly', '5000', '800', '450.00', 'CNY', 'non_renewable', 'active', 40, 'seed-token-bank-5000', 'seed-token-bank-5000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (id) DO UPDATE SET
+    tenant_id = EXCLUDED.tenant_id,
+    organization_id = EXCLUDED.organization_id,
+    plan_code = EXCLUDED.plan_code,
+    display_name = EXCLUDED.display_name,
+    plan_period = EXCLUDED.plan_period,
+    grant_amount = EXCLUDED.grant_amount,
+    bonus_amount = EXCLUDED.bonus_amount,
+    price_amount = EXCLUDED.price_amount,
+    currency_code = EXCLUDED.currency_code,
+    renewal_policy = EXCLUDED.renewal_policy,
+    status = EXCLUDED.status,
+    sort_weight = EXCLUDED.sort_weight,
+    request_no = EXCLUDED.request_no,
+    idempotency_key = EXCLUDED.idempotency_key,
+    updated_at = EXCLUDED.updated_at;

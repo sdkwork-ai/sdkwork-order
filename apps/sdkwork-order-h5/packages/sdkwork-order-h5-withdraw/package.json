@@ -1,7 +1,7 @@
 {
-  "name": "@sdkwork/order-h5-subscription",
+  "name": "@sdkwork/order-h5-withdraw",
   "version": "0.1.0",
-  "description": "H5 subscription purchase surface for the order domain: Token Bank recharge and membership subscription checkout.",
+  "description": "H5 cash withdrawal request surface for the order domain: withdrawable cash balance to a withdrawal request via withdrawals.requests.",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -14,20 +14,15 @@
     }
   },
   "dependencies": {
-    "@sdkwork/membership-app-sdk": "workspace:*",
     "@sdkwork/order-app-sdk": "workspace:*",
-    "@sdkwork/order-mobile-react-orders": "workspace:*",
     "@sdkwork/order-service": "workspace:*",
-    "@sdkwork/sdk-common": "workspace:*",
     "@sdkwork/ui-mobile-react": "workspace:*",
     "lucide-react": "catalog:",
-    "qrcode": "catalog:",
     "react": "catalog:",
     "react-i18next": "catalog:",
     "react-router": ">=7.0.0"
   },
   "devDependencies": {
-    "@types/qrcode": "catalog:",
     "@types/react": "catalog:"
   }
 }

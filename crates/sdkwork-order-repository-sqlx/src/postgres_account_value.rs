@@ -32,7 +32,7 @@ SELECT
     COUNT(*) OVER() AS total_count
 FROM commerce_account_value_package
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND (CAST($3 AS TEXT) IS NULL OR target_asset = CAST($3 AS TEXT))
   AND (CAST($4 AS TEXT) IS NULL OR status = CAST($4 AS TEXT))
 ORDER BY sort_weight ASC, id ASC
@@ -52,7 +52,7 @@ SELECT
     status
 FROM commerce_account_value_package
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND idempotency_key = CAST($3 AS TEXT)
 LIMIT 1
 "#;
@@ -70,7 +70,7 @@ SELECT
     status
 FROM commerce_account_value_package
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND (id = CAST($3 AS TEXT) OR package_code = CAST($4 AS TEXT))
 ORDER BY CASE WHEN id = CAST($3 AS TEXT) THEN 0 ELSE 1 END ASC
 LIMIT 1
@@ -90,7 +90,7 @@ SELECT
     COUNT(*) OVER() AS total_count
 FROM commerce_token_bank_plan
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND (CAST($3 AS TEXT) IS NULL OR status = CAST($3 AS TEXT))
 ORDER BY sort_weight ASC, plan_code ASC
 LIMIT $4 OFFSET $5
@@ -109,7 +109,7 @@ SELECT
     status
 FROM commerce_token_bank_plan
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND idempotency_key = CAST($3 AS TEXT)
 LIMIT 1
 "#;
@@ -127,7 +127,7 @@ SELECT
     status
 FROM commerce_token_bank_plan
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND plan_code = CAST($3 AS TEXT)
 LIMIT 1
 "#;
@@ -150,7 +150,7 @@ SELECT
     updated_at
 FROM commerce_order_refund_request
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND owner_user_id = CAST($3 AS TEXT)
   AND idempotency_key = CAST($4 AS TEXT)
 LIMIT 1
@@ -173,7 +173,7 @@ SELECT
     updated_at
 FROM commerce_order_withdrawal_request
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND owner_user_id = CAST($3 AS TEXT)
   AND idempotency_key = CAST($4 AS TEXT)
 LIMIT 1
@@ -198,7 +198,7 @@ SELECT
     COUNT(*) OVER() AS total_count
 FROM commerce_order_refund_request
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND (CAST($3 AS TEXT) IS NULL OR owner_user_id = CAST($3 AS TEXT))
   AND (CAST($4 AS TEXT) IS NULL OR status = CAST($4 AS TEXT))
 ORDER BY created_at DESC, id DESC
@@ -223,7 +223,7 @@ SELECT
     COUNT(*) OVER() AS total_count
 FROM commerce_order_withdrawal_request
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND (CAST($3 AS TEXT) IS NULL OR owner_user_id = CAST($3 AS TEXT))
   AND (CAST($4 AS TEXT) IS NULL OR status = CAST($4 AS TEXT))
 ORDER BY created_at DESC, id DESC
@@ -248,7 +248,7 @@ SELECT
     updated_at
 FROM commerce_order_refund_request
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND (CAST($3 AS TEXT) IS NULL OR owner_user_id = CAST($3 AS TEXT))
   AND id = CAST($4 AS TEXT)
 LIMIT 1
@@ -271,7 +271,7 @@ SELECT
     updated_at
 FROM commerce_order_withdrawal_request
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
   AND (CAST($3 AS TEXT) IS NULL OR owner_user_id = CAST($3 AS TEXT))
   AND id = CAST($4 AS TEXT)
 LIMIT 1
@@ -348,7 +348,7 @@ impl PostgresCommerceRechargeStore {
                 updated_at = $13,
                 retired_at = CASE WHEN $14 = 'retired' THEN COALESCE(retired_at, $15) ELSE NULL END
             WHERE tenant_id = CAST($16 AS TEXT)
-              AND ((organization_id = CAST($17 AS TEXT)) OR (organization_id IS NULL AND $17 IS NULL))
+              AND ((organization_id = CAST($17 AS TEXT)) OR (organization_id IS NULL AND $17 IS NULL) OR (organization_id = '0' AND $17 IS NULL))
               AND (id = CAST($18 AS TEXT) OR package_code = CAST($19 AS TEXT))
             "#,
         )
@@ -453,7 +453,7 @@ impl PostgresCommerceRechargeStore {
                 retired_at = COALESCE(retired_at, $3),
                 updated_at = $4
             WHERE tenant_id = CAST($5 AS TEXT)
-              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL))
+              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL) OR (organization_id = '0' AND $6 IS NULL))
               AND id = CAST($7 AS TEXT)
             "#,
         )
@@ -540,7 +540,7 @@ impl PostgresCommerceRechargeStore {
                 updated_at = $12,
                 retired_at = CASE WHEN $13 = 'retired' THEN COALESCE(retired_at, $14) ELSE NULL END
             WHERE tenant_id = CAST($15 AS TEXT)
-              AND ((organization_id = CAST($16 AS TEXT)) OR (organization_id IS NULL AND $16 IS NULL))
+              AND ((organization_id = CAST($16 AS TEXT)) OR (organization_id IS NULL AND $16 IS NULL) OR (organization_id = '0' AND $16 IS NULL))
               AND plan_code = CAST($17 AS TEXT)
             "#,
         )
@@ -640,7 +640,7 @@ impl PostgresCommerceRechargeStore {
                 retired_at = COALESCE(retired_at, $3),
                 updated_at = $4
             WHERE tenant_id = CAST($5 AS TEXT)
-              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL))
+              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL) OR (organization_id = '0' AND $6 IS NULL))
               AND plan_code = CAST($7 AS TEXT)
             "#,
         )
@@ -1087,7 +1087,7 @@ impl PostgresCommerceRechargeStore {
             SELECT reason_code, reason_detail
             FROM commerce_order_refund_request
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
               AND owner_user_id = CAST($3 AS TEXT)
               AND id = CAST($4 AS TEXT)
             LIMIT 1
@@ -1155,7 +1155,7 @@ impl PostgresCommerceRechargeStore {
             SELECT payout_method, payout_account_ref, reason_code
             FROM commerce_order_withdrawal_request
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
               AND owner_user_id = CAST($3 AS TEXT)
               AND id = CAST($4 AS TEXT)
             LIMIT 1
@@ -1214,7 +1214,7 @@ impl PostgresCommerceRechargeStore {
                 review_comment = $3,
                 updated_at = $4
             WHERE tenant_id = CAST($5 AS TEXT)
-              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL))
+              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL) OR (organization_id = '0' AND $6 IS NULL))
               AND id = CAST($7 AS TEXT)
             "#,
         )
@@ -1264,7 +1264,7 @@ impl PostgresCommerceRechargeStore {
                 idempotency_key = $7,
                 updated_at = $8
             WHERE tenant_id = CAST($9 AS TEXT)
-              AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $10 IS NULL))
+              AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $10 IS NULL) OR (organization_id = '0' AND $10 IS NULL))
               AND id = CAST($11 AS TEXT)
             "#,
         )
@@ -1314,7 +1314,7 @@ impl PostgresCommerceRechargeStore {
                 review_comment = $3,
                 updated_at = $4
             WHERE tenant_id = CAST($5 AS TEXT)
-              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL))
+              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL) OR (organization_id = '0' AND $6 IS NULL))
               AND id = CAST($7 AS TEXT)
             "#,
         )
@@ -1364,7 +1364,7 @@ impl PostgresCommerceRechargeStore {
                 idempotency_key = $7,
                 updated_at = $8
             WHERE tenant_id = CAST($9 AS TEXT)
-              AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $10 IS NULL))
+              AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $10 IS NULL) OR (organization_id = '0' AND $10 IS NULL))
               AND id = CAST($11 AS TEXT)
             "#,
         )
@@ -1429,7 +1429,7 @@ impl PostgresCommerceRechargeStore {
             LEFT JOIN commerce_order_amount_breakdown b
                 ON b.tenant_id = o.tenant_id AND b.order_id = o.id AND b.allocation_type = 'order_total'
             WHERE o.tenant_id = CAST($1 AS TEXT)
-              AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
+              AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
               AND o.owner_user_id = CAST($3 AS TEXT)
               AND o.idempotency_key = CAST($4 AS TEXT)
               AND o.subject IN ('token_bank_recharge', 'token_bank_plan_purchase', 'token_bank_plan_renewal', 'account_recharge_package', 'coupon_recharge')

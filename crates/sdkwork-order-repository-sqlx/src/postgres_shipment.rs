@@ -28,7 +28,7 @@ impl PostgresCommerceOrderStore {
                 ON o.tenant_id = f.tenant_id
                AND o.id = f.order_id
             WHERE s.tenant_id = CAST($1 AS TEXT)
-              AND ((s.organization_id = CAST($2 AS TEXT)) OR (s.organization_id IS NULL AND $3 IS NULL))
+              AND ((s.organization_id = CAST($2 AS TEXT)) OR (s.organization_id IS NULL AND $3 IS NULL) OR (s.organization_id = '0' AND $3 IS NULL))
               AND o.owner_user_id = CAST($4 AS TEXT)
               AND s.id = CAST($5 AS TEXT)
             LIMIT 1
@@ -203,7 +203,7 @@ impl PostgresCommerceOrderStore {
                 ON f.tenant_id = s.tenant_id
                AND f.id = s.fulfillment_id
             WHERE s.tenant_id = CAST($1 AS TEXT)
-              AND ((s.organization_id = CAST($2 AS TEXT)) OR (s.organization_id IS NULL AND $3 IS NULL))
+              AND ((s.organization_id = CAST($2 AS TEXT)) OR (s.organization_id IS NULL AND $3 IS NULL) OR (s.organization_id = '0' AND $3 IS NULL))
               AND ($4 IS NULL OR f.order_id = CAST($5 AS TEXT))
               AND ($6 IS NULL OR s.fulfillment_id = CAST($7 AS TEXT))
               AND ($8 IS NULL OR s.status = CAST($9 AS TEXT))
@@ -252,7 +252,7 @@ impl PostgresCommerceOrderStore {
             SELECT s.id, s.shipment_no, s.fulfillment_id, s.carrier_code, s.tracking_no, s.status
             FROM commerce_shipment s
             WHERE s.tenant_id = CAST($1 AS TEXT)
-              AND ((s.organization_id = CAST($2 AS TEXT)) OR (s.organization_id IS NULL AND $3 IS NULL))
+              AND ((s.organization_id = CAST($2 AS TEXT)) OR (s.organization_id IS NULL AND $3 IS NULL) OR (s.organization_id = '0' AND $3 IS NULL))
               AND s.id = CAST($4 AS TEXT)
             LIMIT 1
            "#,
@@ -466,7 +466,7 @@ impl PostgresCommerceOrderStore {
             SELECT id, shipment_id, package_no, package_type, tracking_no, status
             FROM commerce_shipment_package
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND shipment_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
             LIMIT 1

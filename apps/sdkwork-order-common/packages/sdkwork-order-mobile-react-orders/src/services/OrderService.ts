@@ -2,7 +2,7 @@ import { uuid } from "@sdkwork/utils";
 import { formatMoneyMinorUnits } from "@sdkwork/utils/money";
 import type { SdkworkAppClient } from "@sdkwork/order-app-sdk";
 
-import type { PaymentEnvironment } from "./PaymentEnvironment";
+import { setPaymentRegionOverride, type PaymentEnvironment, type PaymentRegion } from "./PaymentEnvironment";
 import type { WechatPaymentOAuthChannel } from "./WechatPaymentOAuth";
 
 /**
@@ -42,6 +42,18 @@ export const ORDER_PAYMENT_METHODS: readonly OrderPaymentMethod[] = [
 ];
 
 /**
+ * Overseas cashier defaults. The order backend only accepts the CN wire
+ * methods today, so overseas deployments inherit them until their gateway
+ * configures paypal/card providers; hosts may override the whole matrix
+ * through `configureOrderMobileRuntime({ paymentMethodsForEnvironment })`.
+ */
+export const ORDER_PAYMENT_METHODS_OVERSEAS: readonly OrderPaymentMethod[] = [
+  "wechat_pay",
+  "alipay",
+  "balance",
+];
+
+/**
  * Wire methods accepted by `POST /app/v3/api/orders/{orderId}/payments`.
  * `wechat_jsapi` (needs openid) and `alipay_wap` are environment-specific
  * launch methods, not user-facing choices.
@@ -53,13 +65,19 @@ export const ORDER_PAYMENT_WIRE_METHODS: readonly OrderPaymentMethod[] = [
 ];
 
 /**
- * Narrow the cashier method list to the current payment environment:
+ * Narrow the cashier method list to the current payment environment and
+ * deployment region:
  * - Alipay app webview: Alipay only (WAP redirect in-app).
  * - WeChat app webview: WeChat only (JSAPI via OAuth).
- * - Browser: the full list (WeChat/Alipay scan, balance).
+ * - Browser (CN deployment): WeChat/Alipay scan + balance.
+ * - Browser (overseas deployment): the channels configured by the host
+ *   deployment (injected through `configureOrderMobileRuntime`); defaults
+ *   to the CN channels, which are the only wire methods the order backend
+ *   accepts today.
  */
 export function paymentMethodsForEnvironment(
   environment: PaymentEnvironment,
+  region: PaymentRegion = "cn",
 ): readonly OrderPaymentMethod[] {
   switch (environment) {
     case "alipay":
@@ -67,7 +85,9 @@ export function paymentMethodsForEnvironment(
     case "wechat":
       return ["wechat_pay"];
     default:
-      return ORDER_PAYMENT_METHODS;
+      return region === "overseas"
+        ? ORDER_PAYMENT_METHODS_OVERSEAS
+        : ORDER_PAYMENT_METHODS;
   }
 }
 
@@ -184,6 +204,19 @@ export interface OrderRuntime {
    * WeChat JSAPI payment is unavailable inside the WeChat app.
    */
   readonly wechatPaymentOAuth?: WechatPaymentOAuthChannel;
+  /**
+   * Deployment region for the cashier method matrix. When absent, the
+   * payer language selects the region (`zh*` → CN, otherwise overseas).
+   */
+  readonly paymentRegion?: PaymentRegion;
+  /**
+   * Optional per-deployment method matrix override (e.g. overseas hosts
+   * injecting paypal/card channels). Defaults to `paymentMethodsForEnvironment`.
+   */
+  readonly paymentMethodsForEnvironment?: (
+    environment: PaymentEnvironment,
+    region: PaymentRegion,
+  ) => readonly OrderPaymentMethod[];
 }
 
 export class OrderCapabilityUnavailableError extends Error {
@@ -204,13 +237,35 @@ function requireOrderRuntime(): OrderRuntime {
 
 export function configureOrderMobileRuntime(nextRuntime: OrderRuntime): void {
   runtime = nextRuntime;
+  setPaymentRegionOverride(nextRuntime.paymentRegion ?? null);
 }
 
 export function resetOrderMobileRuntime(): void {
   runtime = null;
+  setPaymentRegionOverride(null);
 }
 
 export function getOrderMobileRuntime(): OrderRuntime | null {
+  return runtime;
+}
+
+/**
+ * Resolves the cashier method list for the current environment and region,
+ * honouring the host-injected matrix override from the runtime.
+ */
+export function resolveAvailablePaymentMethods(
+  environment: PaymentEnvironment,
+  region: PaymentRegion,
+): readonly OrderPaymentMethod[] {
+  const composed = requireOrderRuntimeOrNull();
+  const resolver = composed?.paymentMethodsForEnvironment;
+  if (resolver) {
+    return resolver(environment, region);
+  }
+  return paymentMethodsForEnvironment(environment, region);
+}
+
+function requireOrderRuntimeOrNull(): OrderRuntime | null {
   return runtime;
 }
 

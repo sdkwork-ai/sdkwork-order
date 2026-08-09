@@ -15,7 +15,7 @@
 CREATE TABLE IF NOT EXISTS commerce_order (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     owner_user_id TEXT NOT NULL,
     order_no TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending_payment',
@@ -68,7 +68,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_membership_order_active_purchase_intent
 CREATE TABLE IF NOT EXISTS commerce_order_item (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     order_id TEXT NOT NULL,
     product_id TEXT,
     shop_id TEXT,
@@ -98,7 +98,7 @@ CREATE INDEX IF NOT EXISTS idx_order_item_order
 CREATE TABLE IF NOT EXISTS commerce_checkout_session (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     checkout_session_no TEXT NOT NULL,
     owner_user_id TEXT NOT NULL,
     source_type TEXT NOT NULL,
@@ -124,7 +124,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_checkout_session_idempotency
 CREATE TABLE IF NOT EXISTS commerce_checkout_line (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     checkout_session_id TEXT NOT NULL,
     product_id TEXT,
     shop_id TEXT,
@@ -147,7 +147,7 @@ CREATE INDEX IF NOT EXISTS idx_checkout_line_session
 CREATE TABLE IF NOT EXISTS commerce_checkout_quote (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     checkout_session_id TEXT NOT NULL,
     quote_no TEXT NOT NULL,
     original_amount TEXT NOT NULL,
@@ -165,7 +165,7 @@ CREATE INDEX IF NOT EXISTS idx_checkout_quote_session
 CREATE TABLE IF NOT EXISTS commerce_fulfillment_order (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     fulfillment_no TEXT NOT NULL,
     order_id TEXT NOT NULL,
     fulfillment_type TEXT NOT NULL,
@@ -184,7 +184,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_fulfillment_order_type
 CREATE TABLE IF NOT EXISTS commerce_order_amount_breakdown (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     order_id TEXT NOT NULL,
     order_item_id TEXT,
     allocation_type TEXT NOT NULL DEFAULT 'order_total',
@@ -204,7 +204,7 @@ CREATE INDEX IF NOT EXISTS idx_order_amount_breakdown_order
 CREATE TABLE IF NOT EXISTS commerce_recharge_package (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     external_id BIGINT NOT NULL,
     package_no TEXT NOT NULL,
     sku_id TEXT NOT NULL,
@@ -237,7 +237,7 @@ CREATE INDEX IF NOT EXISTS idx_recharge_package_sku
 CREATE TABLE IF NOT EXISTS commerce_account_value_package (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     package_code TEXT NOT NULL,
     display_name TEXT NOT NULL,
     target_asset TEXT NOT NULL,
@@ -268,7 +268,7 @@ CREATE INDEX IF NOT EXISTS idx_account_value_package_list
 CREATE TABLE IF NOT EXISTS commerce_token_bank_plan (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     plan_code TEXT NOT NULL,
     display_name TEXT NOT NULL,
     plan_period TEXT NOT NULL,
@@ -298,7 +298,7 @@ CREATE INDEX IF NOT EXISTS idx_token_bank_plan_list
 CREATE TABLE IF NOT EXISTS commerce_order_refund_request (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     request_no TEXT NOT NULL,
     original_order_id TEXT NOT NULL,
     owner_user_id TEXT NOT NULL,
@@ -327,7 +327,7 @@ CREATE INDEX IF NOT EXISTS idx_order_refund_request_owner
 CREATE TABLE IF NOT EXISTS commerce_order_withdrawal_request (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     request_no TEXT NOT NULL,
     owner_user_id TEXT NOT NULL,
     target_asset TEXT NOT NULL,
