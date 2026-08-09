@@ -32,7 +32,7 @@ function isOrderTabId(value: string | null | undefined): value is OrderTabId {
 }
 
 export function OrderCenter() {
-  const { t } = useTranslation("orders");
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -90,11 +90,11 @@ export function OrderCenter() {
 
   return (
     <PageLayout
-      title={t("my_orders", "我的订单")}
+      title={t("orders.my_orders", "我的订单")}
       rightElement={
         <button
           onClick={() => void loadOrders(activeTab)}
-          aria-label={t("refresh", "刷新")}
+          aria-label={t("orders.refresh", "刷新")}
           className="p-2 active:opacity-70"
         >
           <RefreshCw className="w-5 h-5 text-text-main" />
@@ -108,11 +108,11 @@ export function OrderCenter() {
           onTabChange={(tabId) => setActiveTab(tabId as OrderTabId)}
         />
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+        <div className="flex-1 overflow-y-auto px-4 pt-4 pb-[84px] flex flex-col gap-3">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 text-text-sub opacity-70">
               <div className="w-8 h-8 rounded-full border-4 border-text-sub border-t-transparent animate-spin mb-3" />
-              <p className="text-[14px]">{t("loading", "加载中...")}</p>
+              <p className="text-[14px]">{t("orders.loading", "加载中...")}</p>
             </div>
           ) : orders.length > 0 ? (
             orders.map((order) => (
@@ -132,7 +132,7 @@ export function OrderCenter() {
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-text-sub opacity-70">
               <Inbox className="w-12 h-12 mb-3 stroke-current opacity-40" />
-              <span className="text-[14px]">{t("empty", "暂无订单数据")}</span>
+              <span className="text-[14px]">{t("orders.empty", "暂无订单数据")}</span>
             </div>
           )}
         </div>

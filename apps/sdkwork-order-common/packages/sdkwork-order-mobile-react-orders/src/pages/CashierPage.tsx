@@ -56,7 +56,7 @@ function errorMessage(error: unknown): string {
 export function CashierPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation("orders");
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   /** Payment environment is stable for the page lifetime (UA-based). */
@@ -200,12 +200,12 @@ export function CashierPage() {
           const jsapiPayload = JSON.parse(params.jsapiPayload) as Record<string, unknown>;
           const result = await invokeWechatJsapiPayment(jsapiPayload);
           if (isWechatJsapiResultCancelled(result)) {
-            setLaunchNotice(t("cashier_jsapi_cancelled", "已取消支付"));
+            setLaunchNotice(t("orders.cashier_jsapi_cancelled", "已取消支付"));
           } else if (!isWechatJsapiResultOk(result)) {
-            setLaunchNotice(t("cashier_jsapi_failed", "唤起微信支付失败，请重试"));
+            setLaunchNotice(t("orders.cashier_jsapi_failed", "唤起微信支付失败，请重试"));
           }
         } catch {
-          setLaunchNotice(t("cashier_jsapi_failed", "唤起微信支付失败，请重试"));
+          setLaunchNotice(t("orders.cashier_jsapi_failed", "唤起微信支付失败，请重试"));
         }
         setQrDataUrl(await renderQrCode(params));
         return;
@@ -334,7 +334,7 @@ export function CashierPage() {
     }
     try {
       await OrderService.cancelOrder(orderId);
-      showToast(t("cancelled_toast", "订单已取消"));
+      showToast(t("orders.cancelled_toast", "订单已取消"));
       stopCashier("cancelled");
     } catch (error) {
       showToast(errorMessage(error));
@@ -380,13 +380,13 @@ export function CashierPage() {
           onClick={goToOrderDetail}
           className="w-full bg-primary-blue active:opacity-80 text-white font-medium text-[15px] py-3 rounded-xl transition-opacity"
         >
-          {t("cashier_view_order", "查看订单")}
+          {t("orders.cashier_view_order", "查看订单")}
         </button>
         <button
           onClick={goToOrderCenter}
           className="w-full border border-border-color active:bg-active-bg text-text-main font-medium text-[15px] py-3 rounded-xl transition-colors"
         >
-          {t("cashier_back_center", "返回订单中心")}
+          {t("orders.cashier_back_center", "返回订单中心")}
         </button>
       </div>
     </div>
@@ -398,34 +398,34 @@ export function CashierPage() {
         return launchNotice;
       }
       return qrDataUrl
-        ? t("cashier_pay_tip_wechat_qr", "请长按识别二维码完成支付")
-        : t("cashier_pay_tip_wechat_jsapi", "正在唤起微信支付，请在微信中完成支付");
+        ? t("orders.cashier_pay_tip_wechat_qr", "请长按识别二维码完成支付")
+        : t("orders.cashier_pay_tip_wechat_jsapi", "正在唤起微信支付，请在微信中完成支付");
     }
     if (environment === "alipay") {
-      return t("cashier_pay_tip_alipay", "点击下方按钮跳转支付宝完成支付");
+      return t("orders.cashier_pay_tip_alipay", "点击下方按钮跳转支付宝完成支付");
     }
-    return t("cashier_scan_pay", "请使用微信或支付宝扫一扫完成支付");
+    return t("orders.cashier_scan_pay", "请使用微信或支付宝扫一扫完成支付");
   };
 
   return (
-    <PageLayout title={t("cashier_title", "收银台")}>
+    <PageLayout title={t("orders.cashier_title", "收银台")}>
       <div className="flex flex-col h-full bg-[#f5f6f8] dark:bg-[#1a1b1c]">
         {phase === "loading" || phase === "creating" || phase === "oauth_waiting" ? (
           <div className="flex flex-col items-center justify-center flex-1 text-text-sub">
             <Loader2 className="w-8 h-8 animate-spin mb-3" />
             <p className="text-[14px]">
               {phase === "oauth_waiting"
-                ? t("cashier_oauth_waiting", "正在获取微信支付授权…")
+                ? t("orders.cashier_oauth_waiting", "正在获取微信支付授权…")
                 : phase === "loading"
-                  ? t("loading", "加载中...")
-                  : t("cashier_creating", "正在创建支付...")}
+                  ? t("orders.loading", "加载中...")
+                  : t("orders.cashier_creating", "正在创建支付...")}
             </p>
           </div>
         ) : phase === "pending" && order && paymentSession ? (
           <>
             <div className="bg-white dark:bg-[#1E1E1E] m-4 rounded-xl shadow-sm flex flex-col items-center py-6 px-4">
               <span className="text-[13px] text-text-sub mb-1">
-                {t("cashier_amount_label", "支付金额")}
+                {t("orders.cashier_amount_label", "支付金额")}
               </span>
               <span className="text-[30px] font-bold text-text-main mb-4">
                 {formatAmountCny(paymentSession.amount, order.currencyCode)}
@@ -438,13 +438,13 @@ export function CashierPage() {
 
               {qrDataUrl ? (
                 <div className="bg-white p-3 rounded-lg border border-border-color/60">
-                  <img src={qrDataUrl} alt={t("cashier_qr_alt", "收银台二维码")} className="w-[220px] h-[220px]" />
+                  <img src={qrDataUrl} alt={t("orders.cashier_qr_alt", "收银台二维码")} className="w-[220px] h-[220px]" />
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2 py-6">
                   <QrCode className="w-12 h-12 text-text-sub/50" />
                   <span className="text-[13px] text-text-sub">
-                    {t("cashier_no_qr", "收银台暂未生成二维码")}
+                    {t("orders.cashier_no_qr", "收银台暂未生成二维码")}
                   </span>
                 </div>
               )}
@@ -454,7 +454,7 @@ export function CashierPage() {
                   onClick={launchQrPayment}
                   className="mt-4 w-full max-w-[220px] bg-[#1677FF] active:opacity-80 text-white font-medium text-[14px] py-2.5 rounded-lg transition-opacity"
                 >
-                  {t("cashier_go_pay", "去支付")}
+                  {t("orders.cashier_go_pay", "去支付")}
                 </button>
               )}
 
@@ -463,7 +463,7 @@ export function CashierPage() {
               <div className="flex items-center gap-1 mt-3 text-[#FA5151]">
                 <Clock className="w-4 h-4" />
                 <span className="text-[13px] font-medium">
-                  {t("cashier_auto_close", "剩余 {countdown} 自动关闭", {
+                  {t("orders.cashier_auto_close", "剩余 {countdown} 自动关闭", {
                     countdown: formatCashierCountdown(remainingSeconds),
                   })}
                 </span>
@@ -472,7 +472,7 @@ export function CashierPage() {
 
             <div className="bg-white dark:bg-[#1E1E1E] mx-4 rounded-xl shadow-sm p-4">
               <h3 className="text-[14px] font-bold text-text-main mb-3">
-                {t("cashier_pay_method", "支付方式")}
+                {t("orders.cashier_pay_method", "支付方式")}
               </h3>
               <div className="flex flex-col gap-2">
                 {availableMethods.map((method) => (
@@ -481,7 +481,7 @@ export function CashierPage() {
                     className="flex items-center justify-between px-3 py-3 rounded-lg border border-border-color cursor-pointer active:bg-active-bg"
                   >
                     <span className="text-[14px] text-text-main">
-                      {t(`payment_method_${method}`, method)}
+                      {t(`orders.payment_method_${method}`, method)}
                     </span>
                     <input
                       type="radio"
@@ -498,7 +498,7 @@ export function CashierPage() {
                 className="mt-4 w-full flex items-center justify-center gap-1.5 border border-border-color active:bg-active-bg text-text-main text-[14px] py-2.5 rounded-lg transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
-                {t("cashier_open_external", "打开外部收银台")}
+                {t("orders.cashier_open_external", "打开外部收银台")}
               </button>
             </div>
 
@@ -507,44 +507,44 @@ export function CashierPage() {
                 onClick={() => void cancelPayment()}
                 className="w-full border border-border-color active:bg-active-bg text-text-sub text-[14px] py-3 rounded-xl transition-colors"
               >
-                {t("cashier_cancel_pay", "取消支付")}
+                {t("orders.cashier_cancel_pay", "取消支付")}
               </button>
             </div>
           </>
         ) : phase === "paid" ? (
           renderResult(
-            t("cashier_paid_title", "支付成功"),
-            t("cashier_paid_desc", "支付已完成，订单将尽快为您处理。"),
+            t("orders.cashier_paid_title", "支付成功"),
+            t("orders.cashier_paid_desc", "支付已完成，订单将尽快为您处理。"),
             <CheckCircle2 className="w-16 h-16 text-green-500" />,
           )
         ) : phase === "expired" ? (
           renderResult(
-            t("cashier_expired_title", "支付超时"),
-            t("cashier_expired_desc", "支付已超时，订单已自动关闭。"),
+            t("orders.cashier_expired_title", "支付超时"),
+            t("orders.cashier_expired_desc", "支付已超时，订单已自动关闭。"),
             <Clock className="w-16 h-16 text-text-sub" />,
           )
         ) : phase === "cancelled" ? (
           renderResult(
-            t("cashier_cancelled_title", "订单已取消"),
-            t("cashier_cancelled_desc", "订单已取消，如有疑问请联系商家。"),
+            t("orders.cashier_cancelled_title", "订单已取消"),
+            t("orders.cashier_cancelled_desc", "订单已取消，如有疑问请联系商家。"),
             <XCircle className="w-16 h-16 text-text-sub" />,
           )
         ) : phase === "not_payable" ? (
           renderResult(
-            t("cashier_not_payable_title", "订单不可支付"),
-            t("cashier_not_payable_desc", "该订单当前状态不支持支付。"),
+            t("orders.cashier_not_payable_title", "订单不可支付"),
+            t("orders.cashier_not_payable_desc", "该订单当前状态不支持支付。"),
             <AlertCircle className="w-16 h-16 text-text-sub" />,
           )
         ) : (
           renderResult(
-            t("cashier_failed_title", "支付创建失败"),
-            errorMessageText ?? t("cashier_failed_desc", "请重试或稍后再试。"),
+            t("orders.cashier_failed_title", "支付创建失败"),
+            errorMessageText ?? t("orders.cashier_failed_desc", "请重试或稍后再试。"),
             <XCircle className="w-16 h-16 text-[#FA5151]" />,
             <button
               onClick={retryPayment}
               className="w-full bg-primary-blue active:opacity-80 text-white font-medium text-[15px] py-3 rounded-xl transition-opacity"
             >
-              {t("cashier_retry", "重新支付")}
+              {t("orders.cashier_retry", "重新支付")}
             </button>,
           )
         )}

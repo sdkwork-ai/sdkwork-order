@@ -20,7 +20,7 @@ function errorMessage(error: unknown): string {
 export function OrderDetail() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation("orders");
+  const { t } = useTranslation();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,17 +60,17 @@ export function OrderDetail() {
   };
 
   return (
-    <PageLayout title={t("detail_title", "订单详情")}>
+    <PageLayout title={t("orders.detail_title", "订单详情")}>
       <div className="flex flex-col h-full bg-[#f5f6f8] dark:bg-[#1a1b1c]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center flex-1 text-text-sub">
             <Loader2 className="w-8 h-8 animate-spin mb-3" />
-            <p className="text-[14px]">{t("loading", "加载中...")}</p>
+            <p className="text-[14px]">{t("orders.loading", "加载中...")}</p>
           </div>
         ) : notFound || !order ? (
           <div className="flex flex-col items-center justify-center flex-1 text-text-sub opacity-70">
             <ReceiptText className="w-12 h-12 mb-3 stroke-current opacity-40" />
-            <span className="text-[14px]">{t("not_found", "订单不存在")}</span>
+            <span className="text-[14px]">{t("orders.not_found", "订单不存在")}</span>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 pb-24">
