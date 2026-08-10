@@ -431,7 +431,7 @@ export function CashierPage({
       showToast(t("orders.cancelled_toast", "订单已取消"));
       stopCashier("cancelled");
     } catch (error) {
-      showToast(errorMessage(error));
+      showToast(toUserErrorMessage(t, error));
     }
   };
 

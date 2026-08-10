@@ -1,5 +1,3 @@
-import type { TFunction } from "react-i18next";
-
 /**
  * Localized API error surfacing for the order mobile UI.
  *
@@ -11,6 +9,14 @@ import type { TFunction } from "react-i18next";
  *   3. the server `detail` / `error.message` as a raw fallback.
  * Unknown codes degrade gracefully instead of rendering the raw key.
  */
+
+/**
+ * Minimal `t` shape consumed by the helper. The react-i18next `TFunction`
+ * is structurally compatible with this signature.
+ */
+export interface TranslateFunction {
+  (key: string): string;
+}
 
 /** problem+json payload attached by the SDK as `error.problem`. */
 export interface ApiProblemPayload {
@@ -47,7 +53,7 @@ const SDK_ERROR_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   GATEWAY_TIMEOUT: "errors.timeout",
 };
 
-function translateIfPresent(t: TFunction, key: string): string | null {
+function translateIfPresent(t: TranslateFunction, key: string): string | null {
   const translated = t(key);
   if (translated && translated !== key) {
     return translated;
@@ -56,7 +62,7 @@ function translateIfPresent(t: TFunction, key: string): string | null {
 }
 
 /** Converts an API error into a localized, user-facing message. */
-export function toUserErrorMessage(t: TFunction, error: unknown): string {
+export function toUserErrorMessage(t: TranslateFunction, error: unknown): string {
   const problem = toApiProblem(error);
   if (problem?.i18nKey) {
     const localized = translateIfPresent(t, problem.i18nKey);
