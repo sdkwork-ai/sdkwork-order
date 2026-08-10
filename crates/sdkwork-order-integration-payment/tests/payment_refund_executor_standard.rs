@@ -195,7 +195,7 @@ DROP TABLE IF EXISTS commerce_order;
 CREATE TABLE commerce_order (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     owner_user_id TEXT NOT NULL,
     order_no TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -211,7 +211,7 @@ CREATE TABLE commerce_order (
 CREATE TABLE commerce_order_amount_breakdown (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     order_id TEXT NOT NULL,
     allocation_type TEXT NOT NULL,
     payable_amount TEXT NOT NULL,
@@ -223,7 +223,7 @@ CREATE TABLE commerce_order_amount_breakdown (
 CREATE TABLE commerce_payment_attempt (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     owner_user_id TEXT NOT NULL,
     payment_intent_id TEXT NOT NULL,
     order_id TEXT NOT NULL,
@@ -252,7 +252,7 @@ CREATE TABLE commerce_payment_channel (
 CREATE TABLE commerce_refund (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     order_id TEXT NOT NULL,
     payment_attempt_id TEXT NOT NULL,
     refund_no TEXT NOT NULL,
@@ -277,7 +277,7 @@ CREATE UNIQUE INDEX ux_commerce_refund_idempotency
 CREATE TABLE commerce_refund_event (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     event_no TEXT NOT NULL,
     refund_id TEXT NOT NULL,
     event_type TEXT NOT NULL,

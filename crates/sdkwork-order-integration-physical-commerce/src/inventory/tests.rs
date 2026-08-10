@@ -34,7 +34,7 @@ async fn fixture() -> Option<(sqlx::PgPool, PhysicalInventoryAdapter)> {
         CREATE TABLE commerce_inventory_stock (
             id TEXT PRIMARY KEY,
             tenant_id TEXT NOT NULL,
-            organization_id TEXT,
+            organization_id TEXT NOT NULL DEFAULT '0',
             shop_id TEXT,
             sku_id TEXT NOT NULL,
             warehouse_id TEXT,
@@ -50,7 +50,7 @@ async fn fixture() -> Option<(sqlx::PgPool, PhysicalInventoryAdapter)> {
         CREATE TABLE commerce_inventory_reservation (
             id TEXT PRIMARY KEY,
             tenant_id TEXT NOT NULL,
-            organization_id TEXT,
+            organization_id TEXT NOT NULL DEFAULT '0',
             reservation_no TEXT NOT NULL,
             order_id TEXT NOT NULL,
             reservation_source_type TEXT NOT NULL,
