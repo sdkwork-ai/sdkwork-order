@@ -70,7 +70,10 @@ export function toUserErrorMessage(t: TranslateFunction, error: unknown): string
       return localized;
     }
   }
-  const errorCode = (error as { code?: unknown }).code;
+  const errorCode =
+    error !== null && typeof error === "object"
+      ? (error as { code?: unknown }).code
+      : undefined;
   if (typeof errorCode === "string") {
     const fallbackKey = SDK_ERROR_MESSAGE_KEYS[errorCode];
     if (fallbackKey) {
