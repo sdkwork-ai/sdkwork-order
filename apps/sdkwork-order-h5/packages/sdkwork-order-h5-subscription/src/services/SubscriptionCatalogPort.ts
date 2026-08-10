@@ -136,7 +136,9 @@ export function createDefaultSubscriptionCatalogPort(
         const bonus = toNumber(record.bonusPoints ?? 0);
         return {
           planCode: id,
-          displayName: `${points} 算力积分`,
+          // 展示名由 UI 按当前语言拼装（`subscription.points_display`），
+          // 这里只保留到账点数，避免把语言硬编码进目录数据。
+          displayName: String(points),
           planPeriod: "once",
           grantAmount: String(points),
           bonusAmount: String(bonus),

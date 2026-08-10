@@ -14,8 +14,10 @@ pub fn split_order_e2e_sql_statements(sql: &str) -> Vec<String> {
                     !trimmed.is_empty() && !trimmed.starts_with("--")
                 })
                 .collect::<Vec<_>>()
-                .join("
-")
+                .join(
+                    "
+",
+                )
         })
         .map(|statement| statement.trim().to_string())
         .filter(|statement| !statement.is_empty())

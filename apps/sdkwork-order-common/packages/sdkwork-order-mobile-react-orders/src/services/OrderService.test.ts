@@ -219,8 +219,8 @@ describe("cashier payment flow", () => {
       paymentId: "pay-1",
       paymentMethod: "wechat_pay",
       paymentParams: {
-        cashierUrl: "https://im.sdkwork.com/cashier?scene=recharge&orderId=SW1&outTradeNo=202608010001",
-        qrCodePayload: "https://im.sdkwork.com/cashier?scene=recharge&orderId=SW1&outTradeNo=202608010001",
+        cashierUrl: "https://im.sdkwork.com/cashier/order-1?scene=recharge&outTradeNo=202608010001",
+        qrCodePayload: "https://im.sdkwork.com/cashier/order-1?scene=recharge&outTradeNo=202608010001",
         nextAction: "cashier",
         orderSn: "SW1",
         cashierScene: "recharge",
@@ -323,6 +323,9 @@ describe("cashier payment flow", () => {
     expect(client.orderOrders.orders.cancellations.create).toHaveBeenCalledWith(
       "order-1",
       expect.objectContaining({ idempotencyKey: expect.any(String) }),
+      // Empty command body keeps the request well-formed; the HTTP layer would
+      // otherwise send an empty JSON body that the server rejects (40002).
+      {},
     );
   });
 });

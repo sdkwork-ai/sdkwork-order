@@ -33,6 +33,9 @@ tables:
   - name: commerce_recharge_package
     write_owner: sdkwork-order
     reference_only: false
+  - name: commerce_exchange_rule
+    write_owner: sdkwork-order
+    reference_only: false
   - name: commerce_account_value_package
     write_owner: sdkwork-order
     reference_only: false

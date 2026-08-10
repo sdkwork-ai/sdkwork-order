@@ -24,13 +24,13 @@ export function TokenBankPurchasePage({
   getBalance,
   cashierPath = DEFAULT_CASHIER_PATH,
 }: TokenBankPurchasePageProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const service = serviceProp ?? createSubscriptionPurchaseService();
   const [plans, setPlans] = useState<TokenBankPlan[]>([]);
   const [balance, setBalance] = useState<string | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [agreed, setAgreed] = useState(false);
+  const [agreed, setAgreed] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -45,6 +45,8 @@ export function TokenBankPurchasePage({
       .then(([planList, balanceValue]) => {
         setPlans(planList);
         setBalance(balanceValue);
+        // 默认选中第一个套餐，减少一次点击，提升交互效率
+        setSelectedCode((prev) => prev ?? planList[0]?.planCode ?? null);
       })
       .catch(() => setLoadFailed(true))
       .finally(() => setIsLoading(false));
@@ -76,7 +78,7 @@ export function TokenBankPurchasePage({
   const selectedPlan = plans.find((plan) => plan.planCode === selectedCode) ?? null;
 
   return (
-    <PageLayout title={t("subscription.token_bank_title", "算力积分购买")} bgClass="bg-[#F8F9FA] dark:bg-black">
+    <PageLayout title={t("subscription.token_bank_title", "算力积分购买")} bgClass="bg-bg-color">
       <div className="flex-1 overflow-y-auto p-4 pb-28">
           {isLoading ? (
             <div className="flex items-center justify-center py-20 text-[14px] text-text-sub">
@@ -100,7 +102,7 @@ export function TokenBankPurchasePage({
                     <span className="text-[15px] font-bold">{t("subscription.token_bank_balance", "我的算力积分")}</span>
                   </div>
                   <div className="text-[32px] font-bold font-mono leading-none">
-                    {Number(balance).toLocaleString("zh-CN")} {t("subscription.points_unit", "算力积分")}
+                    {Number(balance).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力积分")}
                   </div>
                 </div>
               )}
@@ -116,25 +118,29 @@ export function TokenBankPurchasePage({
                       onClick={() => setSelectedCode(plan.planCode)}
                       className={`relative rounded-xl p-4 text-left border transition-colors ${
                         active
-                          ? "border-primary-blue bg-primary-blue/5"
+                          ? "border-primary-blue bg-primary-blue text-white"
                           : "border-border-color bg-chat-other-bg"
                       }`}
                     >
                       {active && (
-                        <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary-blue text-white flex items-center justify-center">
+                        <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-white text-primary-blue flex items-center justify-center">
                           <Check className="w-3 h-3" strokeWidth={3} />
                         </span>
                       )}
-                      <div className="text-[15px] font-bold text-text-main">{plan.displayName}</div>
-                      <div className="mt-1 text-[13px] text-text-sub">
-                        {t("subscription.grant", "到账")} {Number(plan.grantAmount).toLocaleString("zh-CN")} {t("subscription.points_unit", "算力积分")}
+                      <div className={`text-[15px] font-bold ${active ? "text-white" : "text-text-main"}`}>
+                        {t("subscription.points_display", "{{points}} 算力积分", {
+                          points: Number(plan.displayName).toLocaleString(i18n.language),
+                        })}
+                      </div>
+                      <div className={`mt-1 text-[13px] ${active ? "text-white opacity-70" : "text-text-sub"}`}>
+                        {t("subscription.grant", "到账")} {Number(plan.grantAmount).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力积分")}
                       </div>
                       {Number(plan.bonusAmount) > 0 && (
-                        <div className="mt-0.5 text-[12px] text-orange-500">
-                          {t("subscription.bonus", "赠送")} {Number(plan.bonusAmount).toLocaleString("zh-CN")} {t("subscription.points_unit", "算力积分")}
+                        <div className={`mt-0.5 text-[12px] ${active ? "text-orange-200" : "text-orange-500"}`}>
+                          {t("subscription.bonus", "赠送")} {Number(plan.bonusAmount).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力积分")}
                         </div>
                       )}
-                      <div className="mt-3 text-[18px] font-bold text-primary-blue">
+                      <div className={`mt-3 text-[18px] font-bold ${active ? "text-white" : "text-primary-blue"}`}>
                         ¥{Number(plan.priceAmount).toFixed(2)}
                       </div>
                     </button>
@@ -162,7 +168,7 @@ export function TokenBankPurchasePage({
           )}
         </div>
 
-      <div className="absolute bottom-0 inset-x-0 flex items-center gap-4 p-4 bg-white dark:bg-[#1A1A1A] border-t border-border-color shadow-[0_-4px_20px_rgba(0,0,0,0.05)] pb-safe z-30">
+      <div className="absolute bottom-0 inset-x-0 flex items-center gap-4 px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] bg-chat-other-bg border-t border-border-color shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-30">
         <div className="flex-1 min-w-0">
           {selectedPlan ? (
             <>
@@ -170,9 +176,11 @@ export function TokenBankPurchasePage({
                 ¥{Number(selectedPlan.priceAmount).toFixed(2)}
               </div>
                 <div className="mt-1 text-[12px] text-text-sub truncate">
-                  {selectedPlan.displayName}
+                  {t("subscription.points_display", "{{points}} 算力积分", {
+                    points: Number(selectedPlan.displayName).toLocaleString(i18n.language),
+                  })}
                   <span className="ml-1">
-                    {t("subscription.grant", "到账")} {Number(selectedPlan.grantAmount).toLocaleString("zh-CN")} {t("subscription.points_unit", "算力积分")}
+                    {t("subscription.grant", "到账")} {Number(selectedPlan.grantAmount).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力积分")}
                   </span>
                 </div>
             </>

@@ -509,6 +509,11 @@ export class OrderService {
     await client.orderOrders.orders.cancellations.create(
       orderId,
       { idempotencyKey: uuid() },
+      // The HTTP layer always sends `Content-Type: application/json`, so an
+      // omitted body turns into an empty JSON body that the server rejects as
+      // a malformed request (40002). An empty command body keeps the request
+      // well-formed while leaving `cancelReason`/`cancelType` unset.
+      {},
     );
   }
 

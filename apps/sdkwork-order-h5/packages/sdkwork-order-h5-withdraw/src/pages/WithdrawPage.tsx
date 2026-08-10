@@ -109,7 +109,7 @@ export function WithdrawPage({
 
   if (submitted) {
     return (
-      <PageLayout title={t("withdraw.title", "提现")} bgClass="bg-[#F8F9FA] dark:bg-black">
+      <PageLayout title={t("withdraw.title", "提现")} bgClass="bg-bg-color">
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" strokeWidth={1.5} />
           <div className="text-[17px] font-bold text-text-main mb-2">
@@ -134,7 +134,7 @@ export function WithdrawPage({
   }
 
   return (
-    <PageLayout title={t("withdraw.title", "提现")} bgClass="bg-[#F8F9FA] dark:bg-black">
+    <PageLayout title={t("withdraw.title", "提现")} bgClass="bg-bg-color">
       <div className="flex-1 overflow-y-auto p-4 pb-32">
         {/* Cash balance */}
         <div className="bg-gradient-to-br from-blue-600 to-indigo-700 dark:from-blue-900/80 dark:to-indigo-950 rounded-2xl p-5 text-white mb-4">
@@ -156,7 +156,7 @@ export function WithdrawPage({
         </div>
 
         {/* Amount */}
-        <div className="bg-white dark:bg-[#1A1A1A] rounded-2xl p-5 shadow-sm border border-border-color mb-4">
+        <div className="bg-chat-other-bg rounded-2xl p-5 shadow-sm border border-border-color mb-4">
           <label className="text-[14px] text-text-main font-medium" htmlFor="withdraw-amount">
             {t("withdraw.amount_label", "提现金额")}
           </label>
@@ -192,7 +192,7 @@ export function WithdrawPage({
         </div>
 
         {/* Payout destination */}
-        <div className="bg-white dark:bg-[#1A1A1A] rounded-2xl p-5 shadow-sm border border-border-color mb-4">
+        <div className="bg-chat-other-bg rounded-2xl p-5 shadow-sm border border-border-color mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Landmark className="w-5 h-5 text-text-sub" strokeWidth={1.5} />
             <span className="text-[15px] text-text-main font-bold">{t("withdraw.destination_title", "到账账户")}</span>
@@ -260,7 +260,7 @@ export function WithdrawPage({
         ) : null}
       </div>
 
-      <div className="absolute bottom-0 inset-x-0 flex items-center gap-4 p-4 bg-white dark:bg-[#1A1A1A] border-t border-border-color shadow-[0_-4px_20px_rgba(0,0,0,0.05)] pb-safe z-30">
+      <div className="absolute bottom-0 inset-x-0 flex items-center gap-4 px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] bg-chat-other-bg border-t border-border-color shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-30">
         <div className="flex-1 min-w-0">
           <div className="text-[20px] font-bold text-primary-blue leading-none">
             ¥{Number.isFinite(amount) ? amount.toFixed(2) : "0.00"}

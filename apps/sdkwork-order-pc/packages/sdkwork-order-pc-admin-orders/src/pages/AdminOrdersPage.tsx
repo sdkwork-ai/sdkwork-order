@@ -252,7 +252,7 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
             <label className="min-w-[16rem] flex-[1.5] space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
               <span>搜索</span>
               <div className="relative">
-                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--sdk-color-text-muted)]" />
+                <Search aria-hidden="true" className="pointer-events-none absolute left-3 inset-y-0 my-auto h-4 w-4 text-[var(--sdk-color-text-muted)]" />
                 <Input
                   className="pl-9"
                   placeholder="订单号、主题或关联标识"

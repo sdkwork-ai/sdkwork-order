@@ -10,13 +10,29 @@ use sdkwork_payment_service::{parse_scene_codes_csv, PaymentMethodItem, PaymentM
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::money_amount::{commerce_money, multiply_money_amount, normalize_money_amount};
+use crate::money_amount::{
+    commerce_money, commerce_money_stored, multiply_money_amount, normalize_money_amount,
+};
 use crate::order_limits::MAX_ORDER_LINE_ITEMS;
 use crate::order_settlement_context::membership_purchase_snapshot;
 use crate::read_model::{
     empty_rows_when_read_model_is_missing, none_when_read_model_is_missing,
     read_model_table_is_missing,
 };
+
+/// Platform orders persist the sentinel organization scope (`"0"`) so that
+/// personal-login (no-org) sessions never write NULL into the NOT NULL
+/// `organization_id` column (DATABASE_SPEC DB090, same convention as
+/// recharge.rs / postgres_membership_order.rs).
+const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
+
+fn normalize_organization_scope(organization_id: Option<&str>) -> String {
+    organization_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(PLATFORM_ORGANIZATION_SCOPE_SENTINEL)
+        .to_owned()
+}
 
 const LIST_OWNER_ORDERS: &str = r#"
 SELECT
@@ -514,11 +530,11 @@ impl PostgresCommerceOrderStore {
                 completed: row.try_get::<i64, _>("completed").unwrap_or(0),
                 total_amount: {
                     // The aggregate is projected as text after integer-unit summation
-                    // and re-validated through CommerceMoney.
+                    // and re-validated through the stored-money reader.
                     let raw = row
                         .try_get::<String, _>("total_amount")
                         .unwrap_or_else(|_| "0".to_owned());
-                    CommerceMoney::new(&raw).map_err(CommerceServiceError::storage)?
+                    commerce_money_stored(&raw, "total_amount", "order statistics")?
                 },
             }),
             Err(error) if read_model_table_is_missing(&error) => Ok(empty_order_statistics()),
@@ -607,7 +623,11 @@ impl PostgresCommerceOrderStore {
             tx.commit().await.map_err(|error| {
                 store_error("failed to commit existing owner order lookup", error)
             })?;
-            let total_amount = commerce_money(&string_cell(&row, "total_amount"))?;
+            let total_amount = commerce_money_stored(
+                &string_cell(&row, "total_amount"),
+                "total_amount",
+                &order_id,
+            )?;
             return Ok(CreateOwnerOrderOutcome {
                 inventory_lines,
                 merchant_organization_id: optional_string_cell(&row, "merchant_organization_id"),
@@ -651,7 +671,7 @@ impl PostgresCommerceOrderStore {
         )
         .bind(&order_id)
         .bind(&command.tenant_id)
-        .bind(command.organization_id.as_deref())
+        .bind(normalize_organization_scope(command.organization_id.as_deref()))
         .bind(&command.owner_user_id)
         .bind(&order_sn)
         .bind(&subject)
@@ -716,7 +736,7 @@ impl PostgresCommerceOrderStore {
         )
         .bind(format!("{order_id}-amount"))
         .bind(&command.tenant_id)
-        .bind(command.organization_id.as_deref())
+        .bind(normalize_organization_scope(command.organization_id.as_deref()))
         .bind(&order_id)
         .bind(&original_amount)
         .bind(&discount_amount)
@@ -967,10 +987,16 @@ async fn load_order_items(
                 id: string_cell(row, "id"),
                 product_name: string_cell(row, "product_name"),
                 quantity: row.try_get::<i64, _>("quantity").unwrap_or(1),
-                unit_price: CommerceMoney::new(&string_cell(row, "unit_price_amount"))
-                    .map_err(CommerceServiceError::storage)?,
-                total_amount: CommerceMoney::new(&string_cell(row, "total_amount"))
-                    .map_err(CommerceServiceError::storage)?,
+                unit_price: commerce_money_stored(
+                    &string_cell(row, "unit_price_amount"),
+                    "unit_price_amount",
+                    order_id,
+                )?,
+                total_amount: commerce_money_stored(
+                    &string_cell(row, "total_amount"),
+                    "total_amount",
+                    order_id,
+                )?,
             })
         })
         .collect()
@@ -995,10 +1021,16 @@ fn map_owner_order_event_row(
 fn map_order_summary_row(
     row: &sqlx::postgres::PgRow,
 ) -> Result<OrderOwnerSummary, CommerceServiceError> {
-    let total_amount = CommerceMoney::new(&string_cell(row, "total_amount"))
-        .map_err(CommerceServiceError::storage)?;
-    let discount_amount = CommerceMoney::new(&string_cell(row, "discount_amount"))
-        .map_err(CommerceServiceError::storage)?;
+    let order_id = string_cell(row, "order_id");
+    // Stored money columns may carry legacy major-unit decimals (`0.00`); a
+    // single legacy row must not fail the whole owner order list.
+    let total_amount =
+        commerce_money_stored(&string_cell(row, "total_amount"), "total_amount", &order_id)?;
+    let discount_amount = commerce_money_stored(
+        &string_cell(row, "discount_amount"),
+        "discount_amount",
+        &order_id,
+    )?;
     let status = string_cell(row, "status");
     let payment_status = optional_string_cell(row, "payment_status");
     let paid_amount = if status.eq_ignore_ascii_case("paid")

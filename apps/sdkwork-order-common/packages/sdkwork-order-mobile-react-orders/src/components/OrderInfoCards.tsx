@@ -27,7 +27,7 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
 
   return (
     <>
-      <div className="bg-white dark:bg-[#1E1E1E] rounded-xl p-4 shadow-sm flex flex-col gap-3">
+      <div className="bg-chat-other-bg rounded-xl p-4 shadow-sm flex flex-col gap-3">
         <h3 className="text-[14px] font-bold text-text-main mb-1">
           {t("orders.order_info", "订单信息")}
         </h3>
@@ -90,7 +90,7 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
         )}
       </div>
 
-      <div className="bg-white dark:bg-[#1E1E1E] rounded-xl p-4 shadow-sm flex flex-col gap-3">
+      <div className="bg-chat-other-bg rounded-xl p-4 shadow-sm flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-[13px] text-text-sub">
             {t("orders.goods_total", "商品总价")}

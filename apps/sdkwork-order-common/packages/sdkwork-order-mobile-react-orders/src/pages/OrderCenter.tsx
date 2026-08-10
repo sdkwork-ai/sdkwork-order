@@ -118,7 +118,7 @@ export function OrderCenter({
         </button>
       }
     >
-      <div className="flex flex-col h-full bg-[#f5f6f8] dark:bg-[#1a1b1c]">
+      <div className="flex flex-col h-full bg-bg-color">
         <OrderTabsNav
           tabs={tabs.map((tab) => ({ id: tab.id, label: tabLabel(tab) }))}
           activeTab={activeTab}

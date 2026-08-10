@@ -5,9 +5,7 @@ use sdkwork_order_service::{
 };
 use sqlx::{Postgres, Row, Transaction};
 
-use crate::order_lifecycle::{
-    insert_order_event_postgres, OrderLifecycleAuditInput,
-};
+use crate::order_lifecycle::{insert_order_event_postgres, OrderLifecycleAuditInput};
 use crate::sql_store_error::map_sqlx_store_error;
 use crate::PostgresCommerceOrderStore;
 

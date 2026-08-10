@@ -25,6 +25,7 @@ import {
   type PaymentSession,
 } from "../services/OrderService";
 import { toUserErrorMessage } from "../services/errorMessage";
+import { localizeOrderTitle } from "../services/orderTitle";
 import {
   CASHIER_POLL_INTERVAL_MS,
   computeCashierRemainingSeconds,
@@ -506,7 +507,7 @@ export function CashierPage({
 
   return (
     <PageLayout title={t("orders.cashier_title", "收银台")}>
-      <div className="flex flex-col h-full bg-[#f5f6f8] dark:bg-[#1a1b1c]">
+      <div className="flex flex-col h-full bg-bg-color">
         {phase === "loading" || phase === "creating" || phase === "oauth_waiting" ? (
           <div className="flex flex-col items-center justify-center flex-1 text-text-sub">
             <Loader2 className="w-8 h-8 animate-spin mb-3" />
@@ -520,7 +521,7 @@ export function CashierPage({
           </div>
         ) : phase === "pending" && order ? (
           <>
-            <div className="bg-white dark:bg-[#1E1E1E] m-4 rounded-xl shadow-sm flex flex-col items-center py-6 px-4">
+            <div className="bg-chat-other-bg m-4 rounded-xl shadow-sm flex flex-col items-center py-6 px-4">
               <span className="text-[13px] text-text-sub mb-1">
                 {t("orders.cashier_amount_label", "支付金额")}
               </span>
@@ -534,7 +535,7 @@ export function CashierPage({
 
               <div className="flex items-center gap-1 text-text-sub mb-4">
                 <Store className="w-4 h-4" />
-                <span className="text-[13px]">{order.subject}</span>
+                <span className="text-[13px]">{localizeOrderTitle(order.subject, t)}</span>
               </div>
 
               {paymentSession ? (
@@ -619,7 +620,7 @@ export function CashierPage({
               )}
             </div>
 
-            <div className="bg-white dark:bg-[#1E1E1E] mx-4 rounded-xl shadow-sm p-4">
+            <div className="bg-chat-other-bg mx-4 rounded-xl shadow-sm p-4">
               <h3 className="text-[14px] font-bold text-text-main mb-3">
                 {t("orders.cashier_pay_method", "支付方式")}
               </h3>

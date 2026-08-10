@@ -19,9 +19,27 @@ export interface VipSubscriptionPageProps {
 }
 
 const FALLBACK_BENEFITS = [
-  { icon: Crown, title: "专属标识", desc: "尊贵身份的外显标识" },
-  { icon: Shield, title: "安全防护", desc: "高级别的账号找回与安全" },
-  { icon: Zap, title: "优先体验", desc: "最新功能提前体验" },
+  {
+    icon: Crown,
+    titleKey: "subscription.benefit_identity_title",
+    title: "专属标识",
+    descKey: "subscription.benefit_identity_desc",
+    desc: "尊贵身份的外显标识",
+  },
+  {
+    icon: Shield,
+    titleKey: "subscription.benefit_safety_title",
+    title: "安全防护",
+    descKey: "subscription.benefit_safety_desc",
+    desc: "高级别的账号找回与安全",
+  },
+  {
+    icon: Zap,
+    titleKey: "subscription.benefit_priority_title",
+    title: "优先体验",
+    descKey: "subscription.benefit_priority_desc",
+    desc: "最新功能提前体验",
+  },
 ];
 
 const DEFAULT_CASHIER_PATH = "/me/orders/:orderId/cashier";
@@ -111,7 +129,7 @@ export function VipSubscriptionPage({
   };
 
   return (
-    <PageLayout title={t("subscription.vip_title", "会员订阅")} bgClass="bg-[#F8F9FA] dark:bg-black">
+    <PageLayout title={t("subscription.vip_title", "会员订阅")} bgClass="bg-bg-color">
       <VipPlanTabs
         groups={groups}
         activeGroupId={activeGroupId}
@@ -133,17 +151,6 @@ export function VipSubscriptionPage({
           </div>
         ) : (
           <>
-            {/* Membership banner */}
-            <div className="bg-gradient-to-br from-indigo-600 to-purple-700 dark:from-indigo-900/80 dark:to-purple-950 rounded-2xl p-6 text-white mb-4">
-              <div className="flex items-center gap-2 text-white/90 mb-1">
-                <Crown className="w-6 h-6" />
-                <span className="text-[17px] font-bold">{t("subscription.vip_membership", "SDKWork 会员")}</span>
-              </div>
-              <p className="text-[13px] text-white/70">
-                {t("subscription.vip_desc", "开通会员，解锁专属权益与能力")}
-              </p>
-            </div>
-
             {/* Active group packages */}
             <div className="space-y-3">
               {activePackages.map((pkg) => {
@@ -156,12 +163,19 @@ export function VipSubscriptionPage({
                     className={cn(
                       "w-full rounded-xl p-4 text-left border transition-colors",
                       active
-                        ? "border-primary-blue bg-primary-blue/5"
+                        ? "border-primary-blue bg-primary-blue text-white"
                         : "border-border-color bg-chat-other-bg",
                     )}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="text-[15px] font-bold text-text-main">{pkg.name}</div>
+                      <div
+                        className={cn(
+                          "text-[15px] font-bold",
+                          active ? "text-white" : "text-text-main",
+                        )}
+                      >
+                        {pkg.name}
+                      </div>
                       {pkg.recommended && (
                         <span className="text-[11px] text-white bg-orange-500 rounded-full px-2 py-0.5">
                           {t("subscription.recommended", "推荐")}
@@ -169,14 +183,40 @@ export function VipSubscriptionPage({
                       )}
                     </div>
                     {pkg.planName && (
-                      <div className="mt-0.5 text-[12px] text-text-sub">{pkg.planName}</div>
+                      <div
+                        className={cn(
+                          "mt-0.5 text-[12px]",
+                          active ? "text-white opacity-70" : "text-text-sub",
+                        )}
+                      >
+                        {pkg.planName}
+                      </div>
                     )}
                     <div className="mt-2 flex items-baseline gap-1">
-                      <span className="text-[20px] font-bold text-primary-blue">¥{pkg.price}</span>
+                      <span
+                        className={cn(
+                          "text-[20px] font-bold",
+                          active ? "text-white" : "text-primary-blue",
+                        )}
+                      >
+                        ¥{pkg.price}
+                      </span>
                       {pkg.originalPrice && (
-                        <span className="text-[13px] text-text-sub line-through">¥{pkg.originalPrice}</span>
+                        <span
+                          className={cn(
+                            "text-[13px] line-through",
+                            active ? "text-white opacity-70" : "text-text-sub",
+                          )}
+                        >
+                          ¥{pkg.originalPrice}
+                        </span>
                       )}
-                      <span className="text-[12px] text-text-sub ml-1">
+                      <span
+                        className={cn(
+                          "text-[12px] ml-1",
+                          active ? "text-white opacity-70" : "text-text-sub",
+                        )}
+                      >
                         {t("subscription.duration_days", "{{days}}天", { days: pkg.durationDays })}
                       </span>
                       <span className="ml-auto">
@@ -184,8 +224,8 @@ export function VipSubscriptionPage({
                           className={cn(
                             "flex h-5 w-5 items-center justify-center rounded-full border",
                             active
-                              ? "border-primary-blue bg-primary-blue text-white"
-                              : "border-border-color bg-white dark:bg-[#1A1A1A]",
+                              ? "border-white bg-white text-primary-blue"
+                              : "border-border-color bg-chat-other-bg",
                           )}
                         >
                           {active && <Check className="w-3 h-3" strokeWidth={3} />}
@@ -215,11 +255,11 @@ export function VipSubscriptionPage({
                 {FALLBACK_BENEFITS.map((benefit) => {
                   const Icon = benefit.icon;
                   return (
-                    <div key={benefit.title} className="flex items-center gap-3">
+                    <div key={benefit.titleKey} className="flex items-center gap-3">
                       <Icon className="w-5 h-5 text-primary-blue" />
                       <div>
-                        <div className="text-[14px] text-text-main">{benefit.title}</div>
-                        <div className="text-[12px] text-text-sub">{benefit.desc}</div>
+                        <div className="text-[14px] text-text-main">{t(benefit.titleKey, benefit.title)}</div>
+                        <div className="text-[12px] text-text-sub">{t(benefit.descKey, benefit.desc)}</div>
                       </div>
                     </div>
                   );

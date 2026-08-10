@@ -690,7 +690,7 @@ impl PostgresCommerceRechargeStore {
         tx.commit()
             .await
             .map_err(|error| store_error("failed to commit recharge transaction", error))?;
-        let cashier_url = recharge_cashier_url(&command.order_no, &command.out_trade_no);
+        let cashier_url = recharge_cashier_url(&command.order_id, &command.out_trade_no);
 
         Ok(CreatePointsRechargeOrderOutcome {
             success: true,
@@ -1928,8 +1928,8 @@ fn map_checkout_status(
         expires_at: string_cell(row, "expires_at"),
         paid_at: string_cell(row, "paid_at"),
         next_action: checkout_next_action(status).to_string(),
-        cashier_url: recharge_cashier_url(&string_cell(row, "order_no"), &out_trade_no),
-        qr_code_payload: recharge_cashier_url(&string_cell(row, "order_no"), &out_trade_no),
+        cashier_url: recharge_cashier_url(&string_cell(row, "order_id"), &out_trade_no),
+        qr_code_payload: recharge_cashier_url(&string_cell(row, "order_id"), &out_trade_no),
         request_payment_payload: None,
     })
 }
@@ -2013,10 +2013,10 @@ fn checkout_next_action(status: &str) -> &'static str {
     }
 }
 
-fn recharge_cashier_url(order_no: &str, out_trade_no: &str) -> String {
+fn recharge_cashier_url(order_id: &str, out_trade_no: &str) -> String {
     build_commerce_cashier_url(
         commerce_cashier_scene(Some("points_recharge")),
-        order_no,
+        order_id,
         out_trade_no,
     )
 }

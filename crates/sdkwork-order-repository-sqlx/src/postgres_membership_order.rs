@@ -352,7 +352,7 @@ async fn load_membership_order_in_tx(
         &string_cell(&row, "payment_method"),
         membership_order_status_label(&string_cell(&row, "order_status")),
         true,
-        &membership_cashier_url(&order_no, &out_trade_no),
+        &membership_cashier_url(&string_cell(&row, "order_id"), &out_trade_no),
     )?;
     Ok(Some(StoredMembershipOrderOutcome {
         request_fingerprint: optional_string_cell(&row, "request_fingerprint"),
@@ -515,8 +515,10 @@ async fn insert_membership_order_item(
         "item_title": package.package_name,
         "quantity": 1,
         "unit_price_amount": package.price_amount.as_str(),
-        "discount_amount": "0.00",
-        "tax_amount": "0.00",
+        // Amount columns store canonical integer smallest-unit strings; the
+        // owner list/detail readers parse them with CommerceMoney::new.
+        "discount_amount": "0",
+        "tax_amount": "0",
         "total_amount": package.price_amount.as_str(),
         "fulfillment_status": "unfulfilled",
         "refund_status": "none",
@@ -548,7 +550,9 @@ async fn insert_membership_order_amount_breakdown(
         "order_item_id": null,
         "allocation_type": "order_total",
         "original_amount": package.price_amount.as_str(),
-        "discount_amount": "0.00",
+        // Canonical integer smallest-unit string; the owner order list parses
+        // discount_amount with CommerceMoney::new and rejects decimals.
+        "discount_amount": "0",
         "payable_amount": package.price_amount.as_str(),
         "currency_code": package.currency_code,
         "created_at": command.requested_at,
@@ -610,15 +614,15 @@ fn build_membership_order_outcome(
         payment_method,
         "pending_payment",
         false,
-        &membership_cashier_url(&command.order_no, &command.out_trade_no),
+        &membership_cashier_url(&command.order_id, &command.out_trade_no),
     )
     .expect("membership order outcome should be valid")
 }
 
-fn membership_cashier_url(order_no: &str, out_trade_no: &str) -> String {
+fn membership_cashier_url(order_id: &str, out_trade_no: &str) -> String {
     build_commerce_cashier_url(
         commerce_cashier_scene(Some("membership")),
-        order_no,
+        order_id,
         out_trade_no,
     )
 }
@@ -739,6 +743,7 @@ mod tests {
     fn postgres_membership_cashier_url_uses_virtual_scene() {
         let url = membership_cashier_url("MB123", "MEMBERSHIP123");
         assert!(url.contains("scene=virtual"));
+        assert!(url.contains("/cashier/MB123"));
     }
 
     #[test]

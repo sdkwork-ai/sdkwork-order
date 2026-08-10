@@ -35,7 +35,10 @@ pub(crate) fn membership_purchase_snapshot(
         .map(str::trim)
         .unwrap_or_default()
         .to_ascii_lowercase();
-    if !matches!(action.as_str(), "purchase" | "renew" | "upgrade" | "recharge") {
+    if !matches!(
+        action.as_str(),
+        "purchase" | "renew" | "upgrade" | "recharge"
+    ) {
         return Err(CommerceServiceError::invalid_state(
             "membership order item snapshot action is invalid",
         ));

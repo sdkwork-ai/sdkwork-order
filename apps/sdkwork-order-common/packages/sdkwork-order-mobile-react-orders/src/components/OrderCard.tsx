@@ -4,6 +4,7 @@ import { Store, ChevronRight } from "lucide-react";
 import { cn } from "@sdkwork/ui-mobile-react";
 import { motion } from "motion/react";
 import { formatAmountCny, type Order } from "../services/OrderService";
+import { localizeOrderTitle } from "../services/orderTitle";
 
 interface OrderCardProps {
   order: Order;
@@ -25,14 +26,14 @@ export const OrderCard: React.FC<OrderCardProps> = ({
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2 }}
       onClick={onClick}
-      className="bg-white dark:bg-[#1E1E1E] rounded-xl p-3 flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-transform"
+      className="bg-chat-other-bg rounded-xl p-3 flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-transform"
     >
       {/* Order Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 cursor-pointer active:opacity-70">
           <Store className="w-4 h-4 text-text-main" />
           <span className="text-[14px] font-semibold text-text-main">
-            {order.subject}
+            {localizeOrderTitle(order.subject, t)}
           </span>
           <ChevronRight className="w-4 h-4 text-text-sub" />
         </div>
@@ -56,7 +57,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             <div className="flex-1 min-w-0 flex flex-col">
               <div className="flex justify-between gap-2 items-start">
                 <h4 className="text-[13px] text-text-main leading-[1.4] line-clamp-2 font-medium">
-                  {item.title}
+                  {localizeOrderTitle(item.title, t)}
                 </h4>
                 <div className="flex flex-col items-end shrink-0">
                   <span className="text-[13px] font-medium text-text-main">

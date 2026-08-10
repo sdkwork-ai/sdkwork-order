@@ -11,6 +11,7 @@ use sdkwork_order_service::{
 };
 use sqlx::{Postgres, Row, Transaction};
 
+use crate::money_amount::commerce_money_stored;
 use crate::postgres_order::PostgresCommerceOrderStore;
 
 impl PostgresCommerceOrderStore {
@@ -59,7 +60,7 @@ impl PostgresCommerceOrderStore {
                  reason_code, description, requested_amount, approved_amount, currency_code,
                  requested_by_type, requested_by, request_no, idempotency_key, created_at, updated_at)
             VALUES
-                ($1, $2, $3, $4, $5, $6, $7, 'submitted', 'none', 'none', 'none', $8, $9, $10, '0.00', $11,
+                ($1, $2, $3, $4, $5, $6, $7, 'submitted', 'none', 'none', 'none', $8, $9, $10, '0', $11,
                  'buyer', $12, $13, $14, $15, $16)
            "#,
         )
@@ -94,7 +95,9 @@ impl PostgresCommerceOrderStore {
             let item_amount = item
                 .requested_amount
                 .clone()
-                .unwrap_or_else(|| "0.00".to_string());
+                // Canonical integer smallest-unit string (after-sales readers
+                // parse amounts with CommerceMoney::new).
+                .unwrap_or_else(|| "0".to_string());
             sqlx::query(
                 r#"
                 INSERT INTO commerce_after_sales_request_item
@@ -815,14 +818,21 @@ async fn insert_after_sales_event(
 fn map_after_sales_request_row(
     row: sqlx::postgres::PgRow,
 ) -> Result<AfterSalesRequestView, CommerceServiceError> {
+    let after_sales_request_id = string_cell(&row, "id");
+    // Stored money columns may carry legacy major-unit decimals; never let
+    // a single legacy row fail the whole after-sales list.
+    let requested_amount = commerce_money_stored(
+        &string_cell(&row, "requested_amount"),
+        "requested_amount",
+        &after_sales_request_id,
+    )?;
     Ok(AfterSalesRequestView {
-        after_sales_request_id: string_cell(&row, "id"),
+        after_sales_request_id,
         after_sales_no: string_cell(&row, "after_sales_no"),
         order_id: string_cell(&row, "order_id"),
         after_sales_type: string_cell(&row, "after_sales_type"),
         reason_code: string_cell(&row, "reason_code"),
-        requested_amount: CommerceMoney::new(&string_cell(&row, "requested_amount"))
-            .map_err(CommerceServiceError::storage)?,
+        requested_amount,
         currency_code: string_cell(&row, "currency_code"),
         status: string_cell(&row, "status"),
     })

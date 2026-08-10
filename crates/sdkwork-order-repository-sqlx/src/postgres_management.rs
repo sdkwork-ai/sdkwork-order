@@ -1,4 +1,4 @@
-use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
+use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{
     CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
     OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
@@ -8,6 +8,7 @@ use sdkwork_order_service::{
 };
 use sqlx::{PgPool, Row};
 
+use crate::money_amount::commerce_money_stored;
 use crate::order_limits::MAX_ORDER_LINE_ITEMS;
 use crate::postgres_order::PostgresCommerceOrderStore;
 
@@ -627,10 +628,16 @@ async fn load_management_order_items(
                 id: string_cell(row, "id"),
                 product_name: string_cell(row, "product_name"),
                 quantity: row.try_get::<i64, _>("quantity").unwrap_or(1),
-                unit_price: CommerceMoney::new(&string_cell(row, "unit_price_amount"))
-                    .map_err(CommerceServiceError::storage)?,
-                total_amount: CommerceMoney::new(&string_cell(row, "total_amount"))
-                    .map_err(CommerceServiceError::storage)?,
+                unit_price: commerce_money_stored(
+                    &string_cell(row, "unit_price_amount"),
+                    "unit_price_amount",
+                    order_id,
+                )?,
+                total_amount: commerce_money_stored(
+                    &string_cell(row, "total_amount"),
+                    "total_amount",
+                    order_id,
+                )?,
             })
         })
         .collect()
@@ -639,18 +646,24 @@ async fn load_management_order_items(
 fn map_management_summary_row(
     row: &sqlx::postgres::PgRow,
 ) -> Result<OrderOwnerSummary, CommerceServiceError> {
+    let order_id = string_cell(row, "order_id");
+    // Stored money columns may carry legacy major-unit decimals; never let a
+    // single legacy row fail the whole management order list.
+    let total_amount =
+        commerce_money_stored(&string_cell(row, "total_amount"), "total_amount", &order_id)?;
+    let discount_amount = commerce_money_stored(
+        &string_cell(row, "discount_amount"),
+        "discount_amount",
+        &order_id,
+    )?;
     Ok(OrderOwnerSummary {
-        order_id: string_cell(row, "order_id"),
+        order_id,
         order_sn: string_cell(row, "order_sn"),
         status: string_cell(row, "status"),
         subject: string_cell(row, "subject"),
-        total_amount: CommerceMoney::new(&string_cell(row, "total_amount"))
-            .map_err(CommerceServiceError::storage)?,
+        total_amount,
         paid_amount: None,
-        discount_amount: Some(
-            CommerceMoney::new(&string_cell(row, "discount_amount"))
-                .map_err(CommerceServiceError::storage)?,
-        ),
+        discount_amount: Some(discount_amount),
         currency_code: string_cell(row, "currency_code"),
         quantity: row.try_get::<i64, _>("quantity").unwrap_or(1),
         created_at: string_cell(row, "created_at"),

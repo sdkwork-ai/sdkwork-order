@@ -44,7 +44,7 @@ export const VoucherRedeemModal: React.FC<VoucherRedeemModalProps> = ({
             <X className="w-6 h-6 text-text-main" />
           </button>
         </div>
-        <div className="absolute left-1/2 -translate-x-1/2">
+        <div className="absolute inset-x-0 flex justify-center">
           <h2 className="text-[17px] font-semibold text-text-main">{t("orders.voucher_title", "券码核销")}</h2>
         </div>
         <div className="flex-1" />

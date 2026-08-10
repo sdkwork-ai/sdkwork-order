@@ -234,6 +234,33 @@ CREATE INDEX IF NOT EXISTS idx_recharge_package_list
 CREATE INDEX IF NOT EXISTS idx_recharge_package_sku
     ON commerce_recharge_package(tenant_id, sku_id);
 
+-- Cash-to-points exchange rule projection shared by the order read store and
+-- the Cloud Router admin store. `rate` is the base points per base currency
+-- unit; `remark` carries the recharge settings payload
+-- (`baseCurrencyCode` + `currencyToCnyRates`). Timestamps are TIMESTAMPTZ
+-- because the shared admin writer binds `::timestamptz` values.
+CREATE TABLE IF NOT EXISTS commerce_exchange_rule (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    rule_no TEXT NOT NULL,
+    source_asset_type TEXT NOT NULL,
+    target_asset_type TEXT NOT NULL,
+    rate TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    remark TEXT,
+    request_no TEXT,
+    idempotency_key TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_exchange_rule_pair
+    ON commerce_exchange_rule(tenant_id, organization_id, source_asset_type, target_asset_type);
+
+CREATE INDEX IF NOT EXISTS idx_exchange_rule_list
+    ON commerce_exchange_rule(tenant_id, organization_id, status, updated_at, id);
+
 CREATE TABLE IF NOT EXISTS commerce_account_value_package (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,

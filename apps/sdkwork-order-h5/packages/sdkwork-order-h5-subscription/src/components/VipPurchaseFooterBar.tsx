@@ -17,7 +17,7 @@ export const VipPurchaseFooterBar: React.FC<VipPurchaseFooterBarProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="absolute bottom-0 inset-x-0 flex items-center gap-4 p-4 bg-white dark:bg-[#1A1A1A] border-t border-border-color shadow-[0_-4px_20px_rgba(0,0,0,0.05)] pb-safe z-30">
+    <div className="absolute bottom-0 inset-x-0 flex items-center gap-4 px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] bg-chat-other-bg border-t border-border-color shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-30">
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-1.5">
           <span className="text-[20px] font-bold text-primary-blue leading-none">
@@ -46,7 +46,7 @@ export const VipPurchaseFooterBar: React.FC<VipPurchaseFooterBarProps> = ({
       >
         {creating
           ? t("subscription.creating_order", "正在创建订单...")
-          : t("subscription.confirm_payment", "立即开通")}
+          : t("subscription.activate_now", "立即开通")}
       </button>
     </div>
   );

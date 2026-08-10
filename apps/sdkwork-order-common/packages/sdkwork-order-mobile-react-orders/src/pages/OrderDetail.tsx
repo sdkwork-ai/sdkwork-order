@@ -8,6 +8,7 @@ import { OrderActionButtons } from "../components/OrderActionButtons";
 import { OrderInfoCards } from "../components/OrderInfoCards";
 import { OrderItemsCard } from "../components/OrderItemsCard";
 import { OrderService, type Order } from "../services/OrderService";
+import { localizeOrderTitle } from "../services/orderTitle";
 import { toUserErrorMessage } from "../services/errorMessage";
 import {
   ORDER_MOBILE_ROUTE_DEFINITIONS,
@@ -65,7 +66,7 @@ export function OrderDetail({
 
   return (
     <PageLayout title={t("orders.detail_title", "订单详情")}>
-      <div className="flex flex-col h-full bg-[#f5f6f8] dark:bg-[#1a1b1c]">
+      <div className="flex flex-col h-full bg-bg-color">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center flex-1 text-text-sub">
             <Loader2 className="w-8 h-8 animate-spin mb-3" />
@@ -78,9 +79,9 @@ export function OrderDetail({
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 pb-24">
-            <div className="bg-white dark:bg-[#1E1E1E] rounded-xl p-4 shadow-sm flex items-center justify-between">
+            <div className="bg-chat-other-bg rounded-xl p-4 shadow-sm flex items-center justify-between">
               <span className="text-[14px] font-semibold text-text-main">
-                {order.subject}
+                {localizeOrderTitle(order.subject, t)}
               </span>
               <span
                 className={
@@ -97,7 +98,7 @@ export function OrderDetail({
             <OrderInfoCards order={order} />
 
             {order.status === "pending_payment" && (
-              <div className="fixed bottom-0 inset-x-0 bg-white dark:bg-[#1E1E1E] border-t border-border-color/50 px-4 py-3 flex justify-end gap-2">
+              <div className="fixed bottom-0 inset-x-0 bg-chat-other-bg border-t border-border-color/50 px-4 py-3 flex justify-end gap-2">
                 <OrderActionButtons
                   order={order}
                   onRefresh={() => void loadOrder()}

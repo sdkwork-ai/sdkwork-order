@@ -36,6 +36,28 @@ ON CONFLICT (id) DO UPDATE SET
     idempotency_key = EXCLUDED.idempotency_key,
     updated_at = EXCLUDED.updated_at;
 
+-- Platform cash-to-points exchange rule. `rate` is the base points per base
+-- currency unit and `remark` carries the recharge settings payload
+-- (`baseCurrencyCode` + `currencyToCnyRates`) shared by the order read store
+-- and the Cloud Router admin store.
+INSERT INTO commerce_exchange_rule (
+    id, tenant_id, organization_id, rule_no, source_asset_type, target_asset_type,
+    rate, status, remark, request_no, idempotency_key, created_at, updated_at
+) VALUES
+    ('platform-exchange-rule-cash-points', '100001', '0', 'CASH_TO_POINTS', 'cash', 'points', '10', 'active',
+     '{"baseCurrencyCode":"CNY","currencyToCnyRates":{"CNY":"1","USD":"7"}}',
+     'seed-exchange-rule-1', 'seed-exchange-rule-1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (id) DO UPDATE SET
+    rule_no = EXCLUDED.rule_no,
+    source_asset_type = EXCLUDED.source_asset_type,
+    target_asset_type = EXCLUDED.target_asset_type,
+    rate = EXCLUDED.rate,
+    status = EXCLUDED.status,
+    remark = EXCLUDED.remark,
+    request_no = EXCLUDED.request_no,
+    idempotency_key = EXCLUDED.idempotency_key,
+    updated_at = EXCLUDED.updated_at;
+
 -- Token Bank recharge plans. Amounts are stored as major-unit decimals.
 -- These are the standard compute-credit tiers offered by the H5 Token Bank
 -- cashier (`GET /app/v3/api/recharges/plans`); the plan codes are stable

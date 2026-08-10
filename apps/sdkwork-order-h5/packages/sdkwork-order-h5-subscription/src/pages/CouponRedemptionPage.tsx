@@ -52,7 +52,7 @@ export function CouponRedemptionPage({
   }
 
   return (
-    <PageLayout title={t("subscription.coupon_title", "优惠券兑换")} bgClass="bg-[#F8F9FA] dark:bg-black">
+    <PageLayout title={t("subscription.coupon_title", "优惠券兑换")} bgClass="bg-bg-color">
       <div className="flex-1 overflow-y-auto p-4">
         <div className="bg-gradient-to-br from-emerald-500 to-teal-600 dark:from-emerald-900/80 dark:to-teal-950 rounded-2xl p-6 text-white mb-4">
           <div className="flex items-center gap-2 text-white/90 mb-2">
@@ -70,7 +70,7 @@ export function CouponRedemptionPage({
         </div>
 
         {result ? (
-          <div className="bg-white dark:bg-[#1A1A1A] rounded-2xl p-6 border border-border-color flex flex-col items-center">
+          <div className="bg-chat-other-bg rounded-2xl p-6 border border-border-color flex flex-col items-center">
             <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-3" strokeWidth={1.5} />
             <h3 className="text-[16px] font-bold text-text-main mb-1">
               {t("subscription.coupon_redeemed", "兑换成功")}
@@ -97,7 +97,7 @@ export function CouponRedemptionPage({
           </div>
         ) : (
           <>
-            <div className="bg-white dark:bg-[#1A1A1A] rounded-2xl p-5 border border-border-color">
+            <div className="bg-chat-other-bg rounded-2xl p-5 border border-border-color">
               <label className="text-[14px] font-medium text-text-main mb-2 block">
                 {t("subscription.coupon_code_label", "兑换码")}
               </label>

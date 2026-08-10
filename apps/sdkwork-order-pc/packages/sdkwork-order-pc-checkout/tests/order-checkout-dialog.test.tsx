@@ -235,7 +235,7 @@ describe("SdkworkOrderCheckoutDialog", () => {
   });
 
   it("uses the mobile cashier URL as the QR payload when qrCode is omitted", async () => {
-    const cashierUrl = "https://im.sdkwork.com/cashier?scene=virtual&orderId=ORDER-H5&outTradeNo=TRADE-H5";
+    const cashierUrl = "https://im.sdkwork.com/cashier/ORDER-H5?scene=virtual&outTradeNo=TRADE-H5";
 
     render(
       <SdkworkThemeProvider defaultTheme="light">
