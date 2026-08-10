@@ -1,6 +1,18 @@
 use sdkwork_contract_service::CommerceServiceError;
 use sqlx::{Postgres, Transaction};
 
+/// `organization_id` column (DATABASE_SPEC DB090, same convention as
+/// postgres_order.rs / postgres_recharge.rs).
+const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
+
+fn normalize_organization_scope(organization_id: Option<&str>) -> String {
+    organization_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(PLATFORM_ORGANIZATION_SCOPE_SENTINEL)
+        .to_owned()
+}
+
 #[derive(Clone, Debug)]
 pub struct OrderLifecycleAuditInput {
     pub tenant_id: String,
@@ -66,9 +78,11 @@ pub async fn insert_order_event_postgres(
             ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, '{}', $13, $14, $15)
         "#,
     )
-    .bind(&event_id)
-    .bind(&input.tenant_id)
-    .bind(input.organization_id.as_deref())
+    // commerce_order_event.organization_id is NOT NULL with the platform
+    // sentinel default (DATABASE_SPEC DB090); org-less orders store '0'.
+    .bind(&normalize_organization_scope(
+        input.organization_id.as_deref(),
+    ))
     .bind(&event_no)
     .bind(&input.order_id)
     .bind(input.event_type)
@@ -119,4 +133,25 @@ pub async fn insert_order_cancellation_postgres(
 
 fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceError {
     crate::sql_store_error::map_sql_store_error(message, error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_organization_scope;
+
+    #[test]
+    fn organization_scope_missing_uses_platform_sentinel() {
+        assert_eq!(normalize_organization_scope(None), "0");
+    }
+
+    #[test]
+    fn organization_scope_blank_uses_platform_sentinel() {
+        assert_eq!(normalize_organization_scope(Some("")), "0");
+        assert_eq!(normalize_organization_scope(Some("   ")), "0");
+    }
+
+    #[test]
+    fn organization_scope_present_is_trimmed() {
+        assert_eq!(normalize_organization_scope(Some(" org-123 ")), "org-123");
+    }
 }
