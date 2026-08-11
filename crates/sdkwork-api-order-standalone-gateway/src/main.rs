@@ -36,6 +36,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let assembly = assemble_api_router(host.clone())
         .await
         .map_err(std::io::Error::other)?;
+    // Order expiration scheduler: scans due orders every tick, transitions
+    // them to `expired`, closes payment attempts, and releases physical
+    // inventory (embedded loop, disabled via
+    // SDKWORK_ORDER_EXPIRATION_SCHEDULER_ENABLED=0).
+    sdkwork_order_service_host::spawn_order_expiration_scheduler(host.clone());
     let manifest = assembly.route_manifest.clone();
     let resolver = sdkwork_iam_web_adapter::IamWebRequestContextResolver::from_database_pool(Some(
         host.database_pool().clone(),

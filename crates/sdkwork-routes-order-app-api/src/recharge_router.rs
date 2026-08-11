@@ -52,9 +52,14 @@ use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;
-const PAYMENT_EXPIRE_MINUTES: i64 = 30;
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
+
+/// Payment countdown in minutes, backed by the shared expiry window
+/// (`SDKWORK_ORDER_PAYMENT_EXPIRE_SECONDS`, default 30 minutes).
+fn payment_expire_minutes() -> i64 {
+    sdkwork_order_service::payment_expire_seconds() / 60
+}
 
 /// 允许的支付方式白名单。新增支付方式时只需扩展此处。
 const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
@@ -2030,7 +2035,7 @@ fn build_create_recharge_command(
     let requested_at_instant = now();
     let requested_at = format_datetime(requested_at_instant, None);
     let expire_at = format_datetime(
-        add_minutes(requested_at_instant, PAYMENT_EXPIRE_MINUTES),
+        add_minutes(requested_at_instant, payment_expire_minutes()),
         None,
     );
     let seed = format!(
@@ -2086,7 +2091,7 @@ fn build_create_account_recharge_command(
     let requested_at_instant = now();
     let requested_at = format_datetime(requested_at_instant, None);
     let expire_at = format_datetime(
-        add_minutes(requested_at_instant, PAYMENT_EXPIRE_MINUTES),
+        add_minutes(requested_at_instant, payment_expire_minutes()),
         None,
     );
     let seed = account_value_command_seed(&input);
@@ -2623,7 +2628,7 @@ mod tests {
         let expire_at = sdkwork_utils_rust::parse_datetime(&command.expire_at, None)
             .expect("expiresAt must be ISO 8601 UTC");
         assert_eq!(
-            PAYMENT_EXPIRE_MINUTES,
+            payment_expire_minutes(),
             (expire_at - requested_at).num_minutes()
         );
         assert!(command.requested_at.ends_with('Z'));

@@ -114,6 +114,8 @@ struct CheckoutSessionResponse {
     payable_amount: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     quote_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expires_at: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -135,6 +137,10 @@ struct CheckoutOrderResponse {
     order_sn: String,
     status: String,
     total_amount: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expires_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partner_id: Option<String>,
 }
 
 impl CommerceCheckoutStore for PostgresCommerceOrderStore {
@@ -513,6 +519,7 @@ fn map_checkout_session(value: CheckoutSessionView) -> CheckoutSessionResponse {
         discount_amount: value.discount_amount.as_str().to_owned(),
         payable_amount: value.payable_amount.as_str().to_owned(),
         quote_id: value.quote_id,
+        expires_at: value.expires_at,
     }
 }
 
@@ -534,6 +541,8 @@ fn map_checkout_order(value: CreateOwnerOrderOutcome) -> CheckoutOrderResponse {
         order_sn: value.order_sn,
         status: value.status,
         total_amount: value.total_amount.as_str().to_owned(),
+        expires_at: value.expires_at,
+        partner_id: value.partner_snapshot.map(|partner| partner.partner_id),
     }
 }
 

@@ -18,7 +18,7 @@ pnpm add @sdkwork/order-app-sdk
 import { SdkworkAppClient } from '@sdkwork/order-app-sdk';
 
 const client = new SdkworkAppClient({
-  baseUrl: 'http://localhost:8080',
+  baseUrl: 'http://127.0.0.1:18079',
   timeout: 30000,
 });
 
@@ -44,7 +44,7 @@ Access-Token: <accessToken>
 import { SdkworkAppClient } from '@sdkwork/order-app-sdk';
 
 const client = new SdkworkAppClient({
-  baseUrl: 'http://localhost:8080',
+  baseUrl: 'http://127.0.0.1:18079',
   timeout: 30000, // Request timeout in ms
   headers: {      // Custom headers
     'X-Custom-Header': 'value',

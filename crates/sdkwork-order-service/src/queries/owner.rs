@@ -160,6 +160,9 @@ pub struct OrderOwnerSummary {
     pub payment_method: Option<String>,
     /// Points credited for `points_recharge` orders when available from line-item snapshot or payment callback.
     pub points: Option<i64>,
+    /// Partner facts snapshotted at order creation, when the order's customer
+    /// was bound to a partner.
+    pub partner: Option<crate::OrderPartnerSnapshot>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -310,6 +313,8 @@ pub struct CreateOwnerOrderCommand {
     pub owner_user_id: String,
     pub request_no: String,
     pub tenant_id: String,
+    /// Partner facts snapshotted onto the order (resolved before insert).
+    pub partner_snapshot: Option<crate::OrderPartnerSnapshot>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -320,6 +325,10 @@ pub struct CreateOwnerOrderOutcome {
     pub order_sn: String,
     pub status: String,
     pub total_amount: CommerceMoney,
+    /// Payment countdown deadline (unix seconds) for the created order.
+    pub expires_at: Option<String>,
+    /// Partner facts snapshotted onto the created order, if any.
+    pub partner_snapshot: Option<crate::OrderPartnerSnapshot>,
 }
 
 impl CreateOwnerOrderCommand {
@@ -344,7 +353,14 @@ impl CreateOwnerOrderCommand {
             owner_user_id: owner_user_id.trim().to_string(),
             request_no: request_no.trim().to_string(),
             tenant_id: tenant_id.trim().to_string(),
+            partner_snapshot: None,
         })
+    }
+
+    /// Attaches the partner snapshot resolved by `OrderPartnerRelationPort`.
+    pub fn with_partner_snapshot(mut self, snapshot: Option<crate::OrderPartnerSnapshot>) -> Self {
+        self.partner_snapshot = snapshot;
+        self
     }
 }
 

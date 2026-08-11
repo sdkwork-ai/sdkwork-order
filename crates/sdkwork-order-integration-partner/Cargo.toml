@@ -1,0 +1,19 @@
+[package]
+name = "sdkwork-order-integration-partner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Order → Partner relation integration adapter: resolves the customer's bound partner and snapshots it onto order creation."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+sdkwork_contract_service.workspace = true
+sdkwork_order_service.workspace = true
+sdkwork_commerce_partner_service.workspace = true
+sdkwork_commerce_partner_repository_sqlx.workspace = true
+sdkwork-database-sqlx.workspace = true
+sqlx = { workspace = true }
+tracing = { workspace = true }

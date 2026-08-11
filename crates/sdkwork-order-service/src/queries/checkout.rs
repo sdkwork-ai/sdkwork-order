@@ -46,6 +46,8 @@ pub struct CheckoutSessionView {
     pub payable_amount: CommerceMoney,
     pub quote_id: Option<String>,
     pub status: String,
+    /// Payment countdown deadline (unix seconds); absent for legacy sessions.
+    pub expires_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

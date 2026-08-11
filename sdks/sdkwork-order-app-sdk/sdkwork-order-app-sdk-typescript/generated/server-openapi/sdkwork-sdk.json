@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "sdkwork-order-app-sdk",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "language": "typescript",
   "sdkType": "app",
   "packageName": "sdkwork-order-app-sdk-generated-typescript",

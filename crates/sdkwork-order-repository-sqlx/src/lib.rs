@@ -7,6 +7,7 @@ pub mod order_settlement_context;
 pub mod postgres_account_value;
 pub mod postgres_after_sales;
 pub mod postgres_checkout;
+pub mod postgres_expiration;
 pub mod postgres_fulfillment;
 pub mod postgres_management;
 pub mod postgres_membership_order;

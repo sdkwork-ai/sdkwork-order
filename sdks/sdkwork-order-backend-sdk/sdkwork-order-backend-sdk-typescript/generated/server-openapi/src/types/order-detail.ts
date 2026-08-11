@@ -14,6 +14,14 @@ export interface OrderDetail {
   payTime?: string;
   expireTime?: string;
   paymentMethod?: string;
+  /** Partner bound to the order's customer at creation time. */
+  partnerId?: string;
+  /** Partner display name snapshot at order creation. */
+  partnerName?: string;
+  /** Partner level number snapshot at order creation. */
+  partnerLevelNo?: string;
+  /** Partner status snapshot at order creation. */
+  partnerStatus?: string;
   items: OrderItem[];
   outTradeNo?: string;
   transactionId?: string;

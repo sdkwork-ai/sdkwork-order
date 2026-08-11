@@ -165,6 +165,33 @@ pub trait PhysicalInventoryReservationPort: Send + Sync {
         &'a self,
         request: ReleasePhysicalOrderInventoryRequest,
     ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome>;
+
+    /// Returns consumed stock back to available stock after a physical
+    /// return is completed (`consumed` reservations become `restocked`).
+    /// Idempotent: released/restocked reservations are skipped.
+    fn restock_consumed_order_inventory<'a>(
+        &'a self,
+        request: ReleasePhysicalOrderInventoryRequest,
+    ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome>;
+
+    /// Sweeps reservations whose `expires_at` has elapsed while still
+    /// `reserved`, releasing them back to stock regardless of the order's
+    /// current status (covers failed releases, legacy orders without
+    /// `expired_at`, and abandoned payment windows). Returns the number of
+    /// orders whose reservations were released. Idempotent per reservation.
+    fn sweep_expired_inventory_reservations<'a>(
+        &'a self,
+        limit: i64,
+    ) -> PhysicalPurchaseFuture<'a, i64>;
+}
+
+/// Whether a stored `commerce_order.fulfillment_status` means the order
+/// holds a physical inventory reservation that must be released on
+/// cancellation or closure. Non-physical orders (points recharge, membership,
+/// account value, virtual goods) never carry this status, so their lifecycle
+/// stays independent of the inventory schema.
+pub fn physical_order_fulfillment_requires_release(fulfillment_status: Option<&str>) -> bool {
+    fulfillment_status.is_some_and(|status| status.eq_ignore_ascii_case("inventory_reserved"))
 }
 
 #[derive(Default)]
@@ -192,6 +219,28 @@ impl PhysicalInventoryReservationPort for UnavailablePhysicalInventoryReservatio
             ))
         })
     }
+
+    fn restock_consumed_order_inventory<'a>(
+        &'a self,
+        _request: ReleasePhysicalOrderInventoryRequest,
+    ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
+        Box::pin(async move {
+            Err(CommerceServiceError::provider_unavailable(
+                "physical inventory restock is not configured",
+            ))
+        })
+    }
+
+    fn sweep_expired_inventory_reservations<'a>(
+        &'a self,
+        _limit: i64,
+    ) -> PhysicalPurchaseFuture<'a, i64> {
+        Box::pin(async move {
+            Err(CommerceServiceError::provider_unavailable(
+                "physical inventory reservation sweep is not configured",
+            ))
+        })
+    }
 }
 
 pub fn physical_inventory_reserve_idempotency_key(order_id: &str) -> String {
@@ -216,3 +265,34 @@ fn optional_text(value: Option<&str>) -> Option<String> {
 
 pub const PHYSICAL_CHECKOUT_RESOLVER_PORT: &str = "merchandise.physical_checkout.resolver";
 pub const PHYSICAL_INVENTORY_RESERVATION_PORT: &str = "inventory.physical_order.reservation";
+
+#[cfg(test)]
+mod tests {
+    use super::physical_order_fulfillment_requires_release;
+
+    #[test]
+    fn inventory_reserved_status_requires_release() {
+        assert!(physical_order_fulfillment_requires_release(Some(
+            "inventory_reserved"
+        )));
+        assert!(physical_order_fulfillment_requires_release(Some(
+            "INVENTORY_RESERVED"
+        )));
+    }
+
+    #[test]
+    fn non_physical_statuses_never_require_release() {
+        for status in [
+            None,
+            Some(""),
+            Some("awaiting_shipment"),
+            Some("inventory_failed"),
+            Some("fulfilled"),
+        ] {
+            assert!(
+                !physical_order_fulfillment_requires_release(status),
+                "status {status:?} must not require inventory release"
+            );
+        }
+    }
+}

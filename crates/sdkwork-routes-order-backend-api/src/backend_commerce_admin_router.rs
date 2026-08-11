@@ -13,18 +13,20 @@ use sdkwork_order_repository_sqlx::{
     PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
 };
 use sdkwork_order_service::{
-    execute_account_value_request_review, AccountValueAssetCode, AccountValueCatalogListQuery,
-    AccountValueLedgerPort, AccountValueOrderSubject, AccountValuePackageItem,
-    AccountValuePackageListPage, AccountValueRequestListPage, AccountValueRequestListQuery,
-    AccountValueRequestReviewAction, AccountValueRequestView, AfterSalesManagementDetailQuery,
-    AfterSalesManagementListQuery, AfterSalesRequestView, CreateShipmentPackageCommand,
-    NoopAccountValueLedgerPort, NoopPaymentPayoutExecutorPort, NoopPaymentRefundExecutorPort,
-    PaymentPayoutExecutorPort, PaymentRefundExecutorPort, RetireAccountValuePackageCommand,
+    execute_account_value_request_review, physical_inventory_release_idempotency_key,
+    AccountValueAssetCode, AccountValueCatalogListQuery, AccountValueLedgerPort,
+    AccountValueOrderSubject, AccountValuePackageItem, AccountValuePackageListPage,
+    AccountValueRequestListPage, AccountValueRequestListQuery, AccountValueRequestReviewAction,
+    AccountValueRequestView, AfterSalesManagementDetailQuery, AfterSalesManagementListQuery,
+    AfterSalesRequestView, CreateShipmentPackageCommand, NoopAccountValueLedgerPort,
+    NoopPaymentPayoutExecutorPort, NoopPaymentRefundExecutorPort, OrderOwnerDetailQuery,
+    PaymentPayoutExecutorPort, PaymentRefundExecutorPort, PhysicalInventoryReservationPort,
+    ReleasePhysicalOrderInventoryRequest, RetireAccountValuePackageCommand,
     RetireTokenBankPlanCommand, ReviewAccountValueRequestCommand, ReviewAfterSalesRequestCommand,
     ShipmentManagementDetailQuery, ShipmentManagementListQuery, ShipmentPackageManagementListQuery,
     ShipmentPackageView, ShipmentView, TokenBankPlanItem, TokenBankPlanListPage,
-    TokenBankPlanPeriod, UpdateShipmentPackageCommand, UpsertAccountValuePackageCommand,
-    UpsertTokenBankPlanCommand,
+    TokenBankPlanPeriod, UnavailablePhysicalInventoryReservationPort, UpdateShipmentPackageCommand,
+    UpsertAccountValuePackageCommand, UpsertTokenBankPlanCommand,
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
@@ -61,6 +63,7 @@ struct BackendCommerceAdminState {
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
     payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -290,6 +293,32 @@ impl BackendCommerceAdminStore {
         }
     }
 
+    async fn resolve_management_order_owner_user_id(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        order_id: &str,
+    ) -> Result<Option<String>, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => {
+                orders
+                    .resolve_management_order_owner_user_id(tenant_id, organization_id, order_id)
+                    .await
+            }
+        }
+    }
+
+    async fn retrieve_owner_order_fulfillment_status(
+        &self,
+        query: OrderOwnerDetailQuery,
+    ) -> Result<Option<String>, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => {
+                orders.retrieve_owner_order_fulfillment_status(query).await
+            }
+        }
+    }
+
     async fn list_management_shipments(
         &self,
         query: ShipmentManagementListQuery,
@@ -416,6 +445,7 @@ impl BackendCommerceAdminStore {
         ledger_port: &dyn AccountValueLedgerPort,
         refund_executor: &dyn PaymentRefundExecutorPort,
         payout_executor: &dyn PaymentPayoutExecutorPort,
+        inventory: &dyn PhysicalInventoryReservationPort,
         command: ReviewAccountValueRequestCommand,
     ) -> Result<AccountValueRequestView, CommerceServiceError> {
         match self {
@@ -425,6 +455,7 @@ impl BackendCommerceAdminStore {
                     ledger_port,
                     refund_executor,
                     payout_executor,
+                    inventory,
                     command,
                 )
                 .await
@@ -439,6 +470,7 @@ pub fn backend_commerce_admin_router_with_postgres_pool(pool: PgPool) -> Router 
         Arc::new(NoopAccountValueLedgerPort),
         Arc::new(NoopPaymentRefundExecutorPort),
         Arc::new(NoopPaymentPayoutExecutorPort),
+        Arc::new(UnavailablePhysicalInventoryReservationPort),
     )
 }
 
@@ -447,6 +479,7 @@ pub fn backend_commerce_admin_router_with_postgres_pool_and_ports(
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
     payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
 ) -> Router {
     build_backend_commerce_admin_router(
         BackendCommerceAdminStore::Postgres {
@@ -456,6 +489,7 @@ pub fn backend_commerce_admin_router_with_postgres_pool_and_ports(
         account_value_ledger_port,
         payment_refund_executor_port,
         payment_payout_executor_port,
+        inventory,
     )
 }
 
@@ -464,6 +498,7 @@ fn build_backend_commerce_admin_router(
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
     payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
 ) -> Router {
     Router::new()
         .route(
@@ -549,6 +584,7 @@ fn build_backend_commerce_admin_router(
             account_value_ledger_port,
             payment_refund_executor_port,
             payment_payout_executor_port,
+            inventory,
         })
 }
 
@@ -1128,6 +1164,7 @@ async fn review_account_value_request_by_action(
             state.account_value_ledger_port.as_ref(),
             state.payment_refund_executor_port.as_ref(),
             state.payment_payout_executor_port.as_ref(),
+            state.inventory.as_ref(),
             command,
         )
         .await
@@ -1372,8 +1409,100 @@ async fn review_after_sales_request(
     };
 
     match state.store.review_after_sales(command).await {
-        Ok(request) => success_created_item(ctx, map_after_sales_request(request)),
+        Ok(request) => {
+            if request.status.eq_ignore_ascii_case("completed") {
+                // Completed physical returns restore inventory: shipped
+                // orders restock consumed reservations, unshipped orders
+                // release their reservations. Best-effort — a restock
+                // failure must not roll back the review itself.
+                maybe_restock_physical_return(
+                    &state,
+                    &subject.tenant_id,
+                    subject.organization_id.as_deref(),
+                    &request.order_id,
+                )
+                .await;
+            }
+            success_created_item(ctx, map_after_sales_request(request))
+        }
         Err(error) => map_service_error(ctx, error),
+    }
+}
+
+/// Restores physical inventory after a completed return review. The decision
+/// follows the order's stored `fulfillment_status`:
+/// - `awaiting_shipment`/`shipped`/`delivered` (stock already consumed) →
+///   `restock_consumed_order_inventory`
+/// - `inventory_reserved` (paid but never shipped) → `release_physical_order_inventory`
+/// - anything else (virtual orders, no reservation) → no inventory action
+async fn maybe_restock_physical_return(
+    state: &BackendCommerceAdminState,
+    tenant_id: &str,
+    organization_id: Option<&str>,
+    order_id: &str,
+) {
+    let owner_user_id = match state
+        .store
+        .resolve_management_order_owner_user_id(tenant_id, organization_id, order_id)
+        .await
+    {
+        Ok(Some(value)) => value,
+        _ => return,
+    };
+    let fulfillment_status = match state
+        .store
+        .retrieve_owner_order_fulfillment_status(OrderOwnerDetailQuery {
+            tenant_id: tenant_id.to_owned(),
+            organization_id: organization_id.map(str::to_owned),
+            owner_user_id,
+            order_id: order_id.to_owned(),
+        })
+        .await
+    {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!(
+                target = "order.after_sales",
+                order_id,
+                error = ?error,
+                "failed to resolve fulfillment status for physical return restock"
+            );
+            return;
+        }
+    };
+    let request = ReleasePhysicalOrderInventoryRequest {
+        tenant_id: tenant_id.to_owned(),
+        order_id: order_id.to_owned(),
+        reason_code: "buyer_return".to_owned(),
+        request_no: format!("restock-{order_id}"),
+        idempotency_key: physical_inventory_release_idempotency_key(order_id),
+    };
+    let outcome = match fulfillment_status
+        .as_deref()
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("awaiting_shipment" | "shipped" | "delivered") => {
+            state
+                .inventory
+                .restock_consumed_order_inventory(request)
+                .await
+        }
+        Some("inventory_reserved") => {
+            state
+                .inventory
+                .release_physical_order_inventory(request)
+                .await
+        }
+        _ => return,
+    };
+    if let Err(error) = outcome {
+        tracing::warn!(
+            target = "order.after_sales",
+            order_id,
+            error = ?error,
+            "failed to restore physical inventory after return review"
+        );
     }
 }
 

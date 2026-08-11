@@ -4,7 +4,7 @@ use sdkwork_order_service::{
     OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
     OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
     OrderManagementListPage, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerItem,
-    OrderOwnerSummary,
+    OrderOwnerSummary, OrderPartnerSnapshot,
 };
 use sqlx::{PgPool, Row};
 
@@ -57,6 +57,8 @@ SELECT
         NULLIF(pi.payment_method, '')
     ) AS payment_method,
     COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
+    o.partner_id,
+    o.partner_snapshot_json,
     COUNT(*) OVER() AS total_count
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
@@ -167,6 +169,8 @@ impl PostgresCommerceOrderStore {
                     NULLIF(pi.payment_method, '')
                 ) AS payment_method,
                 COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
+                o.partner_id,
+                o.partner_snapshot_json,
                 COALESCE(NULLIF(pa.out_trade_no, ''), NULLIF(o.order_no, '')) AS out_trade_no,
                 CAST(pa.id AS TEXT) AS transaction_id
             FROM commerce_order o
@@ -671,6 +675,16 @@ fn map_management_summary_row(
         expire_time: optional_string_cell(row, "expire_time"),
         payment_method: optional_string_cell(row, "payment_method"),
         points: None,
+        partner: optional_string_cell(row, "partner_snapshot_json")
+            .and_then(|json| serde_json::from_str::<OrderPartnerSnapshot>(&json).ok())
+            .or_else(|| {
+                optional_string_cell(row, "partner_id").map(|partner_id| OrderPartnerSnapshot {
+                    partner_id,
+                    name: String::new(),
+                    level_no: String::new(),
+                    status: String::new(),
+                })
+            }),
     })
 }
 

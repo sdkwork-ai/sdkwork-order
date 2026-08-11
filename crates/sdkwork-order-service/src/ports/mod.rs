@@ -2,9 +2,15 @@ mod account_ledger;
 mod account_value;
 mod membership_fulfillment;
 mod owner_order_payment;
+mod partner_relation;
 mod physical_goods;
 mod physical_purchase;
 mod points_recharge_fulfillment;
+
+pub use partner_relation::{
+    NoopOrderPartnerRelationPort, OrderPartnerRelationFuture, OrderPartnerRelationPort,
+    OrderPartnerSnapshot, ORDER_PARTNER_RELATION_PORT,
+};
 
 pub use account_ledger::{
     points_recharge_compensation_idempotency_key, points_recharge_compensation_transaction_no,
@@ -53,8 +59,9 @@ pub use physical_goods::{
 };
 pub use physical_purchase::{
     physical_inventory_release_idempotency_key, physical_inventory_reserve_idempotency_key,
-    PhysicalCheckoutResolverPort, PhysicalInventoryLine, PhysicalInventoryMutationOutcome,
-    PhysicalInventoryReservationPort, PhysicalPurchaseFuture, ReleasePhysicalOrderInventoryRequest,
+    physical_order_fulfillment_requires_release, PhysicalCheckoutResolverPort,
+    PhysicalInventoryLine, PhysicalInventoryMutationOutcome, PhysicalInventoryReservationPort,
+    PhysicalPurchaseFuture, ReleasePhysicalOrderInventoryRequest,
     ReservePhysicalOrderInventoryRequest, ResolvePhysicalCheckoutLine,
     ResolvePhysicalCheckoutRequest, ResolvedPhysicalCheckout, ResolvedPhysicalCheckoutLine,
     ShippingAddressSnapshot, UnavailablePhysicalCheckoutResolverPort,

@@ -149,7 +149,7 @@ async fn reserve_replay_only_decrements_stock_once_and_rejects_changed_payload()
 }
 
 #[tokio::test]
-async fn consume_replay_is_idempotent_and_consumed_stock_cannot_be_released() {
+async fn consume_replay_is_idempotent_and_release_skips_consumed_reservations() {
     let Some((pool, adapter)) = fixture().await else {
         eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
         return;
@@ -175,6 +175,8 @@ async fn consume_replay_is_idempotent_and_consumed_stock_cannot_be_released() {
     assert!(!first.replayed);
     assert!(replay.replayed);
 
+    // A release after consume is a no-op: consumed stock is already out of
+    // the warehouse and must not be returned to available stock.
     let release = adapter
         .release_physical_order_inventory(ReleasePhysicalOrderInventoryRequest {
             tenant_id: "tenant-1".to_owned(),
@@ -183,8 +185,9 @@ async fn consume_replay_is_idempotent_and_consumed_stock_cannot_be_released() {
             request_no: "cancel-order-2".to_owned(),
             idempotency_key: "release-key-2".to_owned(),
         })
-        .await;
-    assert!(release.is_err());
+        .await
+        .expect("release after consume is idempotent");
+    assert!(release.replayed);
 
     let (available, reserved, sold, status): (i64, i64, i64, String) = sqlx::query_as(
         "SELECT available_quantity, reserved_quantity, sold_quantity, (SELECT status FROM commerce_inventory_reservation WHERE order_id = 'order-2') FROM commerce_inventory_stock WHERE id = 'stock-1'",
@@ -234,4 +237,96 @@ async fn release_replay_restores_stock_only_once() {
     .await
     .expect("released stock state");
     assert_eq!((available, reserved, version), (10, 0, 3));
+}
+
+#[tokio::test]
+async fn restock_returns_consumed_stock_to_available_only_once() {
+    let Some((pool, adapter)) = fixture().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
+    let request = reserve_request("order-4", "reserve-key-4");
+    adapter
+        .reserve_physical_order_inventory(request)
+        .await
+        .expect("reservation");
+
+    let database_pool = DatabasePool::Postgres(
+        pool.clone(),
+        PoolContext {
+            config: DatabaseConfig::default(),
+        },
+    );
+    consume_order_inventory(&database_pool, "tenant-1", "order-4", "consume-key-4")
+        .await
+        .expect("consume");
+
+    let request = ReleasePhysicalOrderInventoryRequest {
+        tenant_id: "tenant-1".to_owned(),
+        order_id: "order-4".to_owned(),
+        reason_code: "buyer_return".to_owned(),
+        request_no: "restock-order-4".to_owned(),
+        idempotency_key: "restock-key-4".to_owned(),
+    };
+    let first = adapter
+        .restock_consumed_order_inventory(request.clone())
+        .await
+        .expect("first restock");
+    let replay = adapter
+        .restock_consumed_order_inventory(request)
+        .await
+        .expect("restock replay");
+    assert!(!first.replayed);
+    assert!(replay.replayed);
+
+    let (available, reserved, sold, status): (i64, i64, i64, String) = sqlx::query_as(
+        "SELECT available_quantity, reserved_quantity, sold_quantity, (SELECT status FROM commerce_inventory_reservation WHERE order_id = 'order-4') FROM commerce_inventory_stock WHERE id = 'stock-1'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("restocked stock state");
+    assert_eq!(
+        (available, reserved, sold, status),
+        (10, 0, 0, "restocked".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn sweep_releases_expired_reservations_back_to_stock() {
+    let Some((pool, adapter)) = fixture().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
+    let request = reserve_request("order-5", "reserve-key-5");
+    adapter
+        .reserve_physical_order_inventory(request)
+        .await
+        .expect("reservation");
+
+    // Age the reservation beyond its expiry window.
+    sqlx::query("UPDATE commerce_inventory_reservation SET expires_at = '1' WHERE order_id = 'order-5'")
+        .execute(&pool)
+        .await
+        .expect("age reservation");
+
+    let swept = adapter
+        .sweep_expired_inventory_reservations(10)
+        .await
+        .expect("sweep");
+    assert_eq!(swept, 1);
+
+    let (available, reserved, status): (i64, i64, String) = sqlx::query_as(
+        "SELECT available_quantity, reserved_quantity, (SELECT status FROM commerce_inventory_reservation WHERE order_id = 'order-5') FROM commerce_inventory_stock WHERE id = 'stock-1'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("swept stock state");
+    assert_eq!((available, reserved, status), (10, 0, "released".to_owned()));
+
+    // A second sweep is a no-op (idempotent).
+    let replay = adapter
+        .sweep_expired_inventory_reservations(10)
+        .await
+        .expect("sweep replay");
+    assert_eq!(replay, 0);
 }

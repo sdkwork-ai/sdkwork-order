@@ -17,6 +17,12 @@ sdkwork_order_integration_membership.workspace = true
 sdkwork_order_integration_promotion.workspace = true
 sdkwork_order_integration_payment.workspace = true
 sdkwork_order_integration_physical_commerce.workspace = true
+sdkwork_order_integration_partner.workspace = true
+sdkwork_order_repository_sqlx.workspace = true
 sdkwork_order_service.workspace = true
+sdkwork_payment_providers.workspace = true
+sdkwork_payment_repository_sqlx.workspace = true
 dotenvy = { workspace = true }
 sqlx.workspace = true
+tokio.workspace = true
+tracing.workspace = true

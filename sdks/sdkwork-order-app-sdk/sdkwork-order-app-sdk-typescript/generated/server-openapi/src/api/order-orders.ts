@@ -4,6 +4,30 @@ import type { ApiRequestOptions, HttpClient } from '../http/client';
 import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, OrdersPaymentsWebhooksReceiveRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
 
+export interface OrderOrdersOrdersReceiptsConfirmParams {
+  idempotencyKey: string;
+}
+
+export class OrderOrdersOrdersReceiptsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Orders receipt confirmations create. */
+  async confirm(orderId: string, params: OrderOrdersOrdersReceiptsConfirmParams, body?: CommerceOperationCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/receipt_confirmations`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+  }
+}
+
 export interface OrderOrdersOrdersRefundRequestsListParams {
   status?: string;
   page?: number;
@@ -218,6 +242,7 @@ export class OrderOrdersOrdersApi {
   public readonly status: OrderOrdersOrdersStatusApi;
   public readonly couponRedemptions: OrderOrdersOrdersCouponRedemptionsApi;
   public readonly refundRequests: OrderOrdersOrdersRefundRequestsApi;
+  public readonly receipts: OrderOrdersOrdersReceiptsApi;
 
   constructor(client: HttpClient) {
     this.client = client;
@@ -229,6 +254,7 @@ export class OrderOrdersOrdersApi {
     this.status = new OrderOrdersOrdersStatusApi(client);
     this.couponRedemptions = new OrderOrdersOrdersCouponRedemptionsApi(client);
     this.refundRequests = new OrderOrdersOrdersRefundRequestsApi(client);
+    this.receipts = new OrderOrdersOrdersReceiptsApi(client);
   }
 
 

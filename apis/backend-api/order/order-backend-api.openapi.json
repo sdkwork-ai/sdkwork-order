@@ -3342,6 +3342,22 @@
           },
           "paymentMethod": {
             "type": "string"
+          },
+          "partnerId": {
+            "type": "string",
+            "description": "Partner bound to the order's customer at creation time."
+          },
+          "partnerName": {
+            "type": "string",
+            "description": "Partner display name snapshot at order creation."
+          },
+          "partnerLevelNo": {
+            "type": "string",
+            "description": "Partner level number snapshot at order creation."
+          },
+          "partnerStatus": {
+            "type": "string",
+            "description": "Partner status snapshot at order creation."
           }
         }
       },

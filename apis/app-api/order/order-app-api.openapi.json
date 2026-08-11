@@ -4592,6 +4592,124 @@
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api"
       }
+    },
+    "/app/v3/api/orders/{orderId}/receipt_confirmations": {
+      "post": {
+        "tags": [
+          "orderOrders"
+        ],
+        "summary": "Orders receipt confirmations create.",
+        "operationId": "orders.receipts.confirm",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkCommandResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "orders.cancellations",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommerceOperationCommand"
+              }
+            }
+          }
+        },
+        "x-sdkwork-idempotent": true,
+        "description": "Buyer confirms physical receipt: paid/fulfilled/shipped orders advance to completed (fulfillment delivered) with a lifecycle event. Idempotent."
+      }
     }
   },
   "components": {
@@ -5151,6 +5269,10 @@
           },
           "totalAmount": {
             "type": "string"
+          },
+          "partnerId": {
+            "type": "string",
+            "description": "Partner bound to the order's customer at creation time."
           }
         }
       },

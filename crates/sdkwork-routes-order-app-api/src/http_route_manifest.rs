@@ -94,6 +94,13 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "orders.cancellations.create",
     )
     .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/app/v3/api/orders/{orderId}/receipt_confirmations",
+        "orders",
+        "orders.receipts.confirm",
+    )
+    .with_idempotent(true),
     // === Payment webhooks (PSP callbacks; no user token) ===
     HttpRoute::public(
         HttpMethod::Post,

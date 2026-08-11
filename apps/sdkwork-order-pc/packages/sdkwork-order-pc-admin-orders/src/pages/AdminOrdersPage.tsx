@@ -220,6 +220,24 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
       ),
     },
     {
+      id: "partner",
+      header: "归属合作伙伴",
+      width: "16%",
+      cell: (order) =>
+        order.partnerName ? (
+          <span className="block min-w-0">
+            <span className="block truncate text-sm font-medium text-[var(--sdk-color-text-primary)]">
+              {order.partnerName}
+            </span>
+            <span className="mt-0.5 block truncate font-mono text-xs text-[var(--sdk-color-text-muted)]">
+              #{order.partnerId}
+            </span>
+          </span>
+        ) : (
+          <span className="text-sm text-[var(--sdk-color-text-muted)]">-</span>
+        ),
+    },
+    {
       id: "createdAt",
       header: "创建时间",
       width: "28%",

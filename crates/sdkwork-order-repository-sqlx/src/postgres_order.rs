@@ -1,13 +1,15 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     stable_checkout_order_subject, stable_order_settlement_subject, CancelOwnerOrderCommand,
-    CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery,
-    OrderOwnerEventListQuery, OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerItem,
-    OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerPaymentStatus, OrderOwnerStatistics,
-    OrderOwnerSummary,
+    CreateOwnerOrderCommand, CreateOwnerOrderOutcome, NoopOrderPartnerRelationPort,
+    OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery, OrderOwnerEventPage,
+    OrderOwnerEventView, OrderOwnerItem, OrderOwnerListPage, OrderOwnerListQuery,
+    OrderOwnerPaymentStatus, OrderOwnerStatistics, OrderOwnerSummary, OrderPartnerRelationPort,
+    OrderPartnerSnapshot,
 };
 use sdkwork_payment_service::{parse_scene_codes_csv, PaymentMethodItem, PaymentMethodListQuery};
 use sqlx::{PgPool, Postgres, Row, Transaction};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::money_amount::{
@@ -91,6 +93,10 @@ SELECT
         CAST(COALESCE(NULLIF(pa.callback_payload::jsonb ->> 'points', ''), '0') AS BIGINT),
         0
     ) AS recharge_points,
+    o.partner_id,
+    o.partner_snapshot_json,
+    o.partner_id,
+    o.partner_snapshot_json,
     COUNT(*) OVER() AS total_count
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
@@ -215,6 +221,16 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
 LIMIT 1
 "#;
 
+const RETRIEVE_OWNER_ORDER_FULFILLMENT_STATUS: &str = r#"
+SELECT o.fulfillment_status
+FROM commerce_order o
+WHERE o.tenant_id = CAST($1 AS TEXT)
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND o.owner_user_id = CAST($3 AS TEXT)
+  AND o.id = CAST($4 AS TEXT)
+LIMIT 1
+"#;
+
 const LIST_ORDER_ITEMS: &str = r#"
 SELECT
     id,
@@ -300,11 +316,25 @@ use crate::order_settlement_context::OrderPaymentSettlementContext;
 #[derive(Debug, Clone)]
 pub struct PostgresCommerceOrderStore {
     pool: PgPool,
+    partner_relation_port: Arc<dyn OrderPartnerRelationPort>,
 }
 
 impl PostgresCommerceOrderStore {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            partner_relation_port: Arc::new(NoopOrderPartnerRelationPort),
+        }
+    }
+
+    /// Attaches the partner relation resolver used to snapshot the order's
+    /// partner facts at creation time. Defaults to a no-op port.
+    pub fn with_partner_relation_port(
+        mut self,
+        partner_relation_port: Arc<dyn OrderPartnerRelationPort>,
+    ) -> Self {
+        self.partner_relation_port = partner_relation_port;
+        self
     }
 
     pub(crate) fn pool(&self) -> &PgPool {
@@ -509,6 +539,26 @@ impl PostgresCommerceOrderStore {
         }))
     }
 
+    /// Returns the stored `fulfillment_status` for an owner order, or `None`
+    /// when the order does not exist. Callers decide whether physical
+    /// inventory release is required from the returned status.
+    pub async fn retrieve_owner_order_fulfillment_status(
+        &self,
+        query: OrderOwnerDetailQuery,
+    ) -> Result<Option<String>, CommerceServiceError> {
+        let row = sqlx::query(RETRIEVE_OWNER_ORDER_FULFILLMENT_STATUS)
+            .bind(&query.tenant_id)
+            .bind(query.organization_id.as_deref())
+            .bind(&query.owner_user_id)
+            .bind(&query.order_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|error| {
+                store_error("failed to retrieve owner order fulfillment status", error)
+            })?;
+        Ok(row.map(|row| optional_string_cell(&row, "fulfillment_status").unwrap_or_default()))
+    }
+
     pub async fn retrieve_owner_order_statistics(
         &self,
         tenant_id: &str,
@@ -574,6 +624,38 @@ impl PostgresCommerceOrderStore {
         command: CreateOwnerOrderCommand,
     ) -> Result<CreateOwnerOrderOutcome, CommerceServiceError> {
         let order_id = format!("order-{}", command.checkout_session_id);
+        // Resolve the order's partner relation before opening the write
+        // transaction: the resolution port reads the partner domain on the
+        // same federated commerce pool and must not run inside this
+        // transaction (partner facts are optional; a missing binding never
+        // blocks order creation).
+        let partner_snapshot = match command.partner_snapshot.clone() {
+            Some(snapshot) => Some(snapshot),
+            None => {
+                // The partner relation is an optional snapshot: a resolution
+                // failure (partner domain down, binding store error) must
+                // never block order creation. Degrade to no relation.
+                match self
+                    .partner_relation_port
+                    .resolve_order_partner(
+                        &command.tenant_id,
+                        command.organization_id.as_deref(),
+                        &command.owner_user_id,
+                    )
+                    .await
+                {
+                    Ok(snapshot) => snapshot,
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "sdkwork.order.partner",
+                            error = ?error,
+                            "partner relation resolution failed; creating order without partner snapshot"
+                        );
+                        None
+                    }
+                }
+            }
+        };
         let mut tx = self.pool.begin().await.map_err(|error| {
             store_error("failed to begin create owner order transaction", error)
         })?;
@@ -585,6 +667,9 @@ impl PostgresCommerceOrderStore {
                 o.order_no AS order_sn,
                 o.status,
                 o.merchant_organization_id,
+                o.expired_at,
+                o.partner_id,
+                o.partner_snapshot_json,
                 COALESCE(
                     (
                         SELECT b.payable_amount
@@ -635,6 +720,19 @@ impl PostgresCommerceOrderStore {
                 order_sn: string_cell(&row, "order_sn"),
                 status: string_cell(&row, "status"),
                 total_amount,
+                expires_at: optional_string_cell(&row, "expired_at"),
+                partner_snapshot: optional_string_cell(&row, "partner_snapshot_json")
+                    .and_then(|json| serde_json::from_str::<OrderPartnerSnapshot>(&json).ok())
+                    .or_else(|| {
+                        optional_string_cell(&row, "partner_id").map(|partner_id| {
+                            OrderPartnerSnapshot {
+                                partner_id,
+                                name: String::new(),
+                                level_no: String::new(),
+                                status: String::new(),
+                            }
+                        })
+                    }),
             });
         }
 
@@ -657,16 +755,26 @@ impl PostgresCommerceOrderStore {
         let expires_at =
             optional_string_cell(&session, "expires_at").unwrap_or_else(|| now.clone());
 
+        let partner_snapshot_json = partner_snapshot
+            .as_ref()
+            .map(|snapshot| {
+                serde_json::to_string(snapshot)
+                    .map_err(|error| store_error("failed to serialize partner snapshot", error))
+            })
+            .transpose()?;
+
         sqlx::query(
             r#"
             INSERT INTO commerce_order
                 (id, tenant_id, organization_id, owner_user_id, order_no, status, payment_status,
                 fulfillment_status, refund_status, subject, currency_code, merchant_organization_id,
                  shop_id, shipping_address_snapshot_json, shop_snapshot_json, request_no,
-                 idempotency_key, created_at, paid_at, cancelled_at, expired_at, updated_at)
+                 idempotency_key, partner_id, partner_snapshot_json, created_at, paid_at,
+                 cancelled_at, expired_at, updated_at)
             VALUES
                 ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), CAST($4 AS TEXT), $5, 'pending_inventory',
-                 'pending', 'unfulfilled', 'none', $6, $7, $8, $9, $10, $11, $12, $13, $14, NULL, NULL, $15, $16)
+                 'pending', 'unfulfilled', 'none', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+                 $16, $17, NULL, NULL, $18, $19)
             "#,
         )
         .bind(&order_id)
@@ -682,6 +790,8 @@ impl PostgresCommerceOrderStore {
         .bind(optional_string_cell(&session, "shop_snapshot_json"))
         .bind(&command.request_no)
         .bind(&command.idempotency_key)
+        .bind(partner_snapshot.as_ref().map(|snapshot| &snapshot.partner_id))
+        .bind(partner_snapshot_json.as_deref())
         .bind(&now)
         .bind(&expires_at)
         .bind(&now)
@@ -776,6 +886,8 @@ impl PostgresCommerceOrderStore {
             order_sn,
             status: "pending_inventory".to_owned(),
             total_amount,
+            expires_at: optional_string_cell(&session, "expires_at"),
+            partner_snapshot,
         })
     }
 
@@ -965,6 +1077,111 @@ impl PostgresCommerceOrderStore {
         })?;
         Ok(())
     }
+
+    /// Buyer confirmation of physical receipt: advances the order from
+    /// shipped/awaiting-shipment to `completed` (fulfillment `delivered`)
+    /// with a lifecycle event. Idempotent — a completed order replays.
+    pub async fn confirm_owner_order_receipt(
+        &self,
+        query: OrderOwnerDetailQuery,
+        request_no: &str,
+    ) -> Result<(), CommerceServiceError> {
+        use crate::order_lifecycle::{insert_order_event_postgres, OrderLifecycleAuditInput};
+
+        let now = current_command_timestamp();
+        let idempotency_key = format!("order-receipt:{}", query.order_id);
+        let mut tx = self.pool.begin().await.map_err(|error| {
+            store_error(
+                "failed to begin confirm owner order receipt transaction",
+                error,
+            )
+        })?;
+        let from_status = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT status
+            FROM commerce_order
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND owner_user_id = CAST($4 AS TEXT)
+              AND id = CAST($5 AS TEXT)
+            FOR UPDATE
+            "#,
+        )
+        .bind(&query.tenant_id)
+        .bind(query.organization_id.as_deref())
+        .bind(query.organization_id.as_deref())
+        .bind(&query.owner_user_id)
+        .bind(&query.order_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to load order before receipt confirmation", error))?;
+
+        let Some(from_status) = from_status else {
+            tx.rollback().await.map_err(|error| {
+                store_error("failed to rollback receipt confirmation transaction", error)
+            })?;
+            return Err(CommerceServiceError::not_found("order was not found"));
+        };
+        if from_status.eq_ignore_ascii_case("completed") {
+            tx.rollback().await.map_err(|error| {
+                store_error("failed to rollback receipt confirmation replay", error)
+            })?;
+            return Ok(());
+        }
+
+        let result = sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET status = 'completed',
+                fulfillment_status = 'delivered',
+                updated_at = $1
+            WHERE tenant_id = CAST($2 AS TEXT)
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
+              AND owner_user_id = CAST($5 AS TEXT)
+              AND id = CAST($6 AS TEXT)
+              AND LOWER(COALESCE(status, '')) IN ('paid', 'fulfilled', 'shipped')
+              AND LOWER(COALESCE(fulfillment_status, '')) IN ('awaiting_shipment', 'shipped')
+            "#,
+        )
+        .bind(&now)
+        .bind(&query.tenant_id)
+        .bind(query.organization_id.as_deref())
+        .bind(query.organization_id.as_deref())
+        .bind(&query.owner_user_id)
+        .bind(&query.order_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to confirm owner order receipt", error))?;
+        if result.rows_affected() == 0 {
+            tx.rollback().await.map_err(|error| {
+                store_error("failed to rollback receipt confirmation transaction", error)
+            })?;
+            return Err(CommerceServiceError::conflict(
+                "order is not awaiting receipt confirmation",
+            ));
+        }
+
+        let audit = OrderLifecycleAuditInput {
+            tenant_id: query.tenant_id.clone(),
+            organization_id: query.organization_id.clone(),
+            order_id: query.order_id.clone(),
+            event_type: "completed",
+            from_status,
+            to_status: "completed",
+            actor_type: "buyer",
+            actor_id: Some(query.owner_user_id.clone()),
+            reason_code: Some("buyer_confirmed_receipt".to_owned()),
+            reason_message: None,
+            request_no: request_no.to_owned(),
+            idempotency_key,
+            now,
+        };
+        insert_order_event_postgres(&mut tx, &audit).await?;
+        tx.commit().await.map_err(|error| {
+            store_error("failed to commit owner order receipt confirmation", error)
+        })?;
+        Ok(())
+    }
 }
 
 async fn load_order_items(
@@ -1062,6 +1279,16 @@ fn map_order_summary_row(
         expire_time: optional_string_cell(row, "expire_time"),
         payment_method: optional_string_cell(row, "payment_method"),
         points: positive_i64_cell(row, "recharge_points"),
+        partner: optional_string_cell(row, "partner_snapshot_json")
+            .and_then(|json| serde_json::from_str::<OrderPartnerSnapshot>(&json).ok())
+            .or_else(|| {
+                optional_string_cell(row, "partner_id").map(|partner_id| OrderPartnerSnapshot {
+                    partner_id,
+                    name: String::new(),
+                    level_no: String::new(),
+                    status: String::new(),
+                })
+            }),
     })
 }
 
@@ -1108,6 +1335,19 @@ async fn load_checkout_session_for_order(
     .await
     .map_err(|error| store_error("failed to load checkout session", error))?
     .ok_or_else(|| CommerceServiceError::conflict("checkout session is not orderable"))?;
+    let expires_at = optional_string_cell(&row, "expires_at");
+    let now_seconds = current_command_timestamp()
+        .trim()
+        .parse::<i64>()
+        .unwrap_or(0);
+    if expires_at
+        .as_deref()
+        .is_some_and(|value| value.trim().parse::<i64>().unwrap_or(i64::MAX) <= now_seconds)
+    {
+        return Err(CommerceServiceError::invalid_state(
+            "checkout session has expired; create a new checkout session",
+        ));
+    }
     Ok(row)
 }
 
@@ -1139,7 +1379,7 @@ async fn load_checkout_quote_for_order(
 ) -> Result<sqlx::postgres::PgRow, CommerceServiceError> {
     let row = sqlx::query(
         r#"
-        SELECT original_amount, discount_amount, payable_amount
+        SELECT original_amount, discount_amount, payable_amount, expires_at
         FROM commerce_checkout_quote
         WHERE tenant_id = CAST($1 AS TEXT)
           AND checkout_session_id = $2
@@ -1154,6 +1394,19 @@ async fn load_checkout_quote_for_order(
     .await
     .map_err(|error| store_error("failed to load checkout quote", error))?
     .ok_or_else(|| CommerceServiceError::conflict("checkout quote was not found"))?;
+    let expires_at = optional_string_cell(&row, "expires_at");
+    let now_seconds = current_command_timestamp()
+        .trim()
+        .parse::<i64>()
+        .unwrap_or(0);
+    if expires_at
+        .as_deref()
+        .is_some_and(|value| value.trim().parse::<i64>().unwrap_or(i64::MAX) <= now_seconds)
+    {
+        return Err(CommerceServiceError::invalid_state(
+            "checkout quote has expired; create a new checkout session",
+        ));
+    }
     Ok(row)
 }
 

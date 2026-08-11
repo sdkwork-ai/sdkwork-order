@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::api_response::{
-    map_service_error, not_found, offset_list_page_params_from_query, success_command,
+    conflict, map_service_error, not_found, offset_list_page_params_from_query, success_command,
     success_created_item, success_item, success_items, unauthorized, validation,
 };
 use crate::command_headers::required_app_write_command_headers;
@@ -68,6 +68,11 @@ pub trait CommerceOrderStore: Send + Sync {
         query: OrderOwnerDetailQuery,
     ) -> CommerceOrderFuture<'a, Option<OrderOwnerPaymentStatus>>;
 
+    fn retrieve_owner_order_fulfillment_status<'a>(
+        &'a self,
+        query: OrderOwnerDetailQuery,
+    ) -> CommerceOrderFuture<'a, Option<String>>;
+
     fn retrieve_owner_order_statistics<'a>(
         &'a self,
         tenant_id: String,
@@ -83,6 +88,12 @@ pub trait CommerceOrderStore: Send + Sync {
     fn cancel_owner_order<'a>(
         &'a self,
         command: CancelOwnerOrderCommand,
+    ) -> CommerceOrderFuture<'a, ()>;
+
+    fn confirm_owner_order_receipt<'a>(
+        &'a self,
+        query: OrderOwnerDetailQuery,
+        request_no: String,
     ) -> CommerceOrderFuture<'a, ()>;
 }
 
@@ -384,6 +395,10 @@ pub fn build_app_order_router_with_inventory(
         .route(
             "/app/v3/api/orders/{orderId}/cancellations",
             post(create_order_cancellation),
+        )
+        .route(
+            "/app/v3/api/orders/{orderId}/receipt_confirmations",
+            post(confirm_order_receipt),
         )
         .with_state(AppOrderState {
             store,
@@ -696,6 +711,47 @@ async fn cancel_order_impl(
     }
 }
 
+/// Buyer confirms physical receipt: `paid/fulfilled/shipped` orders advance
+/// to `completed` (fulfillment `delivered`) with a lifecycle event
+/// (idempotent for replays).
+async fn confirm_order_receipt(
+    State(state): State<AppOrderState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(order_id): Path<String>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
+        Ok(subject) => subject,
+        Err(message) => return unauthorized(ctx, message),
+    };
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        format!("order-receipt-{order_id}-{idempotency_key}")
+    }) {
+        Ok(value) => value,
+        Err(response) => return *response,
+    };
+    let query = match OrderOwnerDetailQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &subject.user_id,
+        &order_id,
+    ) {
+        Ok(query) => query,
+        Err(error) => return map_service_error(ctx, error),
+    };
+    match state
+        .store
+        .confirm_owner_order_receipt(query, write_headers.request_no)
+        .await
+    {
+        Ok(()) => success_command(ctx, Some(order_id.clone()), Some("completed".to_string())),
+        Err(error) if error.code() == "conflict" => conflict(ctx, error.message()),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
 async fn list_order_payments(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
@@ -950,6 +1006,13 @@ impl CommerceOrderStore for PostgresCommerceOrderStore {
         Box::pin(async move { self.retrieve_owner_order_payment_status(query).await })
     }
 
+    fn retrieve_owner_order_fulfillment_status<'a>(
+        &'a self,
+        query: OrderOwnerDetailQuery,
+    ) -> CommerceOrderFuture<'a, Option<String>> {
+        Box::pin(async move { self.retrieve_owner_order_fulfillment_status(query).await })
+    }
+
     fn retrieve_owner_order_statistics<'a>(
         &'a self,
         tenant_id: String,
@@ -978,6 +1041,16 @@ impl CommerceOrderStore for PostgresCommerceOrderStore {
         command: CancelOwnerOrderCommand,
     ) -> CommerceOrderFuture<'a, ()> {
         Box::pin(async move { self.cancel_owner_order(command).await })
+    }
+
+    fn confirm_owner_order_receipt<'a>(
+        &'a self,
+        query: OrderOwnerDetailQuery,
+        request_no: String,
+    ) -> CommerceOrderFuture<'a, ()> {
+        Box::pin(async move {
+            self.confirm_owner_order_receipt(query, &request_no).await
+        })
     }
 }
 

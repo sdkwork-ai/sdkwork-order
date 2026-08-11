@@ -13,6 +13,7 @@ use sdkwork_order_service::{
     OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
     OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
     OrderManagementListPage, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerSummary,
+    PhysicalInventoryReservationPort,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
@@ -46,6 +47,7 @@ mod permissions {
 struct BackendOrderAdminState {
     orders: BackendManagementOrderStore,
     payments: BackendManagementPaymentStore,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,6 +110,14 @@ struct OrderSummaryResponse {
     expire_time: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     payment_method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partner_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partner_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partner_level_no: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partner_status: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -161,7 +171,9 @@ struct OrderCancellationResponse {
 }
 
 pub fn backend_order_admin_router_with_postgres_pool(
-    pool: PgPool) -> Router {
+    pool: PgPool,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
+) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
@@ -175,14 +187,20 @@ pub fn backend_order_admin_router_with_postgres_pool(
             registry,
             credentials,
         },
+        inventory,
     )
 }
 
 fn build_backend_order_admin_router(
     orders: BackendManagementOrderStore,
     payments: BackendManagementPaymentStore,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
 ) -> Router {
-    let state = BackendOrderAdminState { orders, payments };
+    let state = BackendOrderAdminState {
+        orders,
+        payments,
+        inventory,
+    };
     Router::new()
         .route("/backend/v3/api/orders", get(list_orders))
         .route(
@@ -335,7 +353,14 @@ async fn cancel_order(
         Err(error) => return validation(ctx, error.message()),
     };
 
-    match cancel_management_order_with_payments(&state.orders, &state.payments, command).await {
+    match cancel_management_order_with_payments(
+        &state.orders,
+        &state.payments,
+        state.inventory.as_ref(),
+        command,
+    )
+    .await
+    {
         Ok(()) => success_command(ctx, Some(order_id), Some("cancelled".to_owned())),
         Err(error) if error.code() == "conflict" => api_conflict(ctx, error.message()),
         Err(error) => map_service_error(ctx, error),
@@ -377,7 +402,14 @@ async fn close_order(
         Err(error) => return validation(ctx, error.message()),
     };
 
-    match close_management_order_with_payments(&state.orders, &state.payments, command).await {
+    match close_management_order_with_payments(
+        &state.orders,
+        &state.payments,
+        state.inventory.as_ref(),
+        command,
+    )
+    .await
+    {
         Ok(()) => success_command(ctx, Some(order_id), Some("closed".to_owned())),
         Err(error) if error.code() == "conflict" => api_conflict(ctx, error.message()),
         Err(error) => map_service_error(ctx, error),
@@ -478,6 +510,16 @@ fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {
         pay_time: value.pay_time,
         expire_time: value.expire_time,
         payment_method: value.payment_method,
+        partner_id: value.partner.as_ref().map(|partner| partner.partner_id.clone()),
+        partner_name: value.partner.as_ref().map(|partner| partner.name.clone()),
+        partner_level_no: value
+            .partner
+            .as_ref()
+            .map(|partner| partner.level_no.clone()),
+        partner_status: value
+            .partner
+            .as_ref()
+            .map(|partner| partner.status.clone()),
     }
 }
 

@@ -10,7 +10,7 @@ use sdkwork_order_service::{
     AccountValueLedgerPort, NoopAccountValueLedgerPort, NoopMembershipPurchaseFulfillmentPort,
     PaymentExecutorOutcome, PaymentPayoutExecutionRequest, PaymentPayoutExecutorPort,
     PaymentRefundExecutionRequest, PaymentRefundExecutorPort, PointsRechargeCreditOutcome,
-    PointsRechargeCreditRequest,
+    PointsRechargeCreditRequest, UnavailablePhysicalInventoryReservationPort,
 };
 use sdkwork_order_service_host::OrderServiceHost;
 use sdkwork_database_config::{DatabaseConfig, DatabaseEngine};
@@ -57,8 +57,13 @@ fn build_test_backend_router(pool: sqlx::PgPool) -> Router {
     let credit = Arc::new(NoopAccountPointsCreditPort);
     mount_backend_openapi(
         Router::new()
-            .merge(backend_order_admin_router_with_postgres_pool(pool.clone()))
-            .merge(backend_commerce_admin_router_with_postgres_pool(pool.clone()))
+            .merge(backend_order_admin_router_with_postgres_pool(
+                pool.clone(),
+                Arc::new(UnavailablePhysicalInventoryReservationPort),
+            ))
+            .merge(backend_commerce_admin_router_with_postgres_pool(
+                pool.clone(),
+            ))
             .merge(payment_confirmation_router_with_postgres_pool(
                 pool,
                 credit,

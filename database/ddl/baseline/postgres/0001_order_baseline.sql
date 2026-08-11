@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS commerce_order (
     request_fingerprint TEXT,
     purchase_intent_key TEXT,
     membership_action TEXT,
+    partner_id TEXT,
+    partner_snapshot_json TEXT,
     created_at TEXT NOT NULL,
     paid_at TEXT,
     cancelled_at TEXT,
@@ -46,6 +48,11 @@ ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS refund_status TEXT;
 ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS request_fingerprint TEXT;
 ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS purchase_intent_key TEXT;
 ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS membership_action TEXT;
+ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS partner_id TEXT;
+ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS partner_snapshot_json TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_order_partner_list
+    ON commerce_order(tenant_id, organization_id, partner_id, created_at DESC, id DESC);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_order_owner_idempotency
     ON commerce_order(tenant_id, COALESCE(organization_id, '0'), owner_user_id, idempotency_key)
@@ -212,6 +219,7 @@ CREATE TABLE IF NOT EXISTS commerce_recharge_package (
     price_amount TEXT NOT NULL,
     currency_code TEXT NOT NULL DEFAULT 'CNY',
     bonus_points BIGINT NOT NULL DEFAULT 0,
+    discount BIGINT NOT NULL DEFAULT 100,
     status TEXT NOT NULL DEFAULT 'active',
     valid_from TEXT,
     valid_to TEXT,
@@ -219,7 +227,8 @@ CREATE TABLE IF NOT EXISTS commerce_recharge_package (
     request_no TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    CONSTRAINT ck_recharge_package_discount_range CHECK (discount >= 1 AND discount <= 100)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_recharge_package_no
@@ -441,3 +450,139 @@ CREATE INDEX IF NOT EXISTS idx_checkout_quote_session
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_fulfillment_order_type
     ON commerce_fulfillment_order(tenant_id, order_id, fulfillment_type);
+
+-- After-sales lifecycle tables (refund / return / exchange). Column shape
+-- mirrors the e2e test migration so test and production schemas stay aligned.
+CREATE TABLE IF NOT EXISTS commerce_after_sales_request (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    after_sales_no TEXT NOT NULL,
+    order_id TEXT NOT NULL,
+    owner_user_id TEXT NOT NULL,
+    after_sales_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'submitted',
+    refund_status TEXT NOT NULL DEFAULT 'none',
+    return_status TEXT NOT NULL DEFAULT 'none',
+    exchange_status TEXT NOT NULL DEFAULT 'none',
+    reason_code TEXT NOT NULL,
+    description TEXT,
+    requested_amount TEXT NOT NULL,
+    approved_amount TEXT NOT NULL DEFAULT '0.00',
+    currency_code TEXT NOT NULL,
+    requested_by_type TEXT NOT NULL DEFAULT 'buyer',
+    requested_by TEXT,
+    request_no TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_after_sales_request_tenant_owner
+    ON commerce_after_sales_request(tenant_id, owner_user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_after_sales_request_idempotency
+    ON commerce_after_sales_request(tenant_id, order_id, idempotency_key);
+
+CREATE TABLE IF NOT EXISTS commerce_after_sales_request_item (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    after_sales_id TEXT NOT NULL,
+    order_item_id TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    requested_amount TEXT NOT NULL,
+    currency_code TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (after_sales_id) REFERENCES commerce_after_sales_request(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_after_sales_request_item_request
+    ON commerce_after_sales_request_item(after_sales_id);
+
+CREATE TABLE IF NOT EXISTS commerce_after_sales_event (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    after_sales_id TEXT NOT NULL,
+    event_no TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    actor_type TEXT NOT NULL DEFAULT 'buyer',
+    actor_id TEXT,
+    request_id TEXT,
+    idempotency_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (after_sales_id) REFERENCES commerce_after_sales_request(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_after_sales_event_request
+    ON commerce_after_sales_event(tenant_id, after_sales_id, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS commerce_after_sales_return_shipment (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    after_sales_id TEXT NOT NULL,
+    return_shipment_no TEXT NOT NULL,
+    carrier_code TEXT,
+    tracking_no TEXT,
+    status TEXT NOT NULL DEFAULT 'submitted',
+    request_no TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (after_sales_id) REFERENCES commerce_after_sales_request(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_after_sales_return_shipment_idempotency
+    ON commerce_after_sales_return_shipment(tenant_id, after_sales_id, idempotency_key);
+
+-- Shipment lifecycle tables (merchant shipping / tracking). Column shape
+-- mirrors the e2e test migration so test and production schemas stay aligned.
+CREATE TABLE IF NOT EXISTS commerce_shipment (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    shipment_no TEXT NOT NULL,
+    fulfillment_id TEXT NOT NULL,
+    carrier_code TEXT NOT NULL,
+    tracking_no TEXT,
+    status TEXT NOT NULL,
+    shipped_at TEXT,
+    delivered_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_commerce_shipment_tenant_created
+    ON commerce_shipment(tenant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS commerce_shipment_package (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    shipment_id TEXT NOT NULL,
+    package_no TEXT NOT NULL,
+    package_type TEXT NOT NULL,
+    tracking_no TEXT,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_commerce_shipment_package_shipment
+    ON commerce_shipment_package(tenant_id, shipment_id, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS commerce_shipment_tracking_event (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    shipment_id TEXT NOT NULL,
+    tracking_event_no TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    event_status TEXT,
+    event_time TEXT NOT NULL,
+    location_text TEXT,
+    created_at TEXT NOT NULL
+);

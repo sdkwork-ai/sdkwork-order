@@ -129,6 +129,7 @@ impl PostgresCommerceOrderStore {
             payable_amount: commerce_money(&payable_amount)?,
             quote_id: Some(quote_id),
             status: "active".to_owned(),
+            expires_at: Some(expires_at.clone()),
         };
         complete_checkout_idempotency(
             &mut tx,
@@ -154,6 +155,7 @@ impl PostgresCommerceOrderStore {
             SELECT s.id,
                    s.status,
                    s.currency_code,
+                   s.expires_at,
                    CAST(COALESCE(q.original_amount, '0') AS TEXT) AS original_amount,
                    CAST(COALESCE(q.discount_amount, '0') AS TEXT) AS discount_amount,
                    CAST(COALESCE(q.payable_amount, '0') AS TEXT) AS payable_amount,
@@ -189,6 +191,7 @@ impl PostgresCommerceOrderStore {
                 payable_amount: commerce_money(&string_cell(&row, "payable_amount"))?,
                 quote_id: optional_string_cell(&row, "quote_id"),
                 status: string_cell(&row, "status"),
+                expires_at: optional_string_cell(&row, "expires_at"),
             })
         })
         .transpose()
@@ -314,6 +317,7 @@ impl PostgresCommerceOrderStore {
             SELECT s.id,
                    s.status,
                    s.currency_code,
+                   s.expires_at,
                    CAST(COALESCE(q.original_amount, '0') AS TEXT) AS original_amount,
                    CAST(COALESCE(q.discount_amount, '0') AS TEXT) AS discount_amount,
                    CAST(COALESCE(q.payable_amount, '0') AS TEXT) AS payable_amount,
@@ -351,6 +355,7 @@ impl PostgresCommerceOrderStore {
                 payable_amount: commerce_money(&string_cell(&row, "payable_amount"))?,
                 quote_id: optional_string_cell(&row, "quote_id"),
                 status: string_cell(&row, "status"),
+                expires_at: optional_string_cell(&row, "expires_at"),
             })
         })
         .transpose()
@@ -813,6 +818,7 @@ async fn complete_checkout_idempotency(
         "discountAmount": session.discount_amount.as_str(),
         "payableAmount": session.payable_amount.as_str(),
         "quoteId": session.quote_id,
+        "expiresAt": session.expires_at,
     })
     .to_string();
     sqlx::query(
@@ -892,6 +898,10 @@ fn replay_checkout_session(
             .get("quoteId")
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned),
+        expires_at: value
+            .get("expiresAt")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned),
     })
 }
 
@@ -933,7 +943,11 @@ fn checkout_idempotency_id(tenant_id: &str, scope: &str, idempotency_key: &str) 
 }
 
 fn checkout_expires_at(now: &str) -> String {
-    now.to_owned()
+    let seconds = now.trim().parse::<i64>().unwrap_or(0);
+    format!(
+        "{}",
+        seconds.saturating_add(sdkwork_order_service::payment_expire_seconds())
+    )
 }
 
 fn checkout_line_title(row: &sqlx::postgres::PgRow) -> String {

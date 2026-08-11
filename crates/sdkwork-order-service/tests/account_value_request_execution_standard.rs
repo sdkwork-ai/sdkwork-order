@@ -8,7 +8,9 @@ use sdkwork_order_service::{
     AccountValueLedgerPort, AccountValueOrderSubject, AccountValueRequestExecutionStore,
     AccountValueRequestReviewAction, AccountValueRequestStatusCommand, AccountValueRequestView,
     PaymentExecutorOutcome, PaymentPayoutExecutionRequest, PaymentPayoutExecutorPort,
-    PaymentRefundExecutionRequest, PaymentRefundExecutorPort, ReviewAccountValueRequestCommand,
+    PaymentRefundExecutionRequest, PaymentRefundExecutorPort, PhysicalInventoryMutationOutcome,
+    PhysicalInventoryReservationPort, PhysicalPurchaseFuture, ReleasePhysicalOrderInventoryRequest,
+    ReservePhysicalOrderInventoryRequest, ReviewAccountValueRequestCommand,
 };
 
 #[tokio::test]
@@ -41,6 +43,7 @@ async fn approve_token_bank_refund_holds_account_value_then_refunds_and_settles_
         ledger.as_ref(),
         refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         command,
     )
     .await
@@ -102,7 +105,7 @@ async fn approve_token_bank_refund_holds_account_value_then_refunds_and_settles_
     assert!(payouts.requests().is_empty());
 
     let statuses = store.status_commands();
-    assert_eq!(statuses.len(), 3);
+    assert_eq!(statuses.len(), 4);
     assert_eq!(statuses[0].status, "account_reversal_held");
     assert_eq!(
         statuses[0].account_effect_reference_id.as_deref(),
@@ -110,6 +113,10 @@ async fn approve_token_bank_refund_holds_account_value_then_refunds_and_settles_
     );
     assert_eq!(statuses[1].status, "provider_refund_processing");
     assert_eq!(statuses[2].status, "refunded");
+    assert_eq!(
+        statuses[3].request_id, "refunded-order-order-token-1",
+        "owner order refund status must be synced after a successful refund"
+    );
 }
 
 #[tokio::test]
@@ -136,6 +143,7 @@ async fn processing_provider_refund_keeps_the_account_hold_unsettled() {
         ledger.as_ref(),
         refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         review_command(
             AccountValueOrderSubject::RefundRequest,
             "refund-processing-1",
@@ -193,6 +201,7 @@ async fn approve_cash_withdrawal_holds_cash_then_payouts_and_settles_hold() {
         ledger.as_ref(),
         refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         command,
     )
     .await
@@ -278,6 +287,7 @@ async fn reject_refund_request_only_persists_rejected_status() {
         ledger.as_ref(),
         refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         command,
     )
     .await
@@ -312,6 +322,7 @@ async fn processing_provider_payout_keeps_the_cash_hold_unsettled() {
         ledger.as_ref(),
         refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         review_command(
             AccountValueOrderSubject::CashWithdrawal,
             "withdrawal-processing-1",
@@ -350,6 +361,7 @@ async fn failed_provider_payout_releases_the_cash_hold() {
         ledger.as_ref(),
         refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         review_command(
             AccountValueOrderSubject::CashWithdrawal,
             "withdrawal-failed-1",
@@ -403,6 +415,7 @@ async fn refund_provider_failure_releases_account_hold_and_marks_failure() {
         ledger.as_ref(),
         refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         command,
     )
     .await
@@ -458,6 +471,7 @@ async fn ambiguous_refund_error_retains_the_account_hold_for_reconciliation() {
         ledger.as_ref(),
         refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         review_command(
             AccountValueOrderSubject::RefundRequest,
             "refund-ambiguous-1",
@@ -506,6 +520,7 @@ async fn retry_after_failed_refund_uses_a_new_hold_identity() {
         ledger.as_ref(),
         failing_refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         review_command(
             AccountValueOrderSubject::RefundRequest,
             "refund-retry-1",
@@ -520,6 +535,7 @@ async fn retry_after_failed_refund_uses_a_new_hold_identity() {
         ledger.as_ref(),
         successful_refunds.as_ref(),
         payouts.as_ref(),
+        &NoopPhysicalInventoryPort,
         review_command(
             AccountValueOrderSubject::RefundRequest,
             "refund-retry-1",
@@ -600,6 +616,34 @@ impl AccountValueRequestExecutionStore for MockAccountValueRequestStore {
         request.updated_at = "2026-07-08 00:01:00".to_owned();
         let view = request.clone();
         Box::pin(async move { Ok(view) })
+    }
+
+    fn mark_owner_order_refunded<'a>(
+        &'a self,
+        _tenant_id: &'a str,
+        _organization_id: Option<&'a str>,
+        _owner_user_id: &'a str,
+        order_id: &'a str,
+        refund_status: &'a str,
+    ) -> AccountValueFuture<'a, ()> {
+        self.status_commands
+            .lock()
+            .expect("status lock")
+            .push(AccountValueRequestStatusCommand {
+                request_id: format!("refunded-order-{order_id}"),
+                status: refund_status.to_owned(),
+                provider_reference_id: None,
+                account_effect_reference_id: None,
+                tenant_id: _tenant_id.to_owned(),
+                organization_id: _organization_id.map(str::to_owned),
+                subject: AccountValueOrderSubject::RefundRequest,
+                action: AccountValueRequestReviewAction::Approve,
+                reason_code: None,
+                review_comment: None,
+                request_no: String::new(),
+                idempotency_key: String::new(),
+            });
+        Box::pin(async move { Ok(()) })
     }
 }
 
@@ -790,5 +834,53 @@ impl RequestProviderAmountExt for AccountValueRequestView {
         self.provider_amount = Some(CommerceMoney::new(amount).expect("provider amount"));
         self.provider_currency_code = Some(currency_code.to_owned());
         self
+    }
+}
+
+#[derive(Default)]
+struct NoopPhysicalInventoryPort;
+
+impl PhysicalInventoryReservationPort for NoopPhysicalInventoryPort {
+    fn reserve_physical_order_inventory<'a>(
+        &'a self,
+        _request: ReservePhysicalOrderInventoryRequest,
+    ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
+        Box::pin(async move {
+            Ok(PhysicalInventoryMutationOutcome {
+                accepted: true,
+                replayed: true,
+            })
+        })
+    }
+
+    fn release_physical_order_inventory<'a>(
+        &'a self,
+        _request: ReleasePhysicalOrderInventoryRequest,
+    ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
+        Box::pin(async move {
+            Ok(PhysicalInventoryMutationOutcome {
+                accepted: true,
+                replayed: true,
+            })
+        })
+    }
+
+    fn restock_consumed_order_inventory<'a>(
+        &'a self,
+        _request: ReleasePhysicalOrderInventoryRequest,
+    ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
+        Box::pin(async move {
+            Ok(PhysicalInventoryMutationOutcome {
+                accepted: true,
+                replayed: true,
+            })
+        })
+    }
+
+    fn sweep_expired_inventory_reservations<'a>(
+        &'a self,
+        _limit: i64,
+    ) -> PhysicalPurchaseFuture<'a, i64> {
+        Box::pin(async move { Ok(0) })
     }
 }

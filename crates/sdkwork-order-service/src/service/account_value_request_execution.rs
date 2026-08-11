@@ -1,20 +1,23 @@
 use sdkwork_contract_service::{CommerceLedgerBusinessType, CommerceMoney, CommerceServiceError};
 
 use crate::{
-    refund_account_hold_idempotency_key, refund_payment_execution_idempotency_key,
-    withdrawal_account_hold_idempotency_key, withdrawal_payment_execution_idempotency_key,
-    AccountValueAssetCode, AccountValueLedgerCommand, AccountValueLedgerOutcome,
-    AccountValueLedgerPort, AccountValueOrderSubject, AccountValueRequestExecutionStore,
-    AccountValueRequestReviewAction, AccountValueRequestStatusCommand, AccountValueRequestView,
-    PaymentExecutorOutcome, PaymentPayoutExecutionRequest, PaymentPayoutExecutorPort,
-    PaymentRefundExecutionRequest, PaymentRefundExecutorPort, ReviewAccountValueRequestCommand,
+    physical_inventory_release_idempotency_key, refund_account_hold_idempotency_key,
+    refund_payment_execution_idempotency_key, withdrawal_account_hold_idempotency_key,
+    withdrawal_payment_execution_idempotency_key, AccountValueAssetCode, AccountValueLedgerCommand,
+    AccountValueLedgerOutcome, AccountValueLedgerPort, AccountValueOrderSubject,
+    AccountValueRequestExecutionStore, AccountValueRequestReviewAction,
+    AccountValueRequestStatusCommand, AccountValueRequestView, PaymentExecutorOutcome,
+    PaymentPayoutExecutionRequest, PaymentPayoutExecutorPort, PaymentRefundExecutionRequest,
+    PaymentRefundExecutorPort, PhysicalInventoryReservationPort,
+    ReleasePhysicalOrderInventoryRequest, ReviewAccountValueRequestCommand,
 };
 
-pub async fn execute_account_value_request_review<S, L, R, P>(
+pub async fn execute_account_value_request_review<S, L, R, P, I>(
     store: &S,
     ledger_port: &L,
     refund_executor: &R,
     payout_executor: &P,
+    inventory: &I,
     command: ReviewAccountValueRequestCommand,
 ) -> Result<AccountValueRequestView, CommerceServiceError>
 where
@@ -22,6 +25,7 @@ where
     L: AccountValueLedgerPort + ?Sized,
     R: PaymentRefundExecutorPort + ?Sized,
     P: PaymentPayoutExecutorPort + ?Sized,
+    I: PhysicalInventoryReservationPort + ?Sized,
 {
     let Some(request) = store
         .load_account_value_request_for_execution(&command)
@@ -46,7 +50,15 @@ where
 
     match command.subject {
         AccountValueOrderSubject::RefundRequest => {
-            execute_refund_request(store, ledger_port, refund_executor, command, request).await
+            execute_refund_request(
+                store,
+                ledger_port,
+                refund_executor,
+                inventory,
+                command,
+                request,
+            )
+            .await
         }
         AccountValueOrderSubject::CashWithdrawal => {
             execute_withdrawal_request(store, ledger_port, payout_executor, command, request).await
@@ -57,10 +69,11 @@ where
     }
 }
 
-async fn execute_refund_request<S, L, R>(
+async fn execute_refund_request<S, L, R, I>(
     store: &S,
     ledger_port: &L,
     refund_executor: &R,
+    inventory: &I,
     command: ReviewAccountValueRequestCommand,
     request: AccountValueRequestView,
 ) -> Result<AccountValueRequestView, CommerceServiceError>
@@ -68,6 +81,7 @@ where
     S: AccountValueRequestExecutionStore + ?Sized,
     L: AccountValueLedgerPort + ?Sized,
     R: PaymentRefundExecutorPort + ?Sized,
+    I: PhysicalInventoryReservationPort + ?Sized,
 {
     if request.status == "refunded" {
         return Ok(request);
@@ -127,8 +141,56 @@ where
     match provider_refund_outcome_class(&provider_outcome.status) {
         ProviderRefundOutcomeClass::Succeeded => {
             settle_account_hold(ledger_port, &command, &request, &hold_id).await?;
-            mark_final_provider_status(store, &command, &provider_outcome, "refunded", &hold_id)
+            let view = mark_final_provider_status(
+                store,
+                &command,
+                &provider_outcome,
+                "refunded",
+                &hold_id,
+            )
+            .await?;
+            // Keep the owner order in sync with the real refund lifecycle so
+            // order views expose `refund_status = refunded`.
+            if let Err(error) = store
+                .mark_owner_order_refunded(
+                    &command.tenant_id,
+                    command.organization_id.as_deref(),
+                    &request.owner_user_id,
+                    original_order_id,
+                    "refunded",
+                )
                 .await
+            {
+                tracing::warn!(
+                    target = "order.refund",
+                    order_id = original_order_id,
+                    error = ?error,
+                    "failed to sync refunded status on owner order"
+                );
+            }
+            // Physical orders refunded before shipment still hold an
+            // inventory reservation; release it once the money is back.
+            // Idempotent release semantics make this safe for virtual and
+            // already-shipped orders (no reservation / consumed rows are
+            // skipped), so no order-type lookup is required.
+            if let Err(error) = inventory
+                .release_physical_order_inventory(ReleasePhysicalOrderInventoryRequest {
+                    tenant_id: command.tenant_id.clone(),
+                    order_id: original_order_id.to_owned(),
+                    reason_code: "refund".to_owned(),
+                    request_no: format!("refund-{}", request.request_id),
+                    idempotency_key: physical_inventory_release_idempotency_key(original_order_id),
+                })
+                .await
+            {
+                tracing::warn!(
+                    target = "order.refund",
+                    order_id = original_order_id,
+                    error = ?error,
+                    "failed to release physical inventory after refund"
+                );
+            }
+            Ok(view)
         }
         ProviderRefundOutcomeClass::Processing => {
             mark_final_provider_status(

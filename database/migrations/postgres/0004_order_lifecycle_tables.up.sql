@@ -1,9 +1,17 @@
--- SDKWork order lifecycle audit tables.
---
--- The order lifecycle worker records state transitions (order_event) and
--- cancellations (order_cancellation). These tables are referenced by the
--- order lifecycle repository but were missing from the consolidated baseline;
--- this migration backfills them on deployments initialized before the fix.
+-- sdkwork:migration
+-- id: 0004_order_lifecycle_tables
+-- engine: postgres
+-- module: sdkwork-order
+-- purpose: Backfill the order lifecycle audit tables (order_event and
+--   order_cancellation) on deployments initialized before the consolidated
+--   baseline included them.
+-- reversible: false
+-- rollback: forward-fix (the lifecycle tables are the canonical state; there
+--   is no down migration)
+-- transactional: true
+-- lock: lightweight
+-- lock_timeout: 2s
+-- statement_timeout: 30s
 
 BEGIN;
 

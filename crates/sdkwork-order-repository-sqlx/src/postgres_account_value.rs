@@ -679,6 +679,44 @@ impl PostgresCommerceRechargeStore {
             self.validate_refund_request_replay(&command, &view).await?;
             return Ok(view);
         }
+        // 退款申请仅对已支付订单开放（行业订单中心一致性：未支付/已取消/
+        // 已关闭/已过期的订单不可发起资金退款）。
+        let order_payment = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT COALESCE(NULLIF(payment_status, ''), 'none')
+            FROM commerce_order
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND owner_user_id = CAST($4 AS TEXT)
+              AND id = CAST($5 AS TEXT)
+            LIMIT 1
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(command.organization_id.as_deref())
+        .bind(&command.owner_user_id)
+        .bind(&command.original_order_id)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to load order for refund request", error))?;
+        match order_payment
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_ascii_lowercase)
+        {
+            Some(status) if matches!(status.as_str(), "success" | "succeeded" | "paid") => {}
+            Some(_) => {
+                return Err(CommerceServiceError::conflict(
+                    "order is not paid; refund requests require a paid order",
+                ))
+            }
+            None => {
+                return Err(CommerceServiceError::not_found(
+                    "order was not found for refund request",
+                ))
+            }
+        }
         let now = current_command_timestamp();
         let inserted = sqlx::query(
             r#"
@@ -1490,6 +1528,45 @@ impl AccountValueRequestExecutionStore for PostgresCommerceRechargeStore {
     ) -> AccountValueFuture<'a, AccountValueRequestView> {
         Box::pin(async move { self.update_account_value_request_status(command).await })
     }
+
+    fn mark_owner_order_refunded<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+        refund_status: &'a str,
+    ) -> AccountValueFuture<'a, ()> {
+        let pool = self.pool().clone();
+        Box::pin(async move {
+            let result = sqlx::query(
+                r#"
+                UPDATE commerce_order
+                SET refund_status = $1, updated_at = $2
+                WHERE tenant_id = CAST($3 AS TEXT)
+                  AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $5 IS NULL) OR (organization_id = '0' AND $5 IS NULL))
+                  AND owner_user_id = CAST($6 AS TEXT)
+                  AND id = CAST($7 AS TEXT)
+                "#,
+            )
+            .bind(refund_status)
+            .bind(current_command_timestamp())
+            .bind(tenant_id)
+            .bind(organization_id)
+            .bind(organization_id)
+            .bind(owner_user_id)
+            .bind(order_id)
+            .execute(&pool)
+            .await
+            .map_err(|error| store_error("failed to mark owner order refunded", error))?;
+            if result.rows_affected() == 0 {
+                return Err(CommerceServiceError::not_found(
+                    "owner order was not found for refund sync",
+                ));
+            }
+            Ok(())
+        })
+    }
 }
 
 async fn insert_account_value_order(
@@ -1572,7 +1649,7 @@ async fn insert_coupon_recharge_order(
     let now = rfc3339_command_timestamp();
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let expires_at = if command.payment_required {
-        Some(now.clone())
+        Some(rfc3339_after_payment_window(&now))
     } else {
         None
     };
@@ -2060,6 +2137,16 @@ fn current_command_timestamp() -> String {
 /// returns Unix seconds which PostgreSQL cannot cast to timestamptz.
 fn rfc3339_command_timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
+/// RFC3339 timestamp shifted by the shared payment expiry window
+/// (`SDKWORK_ORDER_PAYMENT_EXPIRE_SECONDS`, default 30 minutes).
+fn rfc3339_after_payment_window(now: &str) -> String {
+    let seconds = sdkwork_order_service::payment_expire_seconds();
+    let base = chrono::DateTime::parse_from_rfc3339(now)
+        .map(|value| value.with_timezone(&chrono::Utc))
+        .unwrap_or_else(|_| chrono::Utc::now());
+    (base + chrono::Duration::seconds(seconds)).to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
 /// Platform orders persist the sentinel organization scope (`"0"`) so that

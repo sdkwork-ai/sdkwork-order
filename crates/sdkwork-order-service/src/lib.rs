@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod config;
 pub mod domain;
 pub mod ports;
 pub mod queries;
@@ -6,6 +7,7 @@ pub mod service;
 pub mod validation;
 
 pub use commands::*;
+pub use config::*;
 pub use domain::*;
 pub use ports::*;
 pub use queries::*;

@@ -316,6 +316,17 @@ pub trait AccountValueRequestExecutionStore: Send + Sync {
         &'a self,
         command: AccountValueRequestStatusCommand,
     ) -> AccountValueFuture<'a, AccountValueRequestView>;
+
+    /// Syncs the owner order's `refund_status` after a refund settles
+    /// successfully, so order views reflect the real refund lifecycle.
+    fn mark_owner_order_refunded<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+        refund_status: &'a str,
+    ) -> AccountValueFuture<'a, ()>;
 }
 
 pub type AccountValueFulfillmentFuture<'a, T> =

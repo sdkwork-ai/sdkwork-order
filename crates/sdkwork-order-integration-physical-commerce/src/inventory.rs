@@ -45,6 +45,33 @@ impl PhysicalInventoryReservationPort for PhysicalInventoryAdapter {
             release_postgres(pool, &request).await
         })
     }
+
+    fn restock_consumed_order_inventory<'a>(
+        &'a self,
+        request: ReleasePhysicalOrderInventoryRequest,
+    ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
+        Box::pin(async move {
+            // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+            let DatabasePool::Postgres(pool, _) = &self.pool else {
+                panic!("physical inventory restock requires a PostgreSQL pool");
+            };
+            restock_postgres(pool, &request).await
+        })
+    }
+
+    fn sweep_expired_inventory_reservations<'a>(
+        &'a self,
+        limit: i64,
+    ) -> PhysicalPurchaseFuture<'a, i64> {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+            let DatabasePool::Postgres(pool, _) = &pool else {
+                panic!("physical inventory sweep requires a PostgreSQL pool");
+            };
+            sweep_expired_reservations_postgres(pool, limit).await
+        })
+    }
 }
 
 pub(crate) async fn consume_order_inventory(
@@ -175,18 +202,23 @@ async fn release_postgres(
             replayed: true,
         });
     }
-    let replayed = rows
-        .iter()
-        .all(|row| text_postgres(row, "status").eq_ignore_ascii_case("released"));
+    let replayed = rows.iter().all(|row| {
+        matches!(
+            text_postgres(row, "status").as_str(),
+            "released" | "consumed"
+        )
+    });
     if !replayed {
         for row in &rows {
             let status = text_postgres(row, "status");
-            if status.eq_ignore_ascii_case("released") {
+            if matches!(status.as_str(), "released" | "consumed") {
+                // Released rows are already returned to stock; consumed rows
+                // are fulfilled out of stock and must not be released again.
                 continue;
             }
             if !status.eq_ignore_ascii_case("reserved") {
                 return Err(CommerceServiceError::invalid_state(
-                    "consumed inventory cannot be released",
+                    "inventory reservation cannot be released",
                 ));
             }
             release_stock_postgres(&mut tx, row).await?;
@@ -202,6 +234,105 @@ async fn release_postgres(
         accepted: true,
         replayed,
     })
+}
+
+/// Returns consumed stock to available stock after a physical return is
+/// completed. `consumed` reservations become `restocked`; released/restocked
+/// reservations are skipped so retries never double-credit the stock.
+async fn restock_postgres(
+    pool: &sqlx::PgPool,
+    request: &ReleasePhysicalOrderInventoryRequest,
+) -> Result<PhysicalInventoryMutationOutcome, CommerceServiceError> {
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(store_error("begin inventory restock"))?;
+    let rows = sqlx::query("SELECT id, tenant_id, organization_id, sku_id, warehouse_id, fulfillment_node_id, quantity, status FROM commerce_inventory_reservation WHERE tenant_id = $1 AND order_id = $2 ORDER BY id FOR UPDATE")
+        .bind(&request.tenant_id).bind(&request.order_id).fetch_all(&mut *tx).await.map_err(store_error("load inventory reservations for restock"))?;
+    if rows.is_empty() {
+        return Ok(PhysicalInventoryMutationOutcome {
+            accepted: true,
+            replayed: true,
+        });
+    }
+    let replayed = rows.iter().all(|row| {
+        matches!(
+            text_postgres(row, "status").as_str(),
+            "restocked" | "released"
+        )
+    });
+    if !replayed {
+        for row in &rows {
+            let status = text_postgres(row, "status");
+            if matches!(status.as_str(), "restocked" | "released") {
+                // Already returned to stock by an earlier restock or release.
+                continue;
+            }
+            if !status.eq_ignore_ascii_case("consumed") {
+                return Err(CommerceServiceError::invalid_state(
+                    "inventory reservation is not consumed; cannot restock",
+                ));
+            }
+            restock_stock_postgres(&mut tx, row).await?;
+            sqlx::query("UPDATE commerce_inventory_reservation SET status = 'restocked', updated_at = $1, idempotency_key = $2 WHERE id = $3 AND status = 'consumed'")
+                .bind(now_string()).bind(&request.idempotency_key).bind(text_postgres(row, "id"))
+                .execute(&mut *tx).await.map_err(store_error("restock inventory reservation"))?;
+        }
+    }
+    tx.commit()
+        .await
+        .map_err(store_error("commit inventory restock"))?;
+    Ok(PhysicalInventoryMutationOutcome {
+        accepted: true,
+        replayed,
+    })
+}
+
+/// Releases every reservation whose `expires_at` (unix seconds, set at
+/// reserve time) has elapsed while still `reserved`. This is the consistency
+/// backstop for failed releases, legacy orders without `expired_at`, and
+/// abandoned payment windows. Returns the number of affected orders.
+async fn sweep_expired_reservations_postgres(
+    pool: &sqlx::PgPool,
+    limit: i64,
+) -> Result<i64, CommerceServiceError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT DISTINCT tenant_id, order_id
+        FROM commerce_inventory_reservation
+        WHERE status = 'reserved'
+          AND NULLIF(expires_at, '')::bigint <= $1::bigint
+        ORDER BY order_id
+        LIMIT $2
+        "#,
+    )
+    .bind(now_seconds())
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(store_error("load expired inventory reservations for sweep"))?;
+    let mut swept = 0;
+    for row in rows {
+        let request = ReleasePhysicalOrderInventoryRequest {
+            tenant_id: text_postgres(&row, "tenant_id"),
+            order_id: text_postgres(&row, "order_id"),
+            reason_code: "reservation_expired".to_owned(),
+            request_no: format!("sweep-{}", text_postgres(&row, "order_id")),
+            idempotency_key: format!("sweep:{}", text_postgres(&row, "order_id")),
+        };
+        // release is idempotent; concurrent sweepers converge on released.
+        if let Err(error) = release_postgres(pool, &request).await {
+            tracing::warn!(
+                target = "inventory.sweep",
+                order_id = %request.order_id,
+                error = ?error,
+                "failed to release expired inventory reservation"
+            );
+            continue;
+        }
+        swept += 1;
+    }
+    Ok(swept)
 }
 
 fn validate_reserve_request(
@@ -277,6 +408,24 @@ async fn release_stock_postgres(
     row: &sqlx::postgres::PgRow,
 ) -> Result<(), CommerceServiceError> {
     mutate_stock_postgres(tx, row, true).await
+}
+async fn restock_stock_postgres(
+    tx: &mut Transaction<'_, Postgres>,
+    row: &sqlx::postgres::PgRow,
+) -> Result<(), CommerceServiceError> {
+    let quantity = row.try_get::<i64, _>("quantity").unwrap_or(0);
+    sqlx::query("UPDATE commerce_inventory_stock SET available_quantity = available_quantity + $1, sold_quantity = sold_quantity - $1, version = version + 1, updated_at = $2 WHERE tenant_id = $3 AND organization_id = $4 AND sku_id = $5 AND ((warehouse_id = $6) OR (warehouse_id IS NULL AND $6 IS NULL)) AND ((fulfillment_node_id = $7) OR (fulfillment_node_id IS NULL AND $7 IS NULL)) AND sold_quantity >= $1")
+        .bind(quantity)
+        .bind(now_string())
+        .bind(text_postgres(row, "tenant_id"))
+        .bind(text_postgres(row, "organization_id"))
+        .bind(text_postgres(row, "sku_id"))
+        .bind(optional_text_postgres(row, "warehouse_id"))
+        .bind(optional_text_postgres(row, "fulfillment_node_id"))
+        .execute(&mut **tx)
+        .await
+        .map_err(store_error("restock sold inventory stock"))?;
+    Ok(())
 }
 async fn mutate_stock_postgres(
     tx: &mut Transaction<'_, Postgres>,
@@ -365,11 +514,13 @@ where
         )
 }
 fn now_string() -> String {
+    now_seconds().to_string()
+}
+fn now_seconds() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|v| v.as_secs())
+        .map(|v| v.as_secs() as i64)
         .unwrap_or(0)
-        .to_string()
 }
 fn expires_at() -> String {
     (std::time::SystemTime::now()

@@ -28,12 +28,16 @@ pub fn build_order_backend_business_router(host: Arc<OrderServiceHost>) -> Route
         panic!("order backend router requires a PostgreSQL database pool");
     };
     let router = Router::new()
-        .merge(backend_order_admin_router_with_postgres_pool(pool.clone()))
+        .merge(backend_order_admin_router_with_postgres_pool(
+            pool.clone(),
+            host.physical_inventory_reservation_port(),
+        ))
         .merge(backend_commerce_admin_router_with_postgres_pool_and_ports(
             pool.clone(),
             account_value_ledger_port.clone(),
             payment_refund_executor_port.clone(),
             payment_payout_executor_port.clone(),
+            host.physical_inventory_reservation_port(),
         ))
         .merge(
             payment_confirmation_router_with_postgres_pool_and_integrations(

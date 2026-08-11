@@ -4,4 +4,6 @@ export interface CheckoutOrder {
   orderSn: string;
   status: string;
   totalAmount: string;
+  /** Partner bound to the order's customer at creation time. */
+  partnerId?: string;
 }

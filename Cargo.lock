@@ -1738,6 +1738,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkwork-commerce-partner-repository-sqlx"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "sdkwork-account-repository-sqlx",
+ "sdkwork-account-service",
+ "sdkwork-commerce-partner-service",
+ "sdkwork-contract-service",
+ "sdkwork-utils-rust",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "sdkwork-commerce-partner-service"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "sdkwork-contract-service",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
 name = "sdkwork-commerce-promotion-repository-sqlx"
 version = "0.1.0"
 dependencies = [
@@ -2014,6 +2044,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkwork-order-integration-partner"
+version = "0.1.0"
+dependencies = [
+ "sdkwork-commerce-partner-repository-sqlx",
+ "sdkwork-commerce-partner-service",
+ "sdkwork-contract-service",
+ "sdkwork-database-sqlx",
+ "sdkwork-order-service",
+ "sqlx",
+ "tracing",
+]
+
+[[package]]
 name = "sdkwork-order-integration-payment"
 version = "0.1.0"
 dependencies = [
@@ -2047,6 +2090,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2074,6 +2118,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -2100,11 +2145,17 @@ dependencies = [
  "sdkwork-order-database-host",
  "sdkwork-order-integration-account",
  "sdkwork-order-integration-membership",
+ "sdkwork-order-integration-partner",
  "sdkwork-order-integration-payment",
  "sdkwork-order-integration-physical-commerce",
  "sdkwork-order-integration-promotion",
+ "sdkwork-order-repository-sqlx",
  "sdkwork-order-service",
+ "sdkwork-payment-providers",
+ "sdkwork-payment-repository-sqlx",
  "sqlx",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

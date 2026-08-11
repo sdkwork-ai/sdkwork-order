@@ -22,6 +22,7 @@ sdkwork_shop_service.workspace = true
 sdkwork_shop_repository_sqlx.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

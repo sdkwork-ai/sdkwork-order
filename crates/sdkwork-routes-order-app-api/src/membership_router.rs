@@ -32,7 +32,11 @@ use crate::owner_order_payment_enrich::{
 };
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
-const PAYMENT_EXPIRE_SECONDS: i64 = 1_800;
+/// Payment countdown in seconds, backed by the shared expiry window
+/// (`SDKWORK_ORDER_PAYMENT_EXPIRE_SECONDS`, default 30 minutes).
+fn payment_expire_seconds() -> i64 {
+    sdkwork_order_service::payment_expire_seconds()
+}
 const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
 const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
@@ -429,7 +433,7 @@ fn build_create_membership_command(
 ) -> Result<CreateMembershipOrderCommand, CommerceServiceError> {
     let now = current_unix_timestamp();
     let requested_at = format_unix_timestamp(now);
-    let expire_at = format_unix_timestamp(now + PAYMENT_EXPIRE_SECONDS);
+    let expire_at = format_unix_timestamp(now + payment_expire_seconds());
     let order_id = Uuid::new_v4().to_string();
     let order_item_id = Uuid::new_v4().to_string();
     let token = stable_hex_token(&format!(

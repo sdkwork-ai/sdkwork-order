@@ -18,6 +18,7 @@ sdkwork_contract_service.workspace = true
 sdkwork_order_service.workspace = true
 sdkwork_payment_service.workspace = true
 sdkwork-utils-rust.workspace = true
+tracing.workspace = true
 sqlx = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }

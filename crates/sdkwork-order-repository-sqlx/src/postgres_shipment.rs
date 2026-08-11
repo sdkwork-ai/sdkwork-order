@@ -444,6 +444,22 @@ impl PostgresCommerceOrderStore {
         .await
         .map_err(|error| store_error("failed to update shipment package", error))?;
 
+        // 包裹置 shipped → 沿 shipment → fulfillment → order 推进发货状态
+        // （幂等：已 shipped/delivered 的行跳过）。
+        if command
+            .status
+            .as_deref()
+            .is_some_and(|status| status.eq_ignore_ascii_case("shipped"))
+        {
+            advance_owner_order_to_shipped(
+                self.pool(),
+                &command.tenant_id,
+                command.organization_id.as_deref(),
+                &command.shipment_id,
+            )
+            .await?;
+        }
+
         self.load_management_shipment_package(
             &command.tenant_id,
             command.organization_id.as_deref(),
@@ -505,6 +521,128 @@ fn map_shipment_row(row: sqlx::postgres::PgRow) -> Result<ShipmentView, Commerce
 
 fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceError {
     crate::sql_store_error::map_sql_store_error(message, error)
+}
+
+/// Merchant shipment advance: marks the shipment, its fulfillment order, and
+/// the owner order as `shipped` with a lifecycle event. Idempotent — rows
+/// already shipped or beyond are skipped; non-physical fulfillments that do
+/// not resolve to an order are ignored.
+async fn advance_owner_order_to_shipped(
+    pool: &sqlx::PgPool,
+    tenant_id: &str,
+    organization_id: Option<&str>,
+    shipment_id: &str,
+) -> Result<(), CommerceServiceError> {
+    use crate::order_lifecycle::{insert_order_event_postgres, OrderLifecycleAuditInput};
+
+    let now = current_timestamp_string();
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| store_error("failed to begin shipment advance transaction", error))?;
+
+    sqlx::query(
+        r#"
+        UPDATE commerce_shipment
+        SET status = 'shipped', shipped_at = COALESCE(shipped_at, $1), updated_at = $1
+        WHERE tenant_id = CAST($2 AS TEXT)
+          AND id = CAST($3 AS TEXT)
+          AND LOWER(COALESCE(status, '')) NOT IN ('shipped', 'delivered')
+        "#,
+    )
+    .bind(&now)
+    .bind(tenant_id)
+    .bind(shipment_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| store_error("failed to mark shipment shipped", error))?;
+
+    sqlx::query(
+        r#"
+        UPDATE commerce_fulfillment_order fo
+        SET status = 'shipped', updated_at = $1
+        FROM commerce_shipment s
+        WHERE s.tenant_id = CAST($2 AS TEXT)
+          AND s.id = CAST($3 AS TEXT)
+          AND fo.tenant_id = s.tenant_id
+          AND fo.id = s.fulfillment_id
+          AND LOWER(COALESCE(fo.status, '')) NOT IN ('shipped', 'completed')
+        "#,
+    )
+    .bind(&now)
+    .bind(tenant_id)
+    .bind(shipment_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| store_error("failed to mark fulfillment shipped", error))?;
+
+    let order = sqlx::query(
+        r#"
+        SELECT o.id, o.status
+        FROM commerce_order o
+        INNER JOIN commerce_fulfillment_order fo
+          ON fo.tenant_id = o.tenant_id AND fo.order_id = o.id
+        INNER JOIN commerce_shipment s
+          ON s.tenant_id = fo.tenant_id AND s.fulfillment_id = fo.id
+        WHERE o.tenant_id = CAST($1 AS TEXT)
+          AND s.id = CAST($2 AS TEXT)
+        LIMIT 1
+        "#,
+    )
+    .bind(tenant_id)
+    .bind(shipment_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|error| store_error("failed to resolve shipment order", error))?;
+
+    let Some(order) = order else {
+        // 非实物履约（无订单绑定）无需推进。
+        tx.commit().await.map_err(|error| {
+            store_error("failed to commit shipment advance without order", error)
+        })?;
+        return Ok(());
+    };
+    let order_id = string_cell(&order, "id");
+    let from_status = string_cell(&order, "status");
+    let updated = sqlx::query(
+        r#"
+        UPDATE commerce_order
+        SET status = 'shipped', fulfillment_status = 'shipped', updated_at = $1
+        WHERE tenant_id = CAST($2 AS TEXT)
+          AND id = CAST($3 AS TEXT)
+          AND LOWER(COALESCE(status, '')) IN ('paid', 'fulfilled')
+          AND LOWER(COALESCE(fulfillment_status, '')) IN ('inventory_reserved', 'awaiting_shipment')
+        "#,
+    )
+    .bind(&now)
+    .bind(tenant_id)
+    .bind(&order_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| store_error("failed to mark owner order shipped", error))?;
+
+    if updated.rows_affected() > 0 {
+        let audit = OrderLifecycleAuditInput {
+            tenant_id: tenant_id.to_owned(),
+            organization_id: organization_id.map(str::to_owned),
+            order_id: order_id.clone(),
+            event_type: "shipped",
+            from_status,
+            to_status: "shipped",
+            actor_type: "merchant",
+            actor_id: None,
+            reason_code: Some("merchant_shipped".to_owned()),
+            reason_message: None,
+            request_no: format!("ship-{shipment_id}"),
+            idempotency_key: format!("order-shipped:{order_id}"),
+            now,
+        };
+        insert_order_event_postgres(&mut tx, &audit).await?;
+    }
+    tx.commit()
+        .await
+        .map_err(|error| store_error("failed to commit shipment advance transaction", error))?;
+    Ok(())
 }
 
 fn shipment_package_storage_id(command: &CreateShipmentPackageCommand) -> String {
