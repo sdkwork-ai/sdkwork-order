@@ -1761,6 +1761,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "sdkwork-contract-service",
+ "sdkwork-utils-rust",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
