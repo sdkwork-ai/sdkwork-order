@@ -3,9 +3,11 @@ mod account_value;
 mod membership_fulfillment;
 mod owner_order_payment;
 mod partner_relation;
+mod payment_notify;
 mod physical_goods;
 mod physical_purchase;
 mod points_recharge_fulfillment;
+mod refund_notify;
 
 pub use partner_relation::{
     NoopOrderPartnerRelationPort, OrderPartnerRelationFuture, OrderPartnerRelationPort,
@@ -52,6 +54,14 @@ pub use owner_order_payment::{
     UnavailableOwnerOrderPaymentReconciliationPort, OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
     OWNER_ORDER_PAYMENT_RECONCILIATION_PORT, OWNER_ORDER_PAYMENT_STATE_PORT,
 };
+
+pub use payment_notify::{
+    PaymentNotifyAttemptContext, PaymentNotifyEvent, PaymentNotifyIngestFuture,
+    PaymentNotifyIngestOutcome, PaymentNotifyIngestPort, PaymentNotifyOrderContext,
+    PaymentNotifyOrderContextFuture, PaymentNotifyOrderContextPort, PaymentNotifyVerifyFuture,
+    PaymentNotifyVerifyPort,
+};
+
 pub use physical_goods::{
     physical_goods_fulfillment_idempotency_key, FulfillPaidPhysicalOrderRequest,
     PhysicalGoodsFulfillmentOutcome, PhysicalGoodsFulfillmentPort, PhysicalGoodsFuture,
@@ -71,6 +81,12 @@ pub use physical_purchase::{
 pub use points_recharge_fulfillment::{
     PointsRechargeFulfillmentFuture, PointsRechargeFulfillmentStore,
     POINTS_RECHARGE_FULFILLMENT_STORE,
+};
+pub use refund_notify::{
+    OwnerOrderRefundStateFuture, OwnerOrderRefundStateOutcome, RefundNotifyContext,
+    RefundNotifyHandler, RefundNotifyHandlerFuture, RefundNotifyHandlerRegistry,
+    RefundNotifyIngestFuture, RefundNotifyIngestOutcome, RefundNotifyIngestPort,
+    RefundNotifyStatePort, REFUND_NOTIFY_BUSINESS_REFUND,
 };
 
 /// 仓储端口标识符，用于 `CommerceServiceContract` 能力注册。

@@ -11,9 +11,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceMembershipOrderStore,
-};
+use sdkwork_order_repository_sqlx::PostgresCommerceMembershipOrderStore;
 use sdkwork_order_service::{CreateMembershipOrderCommand, CreateMembershipOrderOutcome};
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_service::{
@@ -27,9 +25,7 @@ use uuid::Uuid;
 use crate::api_response::{map_service_error, success_created_item, unauthorized, validation};
 use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::OwnerOrderPaymentStore;
-use crate::owner_order_payment_enrich::{
-    enriched_postgres_owner_order_payments,
-};
+use crate::owner_order_payment_enrich::enriched_postgres_owner_order_payments;
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 /// Payment countdown in seconds, backed by the shared expiry window
@@ -344,7 +340,10 @@ fn validate_package_id(value: Option<&str>) -> Result<String, String> {
 
 fn validate_membership_action(value: Option<&str>) -> Result<String, String> {
     let action = value.unwrap_or("purchase").trim().to_ascii_lowercase();
-    if matches!(action.as_str(), "purchase" | "renew" | "upgrade" | "recharge") {
+    if matches!(
+        action.as_str(),
+        "purchase" | "renew" | "upgrade" | "recharge"
+    ) {
         return Ok(action);
     }
     Err("membership action must be one of: purchase, renew, upgrade, recharge".to_string())
@@ -356,7 +355,11 @@ const MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID: &str = "membership-quota-recharge";
 /// 轻量金额正数校验（命令层为权威校验）。
 fn is_positive_money_text(value: Option<&str>) -> bool {
     let raw = value.unwrap_or_default().trim();
-    !raw.is_empty() && raw.parse::<f64>().map(|parsed| parsed > 0.0).unwrap_or(false)
+    !raw.is_empty()
+        && raw
+            .parse::<f64>()
+            .map(|parsed| parsed > 0.0)
+            .unwrap_or(false)
 }
 
 fn validate_payment_product(value: Option<&str>) -> Result<String, String> {

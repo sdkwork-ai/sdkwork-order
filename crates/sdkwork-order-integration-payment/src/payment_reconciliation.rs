@@ -15,8 +15,8 @@ use sdkwork_payment_providers::{
 use sdkwork_payment_repository_sqlx::{
     ensure_provider_account_matches, load_active_provider_account_postgres,
     load_payment_attempt_provider_context_by_id_postgres,
-    load_provider_account_for_existing_payment_postgres,
-    persist_attempt_enrichment_postgres, provider_account_binding, PaymentAttemptProviderContext,
+    load_provider_account_for_existing_payment_postgres, persist_attempt_enrichment_postgres,
+    provider_account_binding, PaymentAttemptProviderContext,
 };
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
@@ -136,7 +136,7 @@ async fn load_candidate_postgres(
 ) -> Result<ReconciliationCandidate, CommerceServiceError> {
     let rows = sqlx::query(
         r#"
-        SELECT id, provider_code, out_trade_no, CAST(amount AS TEXT) AS amount,
+        SELECT id, provider_code, out_trade_no, CAST(amount AS BIGINT)::TEXT AS amount,
                currency_code, status
         FROM commerce_payment_attempt
         WHERE tenant_id = CAST($1 AS TEXT)

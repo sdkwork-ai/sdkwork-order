@@ -71,18 +71,22 @@ impl CreateMembershipOrderCommand {
             ));
         }
         if action == "recharge" {
-            // 订阅期额度充值：数量与金额必填且为正
+            // 订阅期额度充值：数量与金额必填且为正。用户以"元"为单位的小数
+            // （如 "99.00"）必须先转换为最小单位整数（"9900"）再进入命令，
+            // 否则下游 `CommerceMoney::new` 会拒绝小数（panic）或把整数当作
+            // 分处理（金额错 100 倍）。
             if !matches!(grant_quantity, Some(quantity) if quantity > 0) {
                 return Err(CommerceServiceError::validation(
                     "membership quota recharge requires a positive grantQuantity",
                 ));
             }
             let amount = amount.unwrap_or_default().trim();
-            if amount.is_empty() || !is_positive_money_amount(amount) {
-                return Err(CommerceServiceError::validation(
-                    "membership quota recharge requires a positive amount",
-                ));
-            }
+            let amount = major_decimal_to_minor_string(amount).ok_or_else(|| {
+                CommerceServiceError::validation(
+                    "membership quota recharge requires a positive amount (up to two decimal places)",
+                )
+            })?;
+            let amount = Some(amount);
         } else if grant_quantity.is_some() || amount.is_some() {
             return Err(CommerceServiceError::validation(
                 "grantQuantity and amount are only valid for membership quota recharge",
@@ -129,21 +133,34 @@ impl CreateMembershipOrderCommand {
     }
 }
 
-/// 校验货币金额字符串为正数（支持两位小数的十进制）。
-fn is_positive_money_amount(value: &str) -> bool {
+/// Converts a positive major-unit decimal amount ("99.00", "99", "0.5" —
+/// the user-facing "元" unit) to the canonical minor-unit integer string
+/// ("9900", "9900", "50") that `CommerceMoney` and the order/breakdown tables
+/// require. Returns `None` for empty, negative, non-numeric, or more-than-two
+/// fraction digit values.
+fn major_decimal_to_minor_string(value: &str) -> Option<String> {
     let value = value.trim();
-    let mut dot_count = 0;
-    for (index, character) in value.chars().enumerate() {
-        match character {
-            '0'..='9' => {}
-            '.' if dot_count == 0 && index > 0 && index + 1 < value.len() => dot_count += 1,
-            _ => return false,
-        }
+    let mut parts = value.split('.');
+    let whole = parts.next()?;
+    let fraction = parts.next().unwrap_or("");
+    let trailing = parts.next().is_some();
+    if whole.is_empty() || !whole.chars().all(|c| c.is_ascii_digit()) {
+        return None;
     }
-    value
-        .parse::<f64>()
-        .map(|parsed| parsed > 0.0 && parsed < 1_000_000_000.0)
-        .unwrap_or(false)
+    if !fraction.chars().all(|c| c.is_ascii_digit()) || fraction.len() > 2 || trailing {
+        return None;
+    }
+    let whole_minor: i64 = whole.parse().ok()?;
+    let mut padded = fraction.to_string();
+    while padded.len() < 2 {
+        padded.push('0');
+    }
+    let cents: i64 = padded.parse().ok()?;
+    let minor = whole_minor.checked_mul(100)?.checked_add(cents)?;
+    if minor <= 0 {
+        return None;
+    }
+    Some(minor.to_string())
 }
 
 fn optional_text(value: Option<&str>) -> Option<String> {
@@ -289,10 +306,12 @@ mod tests {
 
     #[test]
     fn membership_command_rejects_non_recharge_with_quantity_or_amount() {
-        assert!(command("purchase", "2026-07-26T00:00:00Z", "2026-07-26T00:30:00Z")
-            .unwrap()
-            .grant_quantity
-            .is_none());
+        assert!(
+            command("purchase", "2026-07-26T00:00:00Z", "2026-07-26T00:30:00Z")
+                .unwrap()
+                .grant_quantity
+                .is_none()
+        );
         assert!(CreateMembershipOrderCommand::new(
             "tenant-1",
             Some("0"),

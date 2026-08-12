@@ -208,6 +208,60 @@ pub fn map_service_error(
     problem_for_context(context, status, result_code, detail)
 }
 
+/// Maps a webhook pipeline error to a PSP-facing response. Provider
+/// webhooks are semi-hostile ingress: 4xx responses carry only generic
+/// messages (internal error details stay in logs), while 5xx keep the
+/// existing redacted server-error handling.
+pub fn map_webhook_service_error(
+    context: Option<&WebRequestContext>,
+    error: CommerceServiceError,
+) -> Response {
+    let (status, result_code, generic_detail) = match error.code() {
+        "validation" => (
+            StatusCode::BAD_REQUEST,
+            SdkWorkResultCode::ValidationError,
+            "bad request",
+        ),
+        "not-found" => (
+            StatusCode::NOT_FOUND,
+            SdkWorkResultCode::NotFound,
+            "not found",
+        ),
+        "conflict" | "locked" | "unsupported-capability" | "invalid-state" => (
+            StatusCode::CONFLICT,
+            SdkWorkResultCode::Conflict,
+            "conflict",
+        ),
+        "unauthenticated" | "unauthorized" => (
+            StatusCode::UNAUTHORIZED,
+            SdkWorkResultCode::AuthenticationRequired,
+            "unauthorized",
+        ),
+        "provider-unavailable" => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            SdkWorkResultCode::ServiceUnavailable,
+            "provider unavailable",
+        ),
+        "transport" => (
+            StatusCode::BAD_GATEWAY,
+            SdkWorkResultCode::BadGateway,
+            "upstream transport error",
+        ),
+        _ => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            SdkWorkResultCode::InternalError,
+            "internal error",
+        ),
+    };
+    tracing::warn!(
+        target = "order.webhook",
+        error_code = error.code(),
+        error = ?error,
+        "provider webhook rejected"
+    );
+    problem_for_context(context, status, result_code, generic_detail)
+}
+
 pub fn unauthorized(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
     problem_for_context(
         context,
@@ -394,5 +448,44 @@ mod tests {
             payload["instance"],
             "GET /app/v3/api/orders/{orderId}/payment_success"
         );
+    }
+
+    #[test]
+    fn webhook_error_classification_matches_psp_retry_semantics() {
+        // PSP-facing classification: 4xx are terminal (no retry), 5xx retry.
+        let context = None;
+        for (error, expected_status) in [
+            (
+                CommerceServiceError::validation("bad"),
+                axum::http::StatusCode::BAD_REQUEST,
+            ),
+            (
+                CommerceServiceError::not_found("nope"),
+                axum::http::StatusCode::NOT_FOUND,
+            ),
+            (
+                CommerceServiceError::conflict("dup"),
+                axum::http::StatusCode::CONFLICT,
+            ),
+            (
+                CommerceServiceError::invalid_state("stale"),
+                axum::http::StatusCode::CONFLICT,
+            ),
+            (
+                CommerceServiceError::provider_unavailable("up"),
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (
+                CommerceServiceError::storage("boom"),
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ),
+        ] {
+            let response = map_webhook_service_error(context, error);
+            assert_eq!(
+                expected_status,
+                response.status(),
+                "classification for {expected_status} mismatch"
+            );
+        }
     }
 }

@@ -201,9 +201,9 @@ WHERE (
       )
   AND p.status = 'active'
   AND COALESCE(NULLIF(p.currency_code, ''), 'CNY') = $3
-  AND CAST(p.price_amount AS TEXT) IN ($4, $5, $6)
-  AND (p.valid_from IS NULL OR p.valid_from <= $7)
-  AND (p.valid_to IS NULL OR p.valid_to >= $7)
+  AND CAST(p.price_amount AS TEXT) IN ($4, $5, $6, $7)
+  AND (p.valid_from IS NULL OR p.valid_from <= $8)
+  AND (p.valid_to IS NULL OR p.valid_to >= $8)
 ORDER BY
     CASE
         WHEN p.tenant_id = CAST($1 AS TEXT) AND p.organization_id = CAST($2 AS TEXT) THEN 0
@@ -228,9 +228,9 @@ WHERE p.tenant_id = '__PLATFORM_TENANT__'
   AND (p.organization_id = '0' OR p.organization_id = '0')
   AND p.status = 'active'
   AND COALESCE(NULLIF(p.currency_code, ''), 'CNY') = $1
-  AND CAST(p.price_amount AS TEXT) IN ($2, $3, $4)
-  AND (p.valid_from IS NULL OR p.valid_from <= $5)
-  AND (p.valid_to IS NULL OR p.valid_to >= $5)
+  AND CAST(p.price_amount AS TEXT) IN ($2, $3, $4, $5)
+  AND (p.valid_from IS NULL OR p.valid_from <= $6)
+  AND (p.valid_to IS NULL OR p.valid_to >= $6)
 ORDER BY COALESCE(p.sort_weight, 0) ASC, p.id ASC
 LIMIT 1
 "#;
@@ -504,7 +504,7 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.subject = 'points_recharge'
-  AND COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') IN ($4, $5, $6)
+  AND CAST(COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') AS BIGINT)::TEXT IN ($4, $5, $6)
   AND COALESCE(NULLIF(pa.currency_code, ''), NULLIF(pi.currency_code, ''), NULLIF(o.currency_code, ''), 'CNY') = $7
   AND CAST(COALESCE(
         NULLIF(pa.callback_payload::jsonb ->> 'points', ''),
@@ -1574,6 +1574,7 @@ async fn load_recharge_pack(
             .bind(command.amount.as_str())
             .bind(&amount_match.compact)
             .bind(&amount_match.one_decimal)
+            .bind(&amount_match.two_decimal)
             .bind(&command.requested_at)
             .fetch_optional(&mut **tx)
             .await
@@ -1585,6 +1586,7 @@ async fn load_recharge_pack(
             .bind(command.amount.as_str())
             .bind(&amount_match.compact)
             .bind(&amount_match.one_decimal)
+            .bind(&amount_match.two_decimal)
             .bind(&command.requested_at)
             .fetch_optional(&mut **tx)
             .await
@@ -1597,6 +1599,7 @@ async fn load_recharge_pack(
                 .bind(command.amount.as_str())
                 .bind(&amount_match.compact)
                 .bind(&amount_match.one_decimal)
+            .bind(&amount_match.two_decimal)
                 .bind(&command.requested_at)
                 .fetch_optional(&mut **tx)
                 .await
@@ -1663,6 +1666,7 @@ async fn load_recharge_product_sku(
             .bind(command.amount.as_str())
             .bind(&amount_match.compact)
             .bind(&amount_match.one_decimal)
+            .bind(&amount_match.two_decimal)
             .fetch_optional(&mut **tx)
             .await
     } else {
@@ -1673,6 +1677,7 @@ async fn load_recharge_product_sku(
             .bind(command.amount.as_str())
             .bind(&amount_match.compact)
             .bind(&amount_match.one_decimal)
+            .bind(&amount_match.two_decimal)
             .fetch_optional(&mut **tx)
             .await
             .map_err(|error| store_error("failed to load recharge product sku", error))?;
@@ -1684,6 +1689,7 @@ async fn load_recharge_product_sku(
                 .bind(command.amount.as_str())
                 .bind(&amount_match.compact)
                 .bind(&amount_match.one_decimal)
+            .bind(&amount_match.two_decimal)
                 .fetch_optional(&mut **tx)
                 .await
         }
@@ -2310,6 +2316,7 @@ fn required_non_negative_integer_cell(
 struct DecimalSqlMatchKeys {
     compact: String,
     one_decimal: String,
+    two_decimal: String,
 }
 
 fn decimal_sql_match_keys(amount: &str) -> DecimalSqlMatchKeys {
@@ -2328,9 +2335,15 @@ fn decimal_sql_match_keys(amount: &str) -> DecimalSqlMatchKeys {
         }
         _ => amount.to_string(),
     };
+    let two_decimal = match amount.split_once('.') {
+        Some((whole, fraction)) if fraction.len() == 1 => format!("{whole}.{fraction}0"),
+        Some((whole, fraction)) if fraction.len() == 2 => amount.clone(),
+        _ => format!("{amount}.00"),
+    };
     DecimalSqlMatchKeys {
         compact,
         one_decimal,
+        two_decimal,
     }
 }
 

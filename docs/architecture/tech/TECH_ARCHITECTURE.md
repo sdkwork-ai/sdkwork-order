@@ -182,6 +182,17 @@ Duplicate webhook deliveries remain correlated to the exact persisted payment at
 
 A successful payment that arrives after an Order is terminal does not reopen or advance the Order lifecycle. Order preserves the terminal status, records `payment_status=success` and the first `paid_at`, and writes one idempotent `payment_succeeded_after_terminal` event.
 
+### 6.1 Payment compensation worker (webhook-failure safety net)
+
+A lost provider notification is recovered by the in-process compensation worker (`sdkwork-order-service-host::spawn_payment_compensation_worker`, spawned by the standalone gateway; opt-in via `SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED=1`, default off). Every tick (default 30 s) it claims `commerce_payment_attempt` rows stuck in `pending`/`processing` and `commerce_refund` rows stuck in `submitted`/`processing` (`FOR UPDATE SKIP LOCKED` claim, scan window `min_age` 60 s to `max_age` 24 h), queries the PSP through the same account-scoped registry as the webhook path (`query_provider_payment_intent` / `query_provider_refund`), and re-enters **the same notify processing framework** with a synthetic event:
+
+```text
+query:{provider}:{out_trade_no}:{mapped_status}        (payment)
+query:{provider}:{out_trade_no}:{refund_no}:{mapped_status}  (refund)
+```
+
+The synthetic event id makes the query path idempotent exactly like webhook redelivery: the ingest de-duplicates on `(tenant_id, provider_scoped_event_id)`, the status machine preserves terminal states, and fulfillment keys suppress duplicate settlement — a webhook that already settled the order turns the worker's query into a replayed ingest with no double success. Trades still `pending` at the PSP are left untouched and re-claimed on the next pass; trades unknown to the PSP are logged and retried within the scan window.
+
 ## 7. Existing Fulfillment
 
 Points recharge fulfillment currently uses a three-phase saga:
@@ -224,6 +235,13 @@ Wallet recharge, refund, and withdrawal UI surfaces must delegate to order SDK r
 | `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` | Tenant id for public recharge package catalog fallback | `100001` |
 | `SDKWORK_ACCESS_TOKEN` | Bearer token for service-to-service wallet credit and membership fulfillment during order settlement | required in production |
 | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | Public base URL registered with PSP for order-owned webhooks | required in production |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED` | Enable the payment/refund compensation worker (webhook-failure safety net) | disabled |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_TENANT_ID` | Scan scope: tenant id filter for claimed attempts/refunds | unset (all) |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_ORGANIZATION_ID` | Scan scope: organization id filter | unset |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_BATCH_SIZE` | Max attempts + refunds claimed per pass | `50` (clamped 1..1000) |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_INTERVAL_MILLIS` | Worker tick interval | `30000` (clamped 5000..3600000) |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_MIN_AGE_SECONDS` | Attempts younger than this are not claimed | `60` |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_MAX_AGE_SECONDS` | Attempts older than this are never claimed (bounds PSP query load) | `86400` |
 | `SDKWORK_DATABASE_TEST_POSTGRES_URL` | PostgreSQL URL for repository parity tests | unset |
 | `RUST_LOG` | Tracing filter (`order.bootstrap`, `order.runtime`, `order.readiness`, `order.security`) | `info` |
 

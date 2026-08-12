@@ -76,6 +76,7 @@ pub async fn insert_order_event_postgres(
              payload_json, request_id, idempotency_key, created_at)
         VALUES
             ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, '{}', $13, $14, $15)
+        ON CONFLICT (id) DO NOTHING
         "#,
     )
     .bind(&event_id)
@@ -119,6 +120,7 @@ pub async fn insert_order_cancellation_postgres(
             (id, tenant_id, order_id, status, reason_code, reason_message, created_at)
         VALUES
             ($1, $2, $3, 'completed', $4, $5, $6)
+        ON CONFLICT (id) DO NOTHING
         "#,
     )
     .bind(&cancellation_id)

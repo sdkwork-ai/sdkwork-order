@@ -1,6 +1,18 @@
 #![allow(clippy::too_many_arguments)]
 
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
+
+/// Platform rows persist the sentinel organization scope (`"0"`) so tenant
+/// (personal) sessions never write NULL into the NOT NULL `organization_id`
+/// column (mirrors `postgres_order.rs`).
+fn normalize_organization_scope(organization_id: Option<&str>) -> String {
+    organization_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("0")
+        .to_owned()
+}
+
 use sdkwork_order_service::{
     AfterSalesEventListQuery, AfterSalesEventPage, AfterSalesEventView,
     AfterSalesManagementDetailQuery, AfterSalesManagementListQuery, AfterSalesRequestDetailQuery,
@@ -66,7 +78,7 @@ impl PostgresCommerceOrderStore {
         )
         .bind(&request_id)
         .bind(&command.tenant_id)
-        .bind(command.organization_id.as_deref())
+        .bind(normalize_organization_scope(command.organization_id.as_deref()))
         .bind(&after_sales_no)
         .bind(&command.order_id)
         .bind(&command.owner_user_id)
@@ -109,7 +121,7 @@ impl PostgresCommerceOrderStore {
             )
             .bind(&item_id)
             .bind(&command.tenant_id)
-            .bind(command.organization_id.as_deref())
+            .bind(normalize_organization_scope(command.organization_id.as_deref()))
             .bind(&request_id)
             .bind(&item.order_item_id)
             .bind(item.quantity)
@@ -650,7 +662,7 @@ impl PostgresCommerceOrderStore {
         )
         .bind(&shipment_id)
         .bind(&command.tenant_id)
-        .bind(command.organization_id.as_deref())
+        .bind(normalize_organization_scope(command.organization_id.as_deref()))
         .bind(&command.after_sales_request_id)
         .bind(&return_shipment_no)
         .bind(command.carrier_code.as_deref())

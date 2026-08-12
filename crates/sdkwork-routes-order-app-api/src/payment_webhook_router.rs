@@ -1,4 +1,12 @@
 //! PSP payment webhooks are owned by order-app-api (Order → Payment ingest → in-process settlement).
+//!
+//! This module is a thin HTTP adapter: it resolves the provider registry
+//! through the shared `StorePaymentNotifyPorts` adapter
+//! (sdkwork-order-integration-payment), verifies and normalizes the event
+//! once, routes by event type (single-URL providers deliver refund
+//! notifications here too), and delegates the decision chains to
+//! `process_payment_notify_verified` / `process_refund_notify_verified` in
+//! sdkwork-order-service.
 
 use std::sync::Arc;
 
@@ -8,40 +16,32 @@ use axum::response::Response;
 use axum::routing::post;
 use axum::Router;
 use sdkwork_contract_service::CommerceServiceError;
-use sdkwork_order_repository_sqlx::{
-    OrderPaymentSettlementContext, PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
-
-};
+use sdkwork_order_integration_payment::StorePaymentNotifyPorts;
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
 use sdkwork_order_service::{
-    settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
+    default_payment_notify_handler_registry, default_refund_notify_handler_registry,
+    is_refund_event_type, process_payment_notify_verified, process_refund_notify_verified,
+    verify_and_normalize_event, AccountPointsCreditPort, AccountValueLedgerPort,
     CouponRedemptionPort, MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort,
-    OrderPaymentSettlementAttempt, OwnerOrderSettlementPorts, PhysicalGoodsFulfillmentPort,
-    UnavailablePhysicalGoodsFulfillmentPort,
+    OwnerOrderSettlementPorts, PaymentNotifyHandlerRegistry, PhysicalGoodsFulfillmentPort,
+    RefundNotifyHandlerRegistry, UnavailablePhysicalGoodsFulfillmentPort,
 };
 use sdkwork_payment_providers::{
-    normalize_provider_code, peek_webhook_routing_fields, provider_registry_for_account,
-    PaymentNormalizeWebhookRequest, PaymentProviderRegistry, PaymentVerifyWebhookRequest,
-    ProviderAccountBinding, ProviderCredentialBundle,
+    normalize_provider_code, PaymentProviderRegistry, ProviderCredentialBundle,
 };
-use sdkwork_payment_repository_sqlx::{
-    load_active_provider_account_by_merchant_id_postgres,
-    load_active_provider_account_postgres,
-    load_webhook_attempt_context_by_out_trade_no_postgres,
-    IngestProviderWebhookCommand,
-    PaymentProviderAccountRecord, PaymentWebhookAttemptContext,
-    PostgresCommerceOwnerOrderPaymentStore,
-};
+use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
 use sdkwork_web_core::WebRequestContext;
 use sqlx::PgPool;
 
-use crate::api_response::{map_service_error, success_command, validation};
+use crate::api_response::{map_webhook_service_error, success_command};
+
+/// Maximum provider notification body size. Explicit and bounded so oversized
+/// forged payloads are rejected before any signature work or persistence.
+pub const PAYMENT_WEBHOOK_BODY_MAX_BYTES: usize = 512 * 1024;
 
 #[derive(Clone)]
 enum PaymentWebhookState {
     Postgres {
-        registry: Arc<PaymentProviderRegistry>,
-        credentials: ProviderCredentialBundle,
-        pool: PgPool,
         payments: Arc<PostgresCommerceOwnerOrderPaymentStore>,
         recharge: Arc<PostgresCommerceRechargeStore>,
         orders: Arc<PostgresCommerceOrderStore>,
@@ -53,29 +53,14 @@ enum PaymentWebhookState {
     },
 }
 
-struct PaymentWebhookRuntime<'a, Pool> {
-    deployment_registry: &'a PaymentProviderRegistry,
-    credentials: &'a ProviderCredentialBundle,
-    pool: &'a Pool,
-    order_context_loader: &'a dyn OrderSettlementContextLoader,
-    settlement_ports: OwnerOrderSettlementPorts<'a>,
-}
-
-struct ProviderWebhookRequest<'a> {
-    context: Option<&'a WebRequestContext>,
-    provider_code: String,
-    headers: axum::http::HeaderMap,
-    body: Bytes,
-}
-
-struct WebhookProviderScope {
-    tenant_id: String,
-    organization_id: Option<String>,
-}
-
-struct WebhookProviderResolution {
-    registry: PaymentProviderRegistry,
-    scope: Option<WebhookProviderScope>,
+/// Injected business handler registries (extension seam). Deployments pass
+/// custom registries through
+/// `app_payment_webhook_router_with_postgres_pool_and_integrations_and_registries`;
+/// `None` falls back to the defaults.
+#[derive(Clone)]
+struct WebhookHandlerRegistries {
+    payment: Arc<dyn PaymentNotifyHandlerRegistry>,
+    refund: Arc<dyn RefundNotifyHandlerRegistry>,
 }
 
 pub fn app_payment_webhook_router_with_postgres_pool(
@@ -118,8 +103,34 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations(
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
 ) -> Router {
+    app_payment_webhook_router_with_postgres_pool_and_integrations_and_registries(
+        pool,
+        credit_port,
+        account_value_ledger_port,
+        coupon_redemption_port,
+        membership_port,
+        physical_goods_port,
+        None,
+        None,
+    )
+}
+
+/// Extension seam: deployments inject their business handler registries
+/// (payment fulfillment + refund post-processing) without forking the routes
+/// crate. `None` falls back to the default registries.
+#[allow(clippy::too_many_arguments)]
+pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_registries(
+    pool: PgPool,
+    credit_port: Arc<dyn AccountPointsCreditPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    payment_notify_handler_registry: Option<Arc<dyn PaymentNotifyHandlerRegistry>>,
+    refund_notify_handler_registry: Option<Arc<dyn RefundNotifyHandlerRegistry>>,
+) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
-    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
+    let deployment_registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
     ));
     Router::new()
@@ -128,22 +139,35 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations(
             post(receive_provider_webhook),
         )
         .with_state(PaymentWebhookState::Postgres {
-            registry,
-            credentials,
-            pool: pool.clone(),
             payments: Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool.clone())),
             recharge: Arc::new(PostgresCommerceRechargeStore::new(pool.clone())),
-            orders: Arc::new(PostgresCommerceOrderStore::new(pool)),
+            orders: Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
             credit_port,
             account_value_ledger_port,
             coupon_redemption_port,
             membership_port,
             physical_goods_port,
         })
+        .layer(axum::extract::DefaultBodyLimit::max(
+            PAYMENT_WEBHOOK_BODY_MAX_BYTES,
+        ))
+        .layer(axum::Extension(StorePaymentNotifyPorts::postgres(
+            pool,
+            credentials,
+            deployment_registry,
+        )))
+        .layer(axum::Extension(WebhookHandlerRegistries {
+            payment: payment_notify_handler_registry
+                .unwrap_or_else(default_payment_notify_handler_registry),
+            refund: refund_notify_handler_registry
+                .unwrap_or_else(default_refund_notify_handler_registry),
+        }))
 }
 
 async fn receive_provider_webhook(
     State(state): State<PaymentWebhookState>,
+    Extension(ports): Extension<StorePaymentNotifyPorts>,
+    Extension(registries): Extension<WebhookHandlerRegistries>,
     request_context: Option<Extension<WebRequestContext>>,
     Path(provider_code): Path<String>,
     headers: axum::http::HeaderMap,
@@ -152,9 +176,6 @@ async fn receive_provider_webhook(
     let ctx = request_context.as_ref().map(|Extension(value)| value);
     match state {
         PaymentWebhookState::Postgres {
-            registry,
-            credentials,
-            pool,
             payments,
             recharge,
             orders,
@@ -164,364 +185,74 @@ async fn receive_provider_webhook(
             membership_port,
             physical_goods_port,
         } => {
-            receive_provider_webhook_inner(
-                PaymentWebhookRuntime {
-                    deployment_registry: registry.as_ref(),
-                    credentials: &credentials,
-                    pool: &pool,
-                    order_context_loader: orders.as_ref(),
-                    settlement_ports: OwnerOrderSettlementPorts {
-                        payment_store: payments.as_ref(),
-                        order_state_store: orders.as_ref(),
-                        recharge_store: recharge.as_ref(),
-                        account_value_store: recharge.as_ref(),
-                        credit_port: credit_port.as_ref(),
-                        account_value_ledger_port: account_value_ledger_port.as_ref(),
-                        coupon_redemption_port: coupon_redemption_port.as_ref(),
-                        membership_port: membership_port.as_ref(),
-                        physical_goods_port: physical_goods_port.as_ref(),
-                    },
-                },
-                ProviderWebhookRequest {
-                    context: ctx,
-                    provider_code,
-                    headers,
-                    body,
-                },
+            let header_pairs = headers
+                .iter()
+                .filter_map(|(name, value)| {
+                    Some((name.as_str().to_owned(), value.to_str().ok()?.to_owned()))
+                })
+                .collect::<Vec<_>>();
+            let settlement_ports = OwnerOrderSettlementPorts {
+                payment_store: payments.as_ref(),
+                order_state_store: orders.as_ref(),
+                recharge_store: recharge.as_ref(),
+                account_value_store: recharge.as_ref(),
+                credit_port: credit_port.as_ref(),
+                account_value_ledger_port: account_value_ledger_port.as_ref(),
+                coupon_redemption_port: coupon_redemption_port.as_ref(),
+                membership_port: membership_port.as_ref(),
+                physical_goods_port: physical_goods_port.as_ref(),
+            };
+            // Single-URL providers (WeChat API v3) deliver payment AND refund
+            // notifications to the payment webhook URL; route by event type so
+            // refund events are never acked unprocessed.
+            match verify_and_normalize_event(
+                &ports,
+                &normalize_provider_code(&provider_code),
+                &header_pairs,
+                &body,
             )
             .await
-        }
-    }
-}
-
-async fn receive_provider_webhook_inner<Pool>(
-    runtime: PaymentWebhookRuntime<'_, Pool>,
-    request: ProviderWebhookRequest<'_>,
-) -> Response
-where
-    Pool: WebhookIngestPool + WebhookCredentialPool + Send + Sync,
-{
-    let PaymentWebhookRuntime {
-        deployment_registry,
-        credentials,
-        pool,
-        order_context_loader,
-        settlement_ports,
-    } = runtime;
-    let ProviderWebhookRequest {
-        context: ctx,
-        provider_code,
-        headers,
-        body,
-    } = request;
-    let provider_code = normalize_provider_code(&provider_code);
-    let resolution = match pool
-        .resolve_webhook_registry(deployment_registry, credentials, &provider_code, &body)
-        .await
-    {
-        Ok(resolution) => resolution,
-        Err(error) => return map_service_error(ctx, error),
-    };
-    let WebhookProviderResolution { registry, scope } = resolution;
-
-    let adapter = match registry.resolve(&provider_code) {
-        Some(adapter) => adapter,
-        None => {
-            return validation(
-                ctx,
-                format!("payment provider {provider_code} is not configured"),
-            );
-        }
-    };
-
-    let header_pairs = headers
-        .iter()
-        .filter_map(|(name, value)| {
-            Some((name.as_str().to_owned(), value.to_str().ok()?.to_owned()))
-        })
-        .collect::<Vec<_>>();
-
-    let verify_request = PaymentVerifyWebhookRequest {
-        headers: header_pairs.clone(),
-        body: body.to_vec(),
-        metadata: serde_json::json!({ "provider_code": provider_code }),
-    };
-
-    match adapter.verify_webhook(verify_request).await {
-        Ok(outcome) if outcome.verified => {}
-        Ok(_) => return validation(ctx, "webhook signature verification failed"),
-        Err(error) => {
-            return validation(ctx, format!("webhook provider error: {error:?}"));
-        }
-    }
-
-    let normalize_request = PaymentNormalizeWebhookRequest {
-        headers: header_pairs,
-        body: body.to_vec(),
-        metadata: serde_json::json!({ "provider_code": provider_code }),
-    };
-
-    let event = match adapter.normalize_webhook(normalize_request).await {
-        Ok(event) => event,
-        Err(error) => {
-            return validation(ctx, format!("webhook provider error: {error:?}"));
-        }
-    };
-
-    let provider_event_id = event
-        .provider_event_id
-        .clone()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| {
-            format!(
-                "{provider_code}:{}",
-                event
-                    .out_trade_no
-                    .as_deref()
-                    .unwrap_or("unknown-out-trade-no")
-            )
-        });
-
-    let ingest = match pool
-        .ingest_provider_webhook(IngestProviderWebhookCommand {
-            provider_code: event.provider_code.clone(),
-            provider_event_id,
-            event_type: event.event_type.clone(),
-            out_trade_no: event.out_trade_no.clone(),
-            payment_status: event.payment_status.clone(),
-            payload: event.payload.clone(),
-            tenant_id: scope.as_ref().map(|scope| scope.tenant_id.clone()),
-            organization_id: scope.and_then(|scope| scope.organization_id),
-        })
-        .await
-    {
-        Ok(outcome) => outcome,
-        Err(error) => return map_service_error(ctx, error),
-    };
-
-    if let Some(attempt) = ingest.payment_attempt_context.as_ref() {
-        let order_context = order_context_loader
-            .load_order_payment_settlement_context(
-                &attempt.tenant_id,
-                attempt.organization_id.as_deref(),
-                &attempt.order_id,
-            )
-            .await;
-        match order_context {
-            Ok(Some(context)) => {
-                let request_no = format!("webhook:{}", ingest.webhook_event_id);
-                let settlement_attempt = order_payment_settlement_attempt_from_webhook(attempt);
-                if let Err(error) = settle_owner_order_after_payment_success(
-                    settlement_ports,
-                    &settlement_attempt,
-                    Some(context.subject.as_str()),
-                    context.membership_purchase.as_ref(),
-                    &request_no,
-                )
-                .await
-                {
-                    return map_service_error(ctx, error);
+            {
+                Ok(event) => {
+                    if is_refund_event_type(event.event_type.as_deref()) {
+                        match process_refund_notify_verified(
+                            event,
+                            &ports,
+                            orders.as_ref(),
+                            registries.refund.as_ref(),
+                        )
+                        .await
+                        {
+                            Ok(outcome) => success_command(
+                                ctx,
+                                Some(outcome.webhook_event_id),
+                                Some(outcome.status),
+                            ),
+                            Err(error) => map_webhook_service_error(ctx, error),
+                        }
+                    } else {
+                        match process_payment_notify_verified(
+                            event,
+                            &ports,
+                            &ports,
+                            settlement_ports,
+                            registries.payment.as_ref(),
+                        )
+                        .await
+                        {
+                            Ok(outcome) => success_command(
+                                ctx,
+                                outcome
+                                    .payment_attempt_id
+                                    .or(Some(outcome.webhook_event_id)),
+                                Some(outcome.status),
+                            ),
+                            Err(error) => map_webhook_service_error(ctx, error),
+                        }
+                    }
                 }
+                Err(error) => map_webhook_service_error(ctx, error),
             }
-            Ok(None) => {
-                return map_service_error(
-                    ctx,
-                    CommerceServiceError::not_found("order was not found for payment webhook"),
-                );
-            }
-            Err(error) => return map_service_error(ctx, error),
         }
-    }
-
-    success_command(
-        ctx,
-        ingest.payment_attempt_id.or(Some(ingest.webhook_event_id)),
-        ingest.applied_status.or_else(|| {
-            if ingest.replayed {
-                Some("replayed".to_owned())
-            } else if ingest.payment_attempt_context.is_some() {
-                Some("settled".to_owned())
-            } else {
-                Some("accepted".to_owned())
-            }
-        }),
-    )
-}
-
-fn order_payment_settlement_attempt_from_webhook(
-    attempt: &PaymentWebhookAttemptContext,
-) -> OrderPaymentSettlementAttempt {
-    OrderPaymentSettlementAttempt {
-        tenant_id: attempt.tenant_id.clone(),
-        organization_id: attempt.organization_id.clone(),
-        owner_user_id: attempt.owner_user_id.clone(),
-        order_id: attempt.order_id.clone(),
-        payment_attempt_id: Some(attempt.payment_attempt_id.clone()),
-        out_trade_no: Some(attempt.out_trade_no.clone()),
-    }
-}
-
-trait OrderSettlementContextLoader: Send + Sync {
-    fn load_order_payment_settlement_context<'a>(
-        &'a self,
-        tenant_id: &'a str,
-        organization_id: Option<&'a str>,
-        order_id: &'a str,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
-                > + Send
-                + 'a,
-        >,
-    >;
-}
-
-impl OrderSettlementContextLoader for PostgresCommerceOrderStore {
-    fn load_order_payment_settlement_context<'a>(
-        &'a self,
-        tenant_id: &'a str,
-        organization_id: Option<&'a str>,
-        order_id: &'a str,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
-                > + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            self.load_order_payment_settlement_context(tenant_id, organization_id, order_id)
-                .await
-        })
-    }
-}
-
-trait WebhookCredentialPool {
-    fn resolve_webhook_registry(
-        &self,
-        deployment_registry: &PaymentProviderRegistry,
-        credentials: &ProviderCredentialBundle,
-        provider_code: &str,
-        body: &[u8],
-    ) -> impl std::future::Future<Output = Result<WebhookProviderResolution, CommerceServiceError>> + Send;
-}
-
-trait WebhookIngestPool {
-    fn ingest_provider_webhook(
-        &self,
-        command: IngestProviderWebhookCommand,
-    ) -> impl std::future::Future<
-        Output = Result<
-            sdkwork_payment_repository_sqlx::IngestProviderWebhookOutcome,
-            CommerceServiceError,
-        >,
-    > + Send;
-}
-
-async fn resolve_webhook_provider_account_postgres(
-    pool: &PgPool,
-    credentials: &ProviderCredentialBundle,
-    deployment_registry: &PaymentProviderRegistry,
-    provider_code: &str,
-    body: &[u8],
-) -> Result<WebhookProviderResolution, CommerceServiceError> {
-    let peek = peek_webhook_routing_fields(provider_code, body);
-    let attempt_context = if let Some(out_trade_no) = peek.out_trade_no.as_deref() {
-        load_webhook_attempt_context_by_out_trade_no_postgres(pool, provider_code, out_trade_no)
-            .await?
-    } else {
-        None
-    };
-    let fallback_scope = attempt_context
-        .as_ref()
-        .map(|context| WebhookProviderScope {
-            tenant_id: context.tenant_id.clone(),
-            organization_id: context.organization_id.clone(),
-        });
-    let account = if let Some(context) = attempt_context.as_ref() {
-        load_active_provider_account_postgres(
-            pool,
-            &context.tenant_id,
-            context.organization_id.as_deref(),
-            &context.provider_code,
-        )
-        .await?
-    } else if let Some(merchant_id) = peek.merchant_id.as_deref() {
-        load_active_provider_account_by_merchant_id_postgres(pool, provider_code, merchant_id)
-            .await?
-    } else {
-        None
-    };
-    Ok(webhook_provider_resolution(
-        deployment_registry,
-        credentials,
-        account,
-        fallback_scope,
-    ))
-}
-
-fn webhook_provider_resolution(
-    deployment_registry: &PaymentProviderRegistry,
-    credentials: &ProviderCredentialBundle,
-    account: Option<PaymentProviderAccountRecord>,
-    fallback_scope: Option<WebhookProviderScope>,
-) -> WebhookProviderResolution {
-    let scope = account
-        .as_ref()
-        .map(|record| WebhookProviderScope {
-            tenant_id: record.tenant_id.clone(),
-            organization_id: record.organization_id.clone(),
-        })
-        .or(fallback_scope);
-    let registry = account.as_ref().map_or_else(
-        || deployment_registry.clone(),
-        |record| provider_registry_for_account(credentials, Some(provider_account_binding(record))),
-    );
-    WebhookProviderResolution { registry, scope }
-}
-
-fn provider_account_binding(record: &PaymentProviderAccountRecord) -> ProviderAccountBinding {
-    ProviderAccountBinding {
-        provider_code: record.provider_code.clone(),
-        merchant_id: record.merchant_id.clone(),
-        environment: record.environment.clone(),
-        secret_ref: record.secret_ref.clone(),
-        webhook_secret_ref: record.webhook_secret_ref.clone(),
-        certificate_ref: record.certificate_ref.clone(),
-        primary_secret: record.primary_secret.clone(),
-        webhook_secret: record.webhook_secret.clone(),
-        certificate: record.certificate.clone(),
-        metadata: record.metadata.clone(),
-    }
-}
-
-impl WebhookCredentialPool for PgPool {
-    async fn resolve_webhook_registry(
-        &self,
-        deployment_registry: &PaymentProviderRegistry,
-        credentials: &ProviderCredentialBundle,
-        provider_code: &str,
-        body: &[u8],
-    ) -> Result<WebhookProviderResolution, CommerceServiceError> {
-        resolve_webhook_provider_account_postgres(
-            self,
-            credentials,
-            deployment_registry,
-            provider_code,
-            body,
-        )
-        .await
-    }
-}
-
-impl WebhookIngestPool for PgPool {
-    async fn ingest_provider_webhook(
-        &self,
-        command: IngestProviderWebhookCommand,
-    ) -> Result<sdkwork_payment_repository_sqlx::IngestProviderWebhookOutcome, CommerceServiceError>
-    {
-        sdkwork_payment_repository_sqlx::ingest_provider_webhook_postgres(self, command).await
     }
 }

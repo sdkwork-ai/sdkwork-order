@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.commerce.order.payment-notify",
+  "capability": "order",
+  "domain": "commerce",
+  "role": "payment-notify-fulfillment-building-block",
+  "owner": "crates/sdkwork-order-service/src/service/payment_notify.rs",
+  "summary": "支付通知履约积木：provider webhook 成功确认后按业务类型分发到可插拔的履约 handler；失败/关闭通知幂等标记订单；未知状态审计后 accepted。",
+  "dispatchKey": {
+    "authority": "OrderSubjectKind::parse（order 领域权威解析，subject / SKU snapshot / membership_action）",
+    "mapping": "OrderSubjectKind::business_type() -> 唯一业务类型",
+    "futureExtension": "显式 businessType 键（callback_payload.businessType）预留为扩展点，subject 解析保持向后兼容"
+  },
+  "businessTypes": {
+    "points_recharge": "积分充值：mark_points_recharge_payment_succeeded + 账户积分入账（幂等键 points-recharge:*）",
+    "token_bank_recharge": "TokenBank 充值：账户价值账本入账",
+    "token_bank_plan_purchase": "TokenBank 套餐购买：账户价值账本入账",
+    "token_bank_plan_renewal": "TokenBank 套餐续费：账户价值账本入账",
+    "account_recharge_package": "账户充值包：账户价值账本入账",
+    "coupon_recharge": "优惠券充值：先兑换券权益再入账账户价值",
+    "membership": "会员购买/激活/额度充值（缺快照时降级 awaiting_subject_resolution，不失败）",
+    "product": "实物商品：履约端口驱动（幂等键 physical-goods:*）",
+    "external": "虚拟商品/券包/外部能力：awaiting_external_fulfillment（外部能力履约）",
+    "unknown": "subject 无法解析：awaiting_subject_resolution（确定性回退，幂等安全）"
+  },
+  "extensionContract": {
+    "register": "实现 PaymentNotifyHandler，经 DefaultPaymentNotifyHandlerRegistry::with 注册",
+    "wire": "settle_owner_order_after_payment_success_with_registry / process_payment_notify 注入注册表",
+    "rule": "新增业务只注册 handler，管道代码零改动（MODULE_SPEC §6 扩展点）",
+    "idempotency": "所有内置履约键 {prefix}:{order_id}；provider 重发经 ingest 重放重新进入结算，各步幂等",
+    "portSurface": "OwnerOrderSettlementPorts 是规范端口集合；新增端口属破坏性变更（需同步扩展结构体与路由装配），业务扩展优先走 handler 注册表"
+  },
+  "singleUrlRouting": {
+    "reality": "微信 API v3 把支付与退款通知发到同一配置 URL（支付 webhook URL）",
+    "handling": "支付 URL 收到 REFUND.* 事件自动转退款管道（process_refund_notify_verified）；退款 URL 收到非退款事件记录 rejected 并 400（PSP 配置错误），绝不 200 ack 未处理事件",
+    "eventIdentity": "无 provider event_id 时回退 {provider}:{out_trade_no}:{event_type}:{payload_hash}——同事件重发稳定去重，同单不同事件互不冲突"
+  },
+  "deploymentConstraints": {
+    "wechatVerification": "微信验签使用部署级商户密钥（单商户部署模型）；多租户共享商户号的租户级 webhook secret 需解密前路由机制（架构级变更，未实现）",
+    "webhookBodyLimit": "支付/退款 webhook 路由显式限制请求体 512 KiB",
+    "noPlatformLogin": "PSP 回调免平台登录与双 token：支付/退款 webhook 路由在 route manifest 声明 RouteAuth::Public（匿名可达），PSP 签名即身份；框架对 public 路由跳过凭据解析、认证、授权与租户隔离阶段，PSP 无需也无法携带平台会话凭据"
+  },
+  "orchestration": {
+    "entrypoint": "process_payment_notify（order-service 编排积木）",
+    "pipeline": [
+      "PaymentNotifyVerifyPort.verify_and_normalize（验签 + 规范化）",
+      "PaymentNotifyIngestPort.ingest（幂等入库 + 状态应用）",
+      "PaymentNotifyOrderContextPort.load_order_settlement_context",
+      "applied_status 分发：succeeded -> settle；failed/canceled/closed -> mark_owner_order_payment_failed；unmapped -> 审计 + accepted"
+    ],
+    "atLeastOnce": "ingest 提交事件后结算；结算失败返回 5xx，provider 重发同一 event_id 走重放路径重新结算，幂等键保证只履约一次",
+    "terminalGuard": "失败通知不得覆盖已确认成功/已终态的订单：paid/fulfilled/completed/finished/cancelled/closed/expired 或 payment_status=success 一律保留（mark_owner_order_payment_failed 幂等保护，含跨 provider/intent 场景）",
+    "terminalConflictAck": "webhook 状态与终态冲突时（如迟到 failed 对已 succeeded），ingest 上报 applied=false，编排仅告警 + accepted ack（当前状态上报），不重新进入结算、不标记失败；same-status 重放保持 applied=true 以维持 at-least-once"
+  },
+  "compensationMechanism": {
+    "role": "webhook 失败时的 at-least-once 补偿：每 30s 认领 pending/processing 支付尝试，查询 PSP 真实状态，复用本积木的合成事件同步履约（sdkwork-order-integration-payment payment_compensation.rs + service-host compensation.rs 启动）",
+    "syntheticEvent": "query:{provider}:{out_trade_no}:{mapped_status}（同状态重放去重；跨状态如 failed->succeeded 可重新应用，terminal 保护在 order 侧）",
+    "claims": "commerce_payment_attempt 中 status IN (pending,processing) + 扫描窗口（min_age 60s ~ max_age 24h）+ FOR UPDATE SKIP LOCKED（多实例安全）",
+    "query": "query_provider_payment_intent：stripe 用 provider_transaction_id（pi_），wechat/alipay 用 out_trade_no；sandbox 短接 succeeded；not_found 记日志下周期重试（窗口内）",
+    "statusVocabulary": "ProviderPaymentQueryState -> 每 provider 原始状态串（compensation_payment_raw_status），与 map_provider_payment_status 往返一致，杜绝状态错位",
+    "pending": "PSP 仍 pending 时不发事件，行保持待认领，下周期再查",
+    "env": "SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED（默认关闭）/TENANT_ID/ORGANIZATION_ID/BATCH_SIZE(50)/INTERVAL_MILLIS(30000)/MIN_AGE_SECONDS(60)/MAX_AGE_SECONDS(86400)",
+    "idempotencyGuarantee": "合成事件与 webhook 事件同走 ingest（(tenant_id, provider_scoped_event_id) 幂等 + 状态机 FOR UPDATE + 履约键抑制重复履约）；webhook 已成功后 worker 查询成功成为重放，订单 terminal 保留"
+  },
+  "ports": {
+    "provided": [
+      "PaymentNotifyHandler",
+      "PaymentNotifyHandlerRegistry",
+      "PaymentNotifyVerifyPort",
+      "PaymentNotifyIngestPort",
+      "PaymentNotifyOrderContextPort"
+    ],
+    "required": [
+      "OwnerOrderPaymentConfirmationPort",
+      "OwnerOrderPaymentStatePort",
+      "PointsRechargeFulfillmentStore",
+      "AccountValueFulfillmentStore",
+      "AccountPointsCreditPort",
+      "AccountValueLedgerPort",
+      "CouponRedemptionPort",
+      "MembershipPurchaseFulfillmentPort",
+      "PhysicalGoodsFulfillmentPort"
+    ]
+  },
+  "idempotencyConventions": [
+    "points-recharge:payment-success:{order_id}",
+    "points-recharge:fulfill:{order_id}",
+    "points-recharge:compensate:{order_id}",
+    "account-value:fulfill:{order_id}",
+    "physical-goods:fulfill:{order_id}",
+    "membership:quota-recharge:{order_id}",
+    "membership:purchase:{order_id}",
+    "webhook:{webhook_event_id}（request_no）"
+  ],
+  "knownGaps": {
+    "outOfOrderDelivery": "webhook 早于支付尝试提交到达时：事件按 unmatched 持久化并 2xx ack，无自动 re-match（webhook_replay 拒绝 unmatched）。建议：延迟 re-match 任务，或对已知 out_trade_no 无匹配返回 503（bounded 重试）",
+    "duplicateAuditIdempotency": "duplicate_payment_success 审计按 per-order 幂等键写入（ON CONFLICT (id) DO NOTHING），重放不增行、每订单一条有界"
+  },
+  "forbidden": [
+    "handler 直接操作 HTTP 层",
+    "route crate 持有履约决策（业务策略在 service）",
+    "handler 在履约前修改 provider 支付状态（支付状态归 payment 域 ingest 管）"
+  ]
+}

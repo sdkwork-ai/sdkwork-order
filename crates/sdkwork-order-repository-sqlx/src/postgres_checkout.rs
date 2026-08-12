@@ -1,6 +1,18 @@
 #![allow(clippy::too_many_arguments)]
 
 use sdkwork_contract_service::CommerceServiceError;
+
+/// Platform rows persist the sentinel organization scope (`"0"`) so tenant
+/// (personal) sessions never write NULL into the NOT NULL `organization_id`
+/// column (mirrors `postgres_order.rs`).
+fn normalize_organization_scope(organization_id: Option<&str>) -> String {
+    organization_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("0")
+        .to_owned()
+}
+
 use sdkwork_order_service::{
     checkout_quote_request_hash, checkout_session_request_hash, CheckoutQuoteView,
     CheckoutSessionDetailQuery, CheckoutSessionView, CreateCheckoutQuoteCommand,
@@ -470,7 +482,7 @@ async fn insert_checkout_session(
     )
     .bind(session_id)
     .bind(&command.tenant_id)
-    .bind(command.organization_id.as_deref())
+    .bind(normalize_organization_scope(command.organization_id.as_deref()))
     .bind(&command.request_no)
     .bind(&command.owner_user_id)
     .bind(&command.currency_code)
@@ -569,7 +581,7 @@ async fn insert_checkout_quote(
     )
     .bind(quote_id)
     .bind(&command.tenant_id)
-    .bind(command.organization_id.as_deref())
+    .bind(normalize_organization_scope(command.organization_id.as_deref()))
     .bind(session_id)
     .bind(&command.request_no)
     .bind(original_amount)
@@ -675,7 +687,7 @@ async fn insert_checkout_quote_for_command(
     )
     .bind(quote_id)
     .bind(&command.tenant_id)
-    .bind(command.organization_id.as_deref())
+    .bind(normalize_organization_scope(command.organization_id.as_deref()))
     .bind(&command.checkout_session_id)
     .bind(format!(
         "{}:{}",
@@ -788,7 +800,7 @@ async fn insert_checkout_idempotency_lock(
     )
     .bind(id)
     .bind(tenant_id)
-    .bind(organization_id)
+    .bind(normalize_organization_scope(organization_id))
     .bind(scope)
     .bind(idempotency_key)
     .bind(request_hash)

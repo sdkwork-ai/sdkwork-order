@@ -28,8 +28,22 @@
     "normalize_provider_event",
     "payment.ingest_provider_webhook",
     "load_order_subject",
-    "settle_owner_order_after_payment_success"
+    "applied_status dispatch (order.payment_notify building block)",
+    "succeeded -> settle_owner_order_after_payment_success_with_registry",
+    "failed/canceled/closed -> mark_owner_order_payment_failed (idempotent, terminal-safe)",
+    "unmapped -> audit warn + accepted ack (no PSP retry storm)"
   ],
+  "compensationWorker": {
+    "owner": "sdkwork-order-service-host compensation.rs (spawn_payment_compensation_worker)",
+    "role": "webhook 失败补偿：认领 pending/processing 支付与 submitted/processing 退款，查询 PSP 状态，以合成事件（query:{provider}:{out_trade_no}:{mapped_status}）复用 notify 积木（幂等/终态保护/履约键）",
+    "env": "SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED（默认关闭）等，见 TECH_ARCHITECTURE.md §9",
+    "idempotency": "合成事件与 webhook 重发同路径：ingest (tenant_id, provider_scoped_event_id) 去重 + 状态机 FOR UPDATE + 履约键；webhook 已成功时 worker 查询成为重放，无重复成功"
+  },
+  "notifyBuildingBlock": {
+    "spec": "crates/sdkwork-order-service/specs/payment-notify.spec.json",
+    "entrypoint": "process_payment_notify",
+    "extension": "PaymentNotifyHandler + PaymentNotifyHandlerRegistry (register-only, pipeline unchanged)"
+  },
   "successProcessing": {
     "entrypoint": "settle_owner_order_after_payment_success",
     "notificationSource": "verified webhook -> persisted exact payment attempt",

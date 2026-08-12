@@ -11,9 +11,7 @@ use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use std::collections::BTreeMap;
 
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
-};
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
 use sdkwork_order_service::{
     default_fulfill_account_value_order_command, redeem_coupon_and_fulfill_account_value_order,
     redeem_coupon_and_fulfill_order, AccountValueAssetCode, AccountValueCatalogListQuery,
@@ -45,9 +43,7 @@ use crate::api_response::{
 use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
 use crate::owner_order_cancel::{cancel_owner_order_with_payments, compensate_failed_recharge_pay};
-use crate::owner_order_payment_enrich::{
-    enriched_postgres_owner_order_payments,
-};
+use crate::owner_order_payment_enrich::enriched_postgres_owner_order_payments;
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;

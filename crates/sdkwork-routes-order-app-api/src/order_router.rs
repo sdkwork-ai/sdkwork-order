@@ -18,9 +18,7 @@ use sdkwork_order_service::{
     UnavailablePhysicalInventoryReservationPort,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
-use sdkwork_payment_repository_sqlx::{
-    PostgresCommercePaymentRecordStore,
-};
+use sdkwork_payment_repository_sqlx::PostgresCommercePaymentRecordStore;
 use sdkwork_payment_service::{
     PaymentRecordItem, PaymentRecordOrderListPage, PaymentRecordOrderListQuery,
 };
@@ -322,9 +320,7 @@ struct OrderStatisticsResponse {
     total_amount: String,
 }
 
-use crate::owner_order_payment_enrich::{
-    enriched_postgres_owner_order_payments,
-};
+use crate::owner_order_payment_enrich::enriched_postgres_owner_order_payments;
 
 pub fn app_order_router_with_postgres_pool(
     pool: PgPool,
@@ -1048,9 +1044,7 @@ impl CommerceOrderStore for PostgresCommerceOrderStore {
         query: OrderOwnerDetailQuery,
         request_no: String,
     ) -> CommerceOrderFuture<'a, ()> {
-        Box::pin(async move {
-            self.confirm_owner_order_receipt(query, &request_no).await
-        })
+        Box::pin(async move { self.confirm_owner_order_receipt(query, &request_no).await })
     }
 }
 
@@ -1098,6 +1092,4 @@ mod tests {
             payment_status: Some("pending".to_owned()),
         }));
     }
-
-
 }

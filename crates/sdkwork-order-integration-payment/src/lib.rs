@@ -1,7 +1,14 @@
 //! Order to Payment executor integration adapters.
 
+mod payment_compensation;
+mod payment_notify_ports;
 mod payment_reconciliation;
 
+pub use payment_compensation::{
+    run_payment_compensation_pass, run_payment_compensation_pass_with_registries,
+    PaymentCompensationPassConfig, PaymentCompensationRunSummary,
+};
+pub use payment_notify_ports::StorePaymentNotifyPorts;
 pub use payment_reconciliation::{
     owner_order_payment_reconciliation_port_from_database_pool,
     StoreOwnerOrderPaymentReconciliationAdapter,
@@ -21,8 +28,8 @@ use sdkwork_payment_providers::{
 use sdkwork_payment_repository_sqlx::{
     ensure_provider_account_matches, load_active_provider_account_postgres,
     load_payment_attempt_provider_context_by_id_postgres,
-    load_provider_account_for_existing_payment_postgres,
-    provider_account_binding, PostgresCommerceRefundStore,
+    load_provider_account_for_existing_payment_postgres, provider_account_binding,
+    PostgresCommerceRefundStore,
 };
 use sdkwork_payment_service::{CreateOwnerRefundCommand, RefundView};
 use sqlx::PgPool;

@@ -4710,6 +4710,63 @@
         "x-sdkwork-idempotent": true,
         "description": "Buyer confirms physical receipt: paid/fulfilled/shipped orders advance to completed (fulfillment delivered) with a lifecycle event. Idempotent."
       }
+    },
+    "/app/v3/api/orders/refunds/webhooks/{providerCode}": {
+      "post": {
+        "tags": [
+          "orderOrders"
+        ],
+        "summary": "Receive PSP refund webhook",
+        "operationId": "orders.refunds.webhooks.receive",
+        "parameters": [
+          {
+            "name": "providerCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkCommandResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-sdkwork-auth-mode": "anonymous",
+        "x-sdkwork-wire-protocol": "external",
+        "x-sdkwork-external-protocol-id": "psp-refund-webhook",
+        "x-sdkwork-api-surface": "app-api"
+      }
     }
   },
   "components": {

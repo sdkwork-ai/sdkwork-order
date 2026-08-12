@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.commerce.order.refund-notify",
+  "capability": "order",
+  "domain": "commerce",
+  "role": "refund-notify-building-block",
+  "owner": "crates/sdkwork-order-service/src/service/refund_notify_orchestration.rs",
+  "summary": "退款通知框架（独立 flow 体系）：PSP 退款异步通知走独立 URL、独立编排与状态管道，与支付通知框架同构但互不耦合。",
+  "url": {
+    "refundWebhook": "POST /app/v3/api/orders/refunds/webhooks/{providerCode}",
+    "paymentWebhook": "POST /app/v3/api/orders/payments/webhooks/{providerCode}（支付通知，独立框架，见 payment-notify.spec.json）",
+    "note": "退款通知与支付通知是两条 URL、两套 flow 体系；共享仅限 provider 验签/规范化端口（PaymentNotifyVerifyPort）"
+  },
+  "pipeline": {
+    "entrypoint": "process_refund_notify",
+    "steps": [
+      "PaymentNotifyVerifyPort.verify_and_normalize（共享验签/规范化）",
+      "RefundNotifyIngestPort.ingest（payment 域退款事件幂等入库 + commerce_refund 状态机应用）",
+      "refund status dispatch：succeeded -> 订单 refund_status=refunded；failed/canceled -> refund_failed；processing -> refunding；unmatched -> 审计 + accepted"
+    ],
+    "refundLink": "退款通知按 refund_no 关联 commerce_refund（订单网关把本地 refund_no 作为 provider out_refund_no 提交），无需 DDL 变更",
+    "idempotency": "event_id 幂等入库；退款状态机 terminal 幂等（succeeded 终态不可覆盖）；订单 refund_status 幂等（refunded 终态不被 refund_failed 覆盖）"
+  },
+  "compensationMechanism": {
+    "role": "退款通知失败补偿：认领 submitted/processing 退款，查询 PSP 退款状态，复用本积木合成事件同步退款状态与订单 refund_status",
+    "syntheticEvent": "query:{provider}:{out_trade_no}:{refund_no}:{mapped_status}",
+    "claims": "commerce_refund 中 status IN (submitted,processing) + created_at 窗口 + FOR UPDATE SKIP LOCKED",
+    "query": "query_provider_refund（stripe re_ 原生 id 优先）；sandbox 短接 succeeded；not_found 记日志下周期重试",
+    "statusVocabulary": "compensation_refund_raw_status：仅终态（succeeded/failed）发事件；processing 不发事件，下周期再查",
+    "env": "与支付补偿同一 worker：SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED（默认关闭）等"
+  },
+  "orderRefundStates": {
+    "none": "初始",
+    "refunding": "退款处理中（provider processing 通知）",
+    "refunded": "退款成功（终态）",
+    "refund_failed": "退款失败/关闭"
+  },
+  "extensionContract": {
+    "register": "实现 RefundNotifyHandler，经 DefaultRefundNotifyHandlerRegistry::with 注册（按 business_type 分发）",
+    "wire": "process_refund_notify_verified 注入注册表；默认注册表为空（订单 refund_status 更新为管道内置）",
+    "idempotency": "业务后处理 handler 必须幂等（稳定键 per refund）；订单 refund_status 状态机 terminal 幂等"
+  },
+  "security": {
+    "rejectedAudit": "验签/规范化失败持久化 commerce_payment_webhook_event（status=rejected，系统租户 '0'，事件指纹 = sha256(body) 去重；payload 仅存 '{}'，原始体不落库——防未验证/攻击者数据持久化）",
+    "sanitizedErrors": "对 PSP 的 4xx 只返回通用消息（bad request/not found/conflict/unauthorized/forbidden），内部细节经 map_webhook_service_error 仅进日志",
+    "bodyLimit": "退款 webhook 路由显式限制请求体 512 KiB",
+    "urlGuard": "退款 URL 只接受退款事件；支付事件（PSP 配置错误）记录 rejected 并 400",
+    "noPlatformLogin": "PSP 回调免平台登录与双 token：退款 webhook 路由 RouteAuth::Public（匿名可达），PSP 签名即身份；框架跳过凭据解析/认证/授权/租户隔离，退款 URL 与支付 URL 同样免登录"
+  },
+  "refundEventAudit": {
+    "key": "commerce_refund_event 的 webhook 审计键 = webhook:{refund_no}:{from_status}:{to_status}——不同状态变更各自成事件，同转换重放去重"
+  },
+  "ports": {
+    "provided": [
+      "RefundNotifyIngestPort",
+      "RefundNotifyStatePort",
+      "RefundNotifyHandler",
+      "RefundNotifyHandlerRegistry"
+    ],
+    "shared": [
+      "PaymentNotifyVerifyPort（与支付通知共享，provider 验签/规范化通用）"
+    ],
+    "required": [
+      "commerce_refund 状态机（payment 域 ingest 应用）",
+      "commerce_order.refund_status（order 域状态端口）"
+    ]
+  },
+  "responsibility": {
+    "paymentDomain": "退款事实（commerce_refund 状态机、退款事件入库、provider 状态映射 map_provider_refund_status）",
+    "orderDomain": "编排决策、订单退款状态（commerce_order.refund_status）、审计与 accepted 语义",
+    "forbidden": [
+      "order 域直接写 commerce_refund",
+      "payment 域直接写 commerce_order.refund_status",
+      "退款通知进入支付通知的结算管道"
+    ]
+  },
+  "forFuture": [
+    "售后单（commerce_after_sales_request.refund_status）联动：一单多售后单存在关联歧义，需明确 refund_no -> after_sales_request 关联键后接入",
+    "退款轮询 worker（payment 域）：provider 异步退款无通知时的状态兜底"
+  ]
+}

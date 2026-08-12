@@ -5,9 +5,8 @@ use std::sync::Arc;
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
-    cancel_owner_order_payments_with_provider_postgres,
-    enrich_owner_order_payment_postgres, OwnerOrderPaymentEnrichmentContext,
-    PostgresCommerceOwnerOrderPaymentStore,
+    cancel_owner_order_payments_with_provider_postgres, enrich_owner_order_payment_postgres,
+    OwnerOrderPaymentEnrichmentContext, PostgresCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_payment_service::{
     CancelOrderPaymentsCommand, PayOwnerOrderCommand, PayOwnerOrderOutcome,

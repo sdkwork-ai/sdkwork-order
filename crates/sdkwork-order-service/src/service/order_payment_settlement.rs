@@ -1,18 +1,16 @@
 use sdkwork_contract_service::CommerceServiceError;
 
+use crate::service::payment_notify::{
+    default_payment_notify_handler_registry, dispatch_payment_notify_handler,
+    PaymentNotifyHandlerRegistry, PAYMENT_NOTIFY_BUSINESS_ACCOUNT_RECHARGE_PACKAGE,
+    PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE, PAYMENT_NOTIFY_BUSINESS_EXTERNAL,
+    PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP, PAYMENT_NOTIFY_BUSINESS_POINTS_RECHARGE,
+    PAYMENT_NOTIFY_BUSINESS_PRODUCT, PAYMENT_NOTIFY_BUSINESS_TOKEN_BANK_RECHARGE,
+    PAYMENT_NOTIFY_BUSINESS_UNKNOWN,
+};
 use crate::{
-    default_fulfill_account_value_order_command, default_fulfill_points_recharge_command,
-    fulfill_account_value_order, fulfill_points_recharge_order,
-    mark_points_recharge_payment_succeeded, membership_purchase_fulfillment_idempotency_key,
-    membership_quota_recharge_idempotency_key, physical_goods_fulfillment_idempotency_key,
-    points_recharge_payment_success_idempotency_key, redeem_coupon_and_fulfill_account_value_order,
-    AccountPointsCreditPort, AccountValueFulfillmentStore, AccountValueLedgerPort,
-    AccountValueOrderSubject, CouponRedemptionPort, FulfillPaidPhysicalOrderRequest,
-    MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentPort,
-    MembershipPurchaseFulfillmentRequest, MembershipPurchaseSettlementSnapshot,
-    MembershipQuotaRechargeFulfillmentRequest, OrderPaymentSettlementAttempt,
-    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort, PhysicalGoodsFulfillmentPort,
-    PointsRechargeFulfillmentStore,
+    MembershipPurchaseSettlementSnapshot, OrderPaymentSettlementAttempt,
+    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -77,14 +75,32 @@ impl OrderSubjectKind {
         )
     }
 
-    fn account_value_subject(self) -> Option<AccountValueOrderSubject> {
+    /// Canonical notify business type used as the fulfillment dispatch key.
+    /// The subject resolution is the order domain's authoritative derivation;
+    /// every kind maps to exactly one business type so the
+    /// `PaymentNotifyHandlerRegistry` lookup is total.
+    pub fn business_type(self) -> &'static str {
         match self {
-            Self::TokenBankRecharge => Some(AccountValueOrderSubject::TokenBankRecharge),
-            Self::TokenBankPlanPurchase => Some(AccountValueOrderSubject::TokenBankPlanPurchase),
-            Self::TokenBankPlanRenewal => Some(AccountValueOrderSubject::TokenBankPlanRenewal),
-            Self::AccountRechargePackage => Some(AccountValueOrderSubject::AccountRechargePackage),
-            Self::CouponRecharge => Some(AccountValueOrderSubject::CouponRecharge),
-            _ => None,
+            Self::PointsRecharge => PAYMENT_NOTIFY_BUSINESS_POINTS_RECHARGE,
+            Self::TokenBankRecharge => PAYMENT_NOTIFY_BUSINESS_TOKEN_BANK_RECHARGE,
+            Self::TokenBankPlanPurchase | Self::TokenBankPlanRenewal => {
+                // Plan purchase and renewal share the token bank account value
+                // handler family but keep distinct business types so per-flow
+                // idempotency and metrics stay separated.
+                if self == Self::TokenBankPlanPurchase {
+                    "token_bank_plan_purchase"
+                } else {
+                    "token_bank_plan_renewal"
+                }
+            }
+            Self::AccountRechargePackage => PAYMENT_NOTIFY_BUSINESS_ACCOUNT_RECHARGE_PACKAGE,
+            Self::CouponRecharge => PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE,
+            Self::Product => PAYMENT_NOTIFY_BUSINESS_PRODUCT,
+            Self::Membership => PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP,
+            Self::VirtualGoods | Self::CouponPackage | Self::External => {
+                PAYMENT_NOTIFY_BUSINESS_EXTERNAL
+            }
+            Self::Unknown => PAYMENT_NOTIFY_BUSINESS_UNKNOWN,
         }
     }
 }
@@ -162,24 +178,51 @@ pub struct OwnerOrderSettlementOutcome {
     pub fulfillment_status: String,
 }
 
+#[derive(Clone, Copy)]
 pub struct OwnerOrderSettlementPorts<'a> {
     pub payment_store: &'a dyn OwnerOrderPaymentConfirmationPort,
     pub order_state_store: &'a dyn OwnerOrderPaymentStatePort,
-    pub recharge_store: &'a dyn PointsRechargeFulfillmentStore,
-    pub account_value_store: &'a dyn AccountValueFulfillmentStore,
-    pub credit_port: &'a dyn AccountPointsCreditPort,
-    pub account_value_ledger_port: &'a dyn AccountValueLedgerPort,
-    pub coupon_redemption_port: &'a dyn CouponRedemptionPort,
-    pub membership_port: &'a dyn MembershipPurchaseFulfillmentPort,
-    pub physical_goods_port: &'a dyn PhysicalGoodsFulfillmentPort,
+    pub recharge_store: &'a dyn crate::PointsRechargeFulfillmentStore,
+    pub account_value_store: &'a dyn crate::AccountValueFulfillmentStore,
+    pub credit_port: &'a dyn crate::AccountPointsCreditPort,
+    pub account_value_ledger_port: &'a dyn crate::AccountValueLedgerPort,
+    pub coupon_redemption_port: &'a dyn crate::CouponRedemptionPort,
+    pub membership_port: &'a dyn crate::MembershipPurchaseFulfillmentPort,
+    pub physical_goods_port: &'a dyn crate::PhysicalGoodsFulfillmentPort,
 }
 
+/// Settles a confirmed successful owner order payment with the standard
+/// built-in notify handler registry.
 pub async fn settle_owner_order_after_payment_success(
     ports: OwnerOrderSettlementPorts<'_>,
     attempt: &OrderPaymentSettlementAttempt,
     order_subject: Option<&str>,
     membership_purchase: Option<&MembershipPurchaseSettlementSnapshot>,
     request_no: &str,
+) -> Result<OwnerOrderSettlementOutcome, CommerceServiceError> {
+    settle_owner_order_after_payment_success_with_registry(
+        ports,
+        attempt,
+        order_subject,
+        membership_purchase,
+        request_no,
+        None,
+        default_payment_notify_handler_registry().as_ref(),
+    )
+    .await
+}
+
+/// Settles a confirmed successful owner order payment with an injected notify
+/// handler registry. The registry is the module extension point: business
+/// flows plug their own handlers without touching the canonical pipeline.
+pub async fn settle_owner_order_after_payment_success_with_registry(
+    ports: OwnerOrderSettlementPorts<'_>,
+    attempt: &OrderPaymentSettlementAttempt,
+    order_subject: Option<&str>,
+    membership_purchase: Option<&MembershipPurchaseSettlementSnapshot>,
+    request_no: &str,
+    event_type: Option<&str>,
+    notify_handler_registry: &dyn PaymentNotifyHandlerRegistry,
 ) -> Result<OwnerOrderSettlementOutcome, CommerceServiceError> {
     let payment_outcome = ports
         .payment_store
@@ -210,13 +253,15 @@ pub async fn settle_owner_order_after_payment_success(
     }
 
     let subject_kind = OrderSubjectKind::parse(order_subject);
-    let fulfillment = dispatch_subject_fulfillment(
+    let fulfillment = dispatch_payment_notify_handler(
+        notify_handler_registry,
         &ports,
         subject_kind,
         attempt,
         &payment_outcome.paid_at,
         membership_purchase,
         request_no,
+        event_type,
     )
     .await?;
 
@@ -228,308 +273,5 @@ pub async fn settle_owner_order_after_payment_success(
         order_id: attempt.order_id.clone(),
         points_credited: fulfillment.points_credited,
         fulfillment_status: fulfillment.status,
-    })
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct SubjectFulfillmentOutcome {
-    accepted: bool,
-    replayed: bool,
-    points_credited: i64,
-    status: String,
-}
-
-async fn dispatch_subject_fulfillment(
-    ports: &OwnerOrderSettlementPorts<'_>,
-    subject: OrderSubjectKind,
-    attempt: &OrderPaymentSettlementAttempt,
-    paid_at: &str,
-    membership_purchase: Option<&MembershipPurchaseSettlementSnapshot>,
-    request_no: &str,
-) -> Result<SubjectFulfillmentOutcome, CommerceServiceError> {
-    match subject {
-        OrderSubjectKind::PointsRecharge => {
-            settle_points_recharge_subject(
-                ports.recharge_store,
-                ports.credit_port,
-                attempt,
-                paid_at,
-                request_no,
-            )
-            .await
-        }
-        OrderSubjectKind::TokenBankRecharge
-        | OrderSubjectKind::TokenBankPlanPurchase
-        | OrderSubjectKind::TokenBankPlanRenewal
-        | OrderSubjectKind::AccountRechargePackage => {
-            settle_account_value_subject(
-                subject,
-                ports.account_value_store,
-                ports.account_value_ledger_port,
-                attempt,
-                request_no,
-            )
-            .await
-        }
-        OrderSubjectKind::CouponRecharge => {
-            settle_coupon_recharge_subject(
-                ports.account_value_store,
-                ports.coupon_redemption_port,
-                ports.account_value_ledger_port,
-                attempt,
-                request_no,
-            )
-            .await
-        }
-        OrderSubjectKind::Membership => {
-            let snapshot = membership_purchase.ok_or_else(|| {
-                CommerceServiceError::invalid_state(
-                    "membership order settlement snapshot is unavailable",
-                )
-            })?;
-            settle_membership_subject(
-                ports.membership_port,
-                attempt,
-                paid_at,
-                snapshot,
-                request_no,
-            )
-            .await
-        }
-        OrderSubjectKind::Product => {
-            settle_physical_goods_subject(ports.physical_goods_port, attempt, paid_at, request_no)
-                .await
-        }
-        OrderSubjectKind::VirtualGoods
-        | OrderSubjectKind::CouponPackage
-        | OrderSubjectKind::External => {
-            tracing::info!(
-                target = "order.settlement",
-                order_id = %attempt.order_id,
-                ?subject,
-                "payment confirmed; fulfillment is owned by external commerce capabilities"
-            );
-            Ok(SubjectFulfillmentOutcome {
-                accepted: false,
-                replayed: false,
-                points_credited: 0,
-                status: "awaiting_external_fulfillment".to_owned(),
-            })
-        }
-        OrderSubjectKind::Unknown => {
-            tracing::warn!(
-                target = "order.settlement",
-                order_id = %attempt.order_id,
-                "payment confirmed; order subject is missing or unsupported for automated fulfillment"
-            );
-            Ok(SubjectFulfillmentOutcome {
-                accepted: false,
-                replayed: false,
-                points_credited: 0,
-                status: "awaiting_subject_resolution".to_owned(),
-            })
-        }
-    }
-}
-
-async fn settle_physical_goods_subject<P>(
-    physical_goods_port: &P,
-    attempt: &OrderPaymentSettlementAttempt,
-    paid_at: &str,
-    request_no: &str,
-) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
-where
-    P: PhysicalGoodsFulfillmentPort + ?Sized,
-{
-    let outcome = physical_goods_port
-        .fulfill_paid_physical_order(FulfillPaidPhysicalOrderRequest {
-            tenant_id: attempt.tenant_id.clone(),
-            organization_id: attempt.organization_id.clone(),
-            owner_user_id: attempt.owner_user_id.clone(),
-            order_id: attempt.order_id.clone(),
-            paid_at: paid_at.to_owned(),
-            request_no: request_no.to_owned(),
-            idempotency_key: physical_goods_fulfillment_idempotency_key(&attempt.order_id),
-        })
-        .await?;
-
-    Ok(SubjectFulfillmentOutcome {
-        accepted: outcome.accepted,
-        replayed: outcome.replayed,
-        points_credited: 0,
-        status: outcome.fulfillment_status,
-    })
-}
-
-async fn settle_coupon_recharge_subject<A, C, L>(
-    account_value_store: &A,
-    coupon_redemption_port: &C,
-    account_value_ledger_port: &L,
-    attempt: &OrderPaymentSettlementAttempt,
-    request_no: &str,
-) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
-where
-    A: AccountValueFulfillmentStore + ?Sized,
-    C: CouponRedemptionPort + ?Sized,
-    L: AccountValueLedgerPort + ?Sized,
-{
-    let command = default_fulfill_account_value_order_command(
-        AccountValueOrderSubject::CouponRecharge,
-        &attempt.tenant_id,
-        attempt.organization_id.as_deref(),
-        &attempt.owner_user_id,
-        &attempt.order_id,
-        request_no,
-    )?;
-    let outcome = redeem_coupon_and_fulfill_account_value_order(
-        account_value_store,
-        coupon_redemption_port,
-        account_value_ledger_port,
-        command,
-    )
-    .await?;
-    Ok(SubjectFulfillmentOutcome {
-        accepted: outcome.accepted,
-        replayed: outcome.replayed,
-        points_credited: 0,
-        status: outcome.fulfillment_status,
-    })
-}
-
-async fn settle_account_value_subject<A, L>(
-    subject: OrderSubjectKind,
-    account_value_store: &A,
-    account_value_ledger_port: &L,
-    attempt: &OrderPaymentSettlementAttempt,
-    request_no: &str,
-) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
-where
-    A: AccountValueFulfillmentStore + ?Sized,
-    L: AccountValueLedgerPort + ?Sized,
-{
-    let account_value_subject = subject.account_value_subject().ok_or_else(|| {
-        CommerceServiceError::validation("order subject does not support account value fulfillment")
-    })?;
-    let command = default_fulfill_account_value_order_command(
-        account_value_subject,
-        &attempt.tenant_id,
-        attempt.organization_id.as_deref(),
-        &attempt.owner_user_id,
-        &attempt.order_id,
-        request_no,
-    )?;
-    let outcome =
-        fulfill_account_value_order(account_value_store, account_value_ledger_port, command)
-            .await?;
-
-    Ok(SubjectFulfillmentOutcome {
-        accepted: outcome.accepted,
-        replayed: outcome.replayed,
-        points_credited: 0,
-        status: outcome.fulfillment_status,
-    })
-}
-
-async fn settle_points_recharge_subject<S, P>(
-    recharge_store: &S,
-    credit_port: &P,
-    attempt: &OrderPaymentSettlementAttempt,
-    paid_at: &str,
-    request_no: &str,
-) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
-where
-    S: PointsRechargeFulfillmentStore + ?Sized,
-    P: AccountPointsCreditPort + ?Sized,
-{
-    let idempotency_key = points_recharge_payment_success_idempotency_key(&attempt.order_id);
-    let payment_command = MarkPointsRechargePaymentSucceededCommand::new(
-        &attempt.tenant_id,
-        attempt.organization_id.as_deref(),
-        &attempt.owner_user_id,
-        &attempt.order_id,
-        paid_at,
-        request_no,
-        &idempotency_key,
-    )?;
-    mark_points_recharge_payment_succeeded(recharge_store, payment_command).await?;
-
-    let fulfill_command = default_fulfill_points_recharge_command(
-        &attempt.tenant_id,
-        attempt.organization_id.as_deref(),
-        &attempt.owner_user_id,
-        &attempt.order_id,
-        request_no,
-    )?;
-    let fulfill_outcome =
-        fulfill_points_recharge_order(recharge_store, credit_port, fulfill_command).await?;
-
-    Ok(SubjectFulfillmentOutcome {
-        accepted: fulfill_outcome.accepted,
-        replayed: fulfill_outcome.replayed,
-        points_credited: fulfill_outcome.points_credited,
-        status: fulfill_outcome.fulfillment_status,
-    })
-}
-
-async fn settle_membership_subject<M>(
-    membership_port: &M,
-    attempt: &OrderPaymentSettlementAttempt,
-    paid_at: &str,
-    snapshot: &MembershipPurchaseSettlementSnapshot,
-    request_no: &str,
-) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
-where
-    M: MembershipPurchaseFulfillmentPort + ?Sized,
-{
-    // 订阅期额度充值：结算时向会员权益账户追加额度（幂等）
-    if snapshot.action == "recharge" {
-        let quantity = snapshot.grant_quantity.ok_or_else(|| {
-            CommerceServiceError::invalid_state(
-                "membership quota recharge settlement snapshot has no grant quantity",
-            )
-        })?;
-        let idempotency_key =
-            membership_quota_recharge_idempotency_key(&attempt.order_id);
-        let outcome = membership_port
-            .fulfill_membership_quota_recharge(
-                MembershipQuotaRechargeFulfillmentRequest {
-                    tenant_id: attempt.tenant_id.clone(),
-                    organization_id: attempt.organization_id.clone(),
-                    owner_user_id: attempt.owner_user_id.clone(),
-                    order_id: attempt.order_id.clone(),
-                    quantity,
-                    request_no: request_no.to_owned(),
-                    idempotency_key,
-                },
-            )
-            .await?;
-        return Ok(SubjectFulfillmentOutcome {
-            accepted: outcome.accepted,
-            replayed: outcome.replayed,
-            points_credited: 0,
-            status: outcome.fulfillment_status,
-        });
-    }
-    let idempotency_key = membership_purchase_fulfillment_idempotency_key(&attempt.order_id);
-    let outcome = membership_port
-        .fulfill_membership_purchase(MembershipPurchaseFulfillmentRequest {
-            action: snapshot.action.clone(),
-            tenant_id: attempt.tenant_id.clone(),
-            organization_id: attempt.organization_id.clone(),
-            owner_user_id: attempt.owner_user_id.clone(),
-            order_id: attempt.order_id.clone(),
-            order_no: snapshot.order_no.clone(),
-            package_id: snapshot.package_id,
-            paid_at: paid_at.to_owned(),
-            request_no: request_no.to_owned(),
-            idempotency_key,
-        })
-        .await?;
-
-    Ok(SubjectFulfillmentOutcome {
-        accepted: outcome.accepted,
-        replayed: outcome.replayed,
-        points_credited: 0,
-        status: outcome.fulfillment_status,
     })
 }

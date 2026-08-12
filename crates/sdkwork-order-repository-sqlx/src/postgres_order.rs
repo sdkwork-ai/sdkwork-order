@@ -841,7 +841,7 @@ impl PostgresCommerceOrderStore {
                 (id, tenant_id, organization_id, order_id, order_item_id, allocation_type,
                  original_amount, discount_amount, payable_amount, currency_code, created_at)
             VALUES
-                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, NULL, 'order_total', $5, $6, $7, $8, $9)
+                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, NULL, 'order_total', $5, $6, $7, $8, $9::timestamptz)
             "#,
         )
         .bind(format!("{order_id}-amount"))

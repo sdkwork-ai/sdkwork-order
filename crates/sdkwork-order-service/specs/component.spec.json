@@ -103,9 +103,33 @@
     }
   ],
   "contracts": {
-    "publicExports": [],
+    "publicExports": [
+      "payment_notify building block: PaymentNotifyHandler, PaymentNotifyHandlerRegistry, PaymentNotifyContext, default_payment_notify_handler_registry, process_payment_notify",
+      "refund_notify building block: process_refund_notify, RefundNotifyIngestPort, RefundNotifyStatePort (spec: specs/refund-notify.spec.json)",
+      "settlement entrypoints: settle_owner_order_after_payment_success, settle_owner_order_after_payment_success_with_registry"
+    ],
     "runtimeEntrypoints": [
       "Cargo.toml"
+    ],
+    "providedPorts": [
+      "PaymentNotifyHandler",
+      "PaymentNotifyHandlerRegistry",
+      "PaymentNotifyVerifyPort",
+      "PaymentNotifyIngestPort",
+      "PaymentNotifyOrderContextPort",
+      "RefundNotifyIngestPort",
+      "RefundNotifyStatePort"
+    ],
+    "requiredPorts": [
+      "OwnerOrderPaymentConfirmationPort",
+      "OwnerOrderPaymentStatePort",
+      "PointsRechargeFulfillmentStore",
+      "AccountValueFulfillmentStore",
+      "AccountPointsCreditPort",
+      "AccountValueLedgerPort",
+      "CouponRedemptionPort",
+      "MembershipPurchaseFulfillmentPort",
+      "PhysicalGoodsFulfillmentPort"
     ],
     "sdkClients": [],
     "events": [],

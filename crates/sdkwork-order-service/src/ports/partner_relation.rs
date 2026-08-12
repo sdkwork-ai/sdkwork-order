@@ -2,8 +2,8 @@ use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 
-use serde::{Deserialize, Serialize};
 use sdkwork_contract_service::CommerceServiceError;
+use serde::{Deserialize, Serialize};
 
 /// Immutable partner facts snapshotted onto an order at creation time.
 ///

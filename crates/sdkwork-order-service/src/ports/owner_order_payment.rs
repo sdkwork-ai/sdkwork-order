@@ -55,7 +55,8 @@ pub struct OwnerOrderPaymentStateOutcome {
     pub terminal_order_preserved: bool,
 }
 
-/// Order-owned persistence boundary for the payment-success part of settlement.
+/// Order-owned persistence boundary for the payment-success/failure parts of
+/// settlement.
 ///
 /// Payment confirms the provider intent/attempt, while Order remains the only
 /// owner allowed to advance `commerce_order` lifecycle state.
@@ -65,6 +66,27 @@ pub trait OwnerOrderPaymentStatePort: Send + Sync {
         attempt: &'a OrderPaymentSettlementAttempt,
         paid_at: &'a str,
     ) -> OwnerOrderPaymentConfirmationFuture<'a, OwnerOrderPaymentStateOutcome>;
+
+    /// Marks the owner order failed/cancelled after a provider payment failure
+    /// or closure webhook. The transition is idempotent: a terminal order
+    /// (already paid, fulfilled, or cancelled) is preserved and reported via
+    /// `terminal_order_preserved`, so a late failure callback can never
+    /// overwrite a confirmed success.
+    ///
+    /// The default implementation fails loudly so deployments without the
+    /// order-owned Postgres store notice that failure-state marking is
+    /// unconfigured instead of silently acking the webhook.
+    fn mark_owner_order_payment_failed<'a>(
+        &'a self,
+        _attempt: &'a OrderPaymentSettlementAttempt,
+        _failure_status: &'a str,
+    ) -> OwnerOrderPaymentConfirmationFuture<'a, OwnerOrderPaymentStateOutcome> {
+        Box::pin(async move {
+            Err(CommerceServiceError::provider_unavailable(
+                "order payment failure state marking is not configured",
+            ))
+        })
+    }
 }
 
 pub const OWNER_ORDER_PAYMENT_STATE_PORT: &str = "order.owner_order_payment.state";

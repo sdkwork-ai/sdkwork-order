@@ -41,6 +41,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // inventory (embedded loop, disabled via
     // SDKWORK_ORDER_EXPIRATION_SCHEDULER_ENABLED=0).
     sdkwork_order_service_host::spawn_order_expiration_scheduler(host.clone());
+    // Payment compensation worker: claims payments/refunds stuck in flight,
+    // queries the PSP, and re-enters the notify processing framework with
+    // synthetic events (the webhook-failure safety net). Opt-in via
+    // SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED=1.
+    sdkwork_order_service_host::spawn_payment_compensation_worker(host.clone());
     let manifest = assembly.route_manifest.clone();
     let resolver = sdkwork_iam_web_adapter::IamWebRequestContextResolver::from_database_pool(Some(
         host.database_pool().clone(),

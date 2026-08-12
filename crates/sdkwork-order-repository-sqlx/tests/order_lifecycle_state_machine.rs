@@ -7,8 +7,10 @@ use sdkwork_order_repository_sqlx::{
     postgres_expiration::{expire_due_order, list_due_expiring_orders},
     PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
 };
-use sdkwork_order_service::{OrderOwnerDetailQuery, UpdateShipmentPackageCommand};
-use sqlx::PgPool;
+use sdkwork_order_service::{
+    OrderOwnerDetailQuery, RefundNotifyStatePort, UpdateShipmentPackageCommand,
+};
+use sqlx::{PgPool, Row};
 
 async fn fixture() -> Option<PgPool> {
     order_points_recharge_e2e_postgres_pool_from_env().await
@@ -53,6 +55,276 @@ async fn event_count(pool: &PgPool, order_id: &str, event_type: &str) -> i64 {
     .fetch_one(pool)
     .await
     .unwrap_or(0)
+}
+
+#[tokio::test]
+async fn recovery_success_notify_on_failed_order_preserves_cancelled_with_audit_and_replay_idempotency(
+) {
+    let Some(pool) = fixture().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
+    // Order previously marked failed/cancelled by a failure webhook.
+    insert_order(
+        &pool,
+        "order-recover-1",
+        "cancelled",
+        "failed",
+        Some("unfulfilled"),
+        None,
+    )
+    .await
+    .expect("seed cancelled order");
+
+    let store = PostgresCommerceOrderStore::new(pool.clone());
+    let attempt = sdkwork_order_service::OrderPaymentSettlementAttempt {
+        tenant_id: "tenant-1".to_owned(),
+        organization_id: Some("0".to_owned()),
+        owner_user_id: "user-1".to_owned(),
+        order_id: "order-recover-1".to_owned(),
+        payment_attempt_id: Some("attempt-recv1".to_owned()),
+        out_trade_no: Some("trade-recv1".to_owned()),
+    };
+
+    // Recovery success notify: the order stays cancelled (terminal preserved)
+    // but the money-collected fact is recorded.
+    let outcome = store
+        .mark_owner_order_payment_succeeded(&attempt, "2026-08-12T00:00:00Z")
+        .await
+        .expect("recovery must not error");
+    assert!(outcome.terminal_order_preserved);
+    assert_eq!("cancelled", outcome.order_status);
+
+    let row = sqlx::query(
+        "SELECT status, payment_status FROM commerce_order WHERE id = 'order-recover-1'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("reload order");
+    let status: String = row.try_get("status").unwrap_or_default();
+    let payment_status: String = row.try_get("payment_status").unwrap_or_default();
+    assert_eq!("cancelled", status);
+    assert_eq!("success", payment_status);
+
+    // Late-payment audit recorded exactly once.
+    assert_eq!(
+        1,
+        event_count(&pool, "order-recover-1", "payment_succeeded_after_terminal").await
+    );
+
+    // Redelivery replay writes no additional audit rows (ON CONFLICT no-op).
+    let replay = store
+        .mark_owner_order_payment_succeeded(&attempt, "2026-08-12T00:00:05Z")
+        .await
+        .expect("replay must not error");
+    assert!(replay.terminal_order_preserved);
+    assert_eq!(
+        1,
+        event_count(&pool, "order-recover-1", "payment_succeeded_after_terminal").await
+    );
+    assert_eq!(
+        1,
+        event_count(&pool, "order-recover-1", "duplicate_payment_success").await
+    );
+    let second_replay = store
+        .mark_owner_order_payment_succeeded(&attempt, "2026-08-12T00:00:10Z")
+        .await
+        .expect("second replay must not error");
+    assert!(second_replay.terminal_order_preserved);
+    assert_eq!(
+        1,
+        event_count(&pool, "order-recover-1", "duplicate_payment_success").await,
+        "duplicate audit must stay bounded across replays"
+    );
+}
+
+#[tokio::test]
+async fn refund_notify_advances_order_refund_status_with_terminal_guard() {
+    let Some(pool) = fixture().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
+    insert_order(
+        &pool,
+        "order-refund-1",
+        "paid",
+        "success",
+        Some("unfulfilled"),
+        None,
+    )
+    .await
+    .expect("seed refunded order");
+
+    let store = PostgresCommerceOrderStore::new(pool.clone());
+    let attempt = sdkwork_order_service::OrderPaymentSettlementAttempt {
+        tenant_id: "tenant-1".to_owned(),
+        organization_id: Some("0".to_owned()),
+        owner_user_id: "user-1".to_owned(),
+        order_id: "order-refund-1".to_owned(),
+        payment_attempt_id: Some("attempt-r1".to_owned()),
+        out_trade_no: Some("trade-r1".to_owned()),
+    };
+
+    let marked = store
+        .mark_owner_order_refund_status(&attempt, "refunded")
+        .await
+        .expect("order must be marked refunded");
+    assert!(!marked.terminal_preserved);
+    assert_eq!("refunded", marked.refund_status);
+
+    // A late refund_failed notify must never overwrite the refunded terminal.
+    let preserved = store
+        .mark_owner_order_refund_status(&attempt, "refund_failed")
+        .await
+        .expect("terminal refunded must be preserved");
+    assert!(preserved.terminal_preserved);
+    assert_eq!("refunded", preserved.refund_status);
+
+    // Replay of the same state is idempotent.
+    let replay = store
+        .mark_owner_order_refund_status(&attempt, "refunded")
+        .await
+        .expect("refunded replay must be idempotent");
+    assert_eq!("refunded", replay.refund_status);
+}
+
+#[tokio::test]
+async fn payment_failure_webhook_preserves_paid_and_fulfilled_orders() {
+    let Some(pool) = fixture().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
+    insert_order(
+        &pool,
+        "order-fail-paid",
+        "paid",
+        "success",
+        Some("unfulfilled"),
+        None,
+    )
+    .await
+    .expect("seed paid order");
+    insert_order(
+        &pool,
+        "order-fail-fulfilled",
+        "fulfilled",
+        "success",
+        Some("fulfilled"),
+        None,
+    )
+    .await
+    .expect("seed fulfilled order");
+
+    let store = PostgresCommerceOrderStore::new(pool.clone());
+    let attempt = sdkwork_order_service::OrderPaymentSettlementAttempt {
+        tenant_id: "tenant-1".to_owned(),
+        organization_id: Some("0".to_owned()),
+        owner_user_id: "user-1".to_owned(),
+        order_id: "order-fail-paid".to_owned(),
+        payment_attempt_id: Some("attempt-rp1".to_owned()),
+        out_trade_no: Some("trade-rp1".to_owned()),
+    };
+
+    // A late failure notify on a paid order must preserve the order and ack
+    // (no cancelled flip, no error) — even cross-provider.
+    let preserved = store
+        .mark_owner_order_payment_failed(&attempt, "failed")
+        .await
+        .expect("paid order must be preserved without error");
+    assert!(preserved.terminal_order_preserved);
+    assert_eq!("paid", preserved.order_status);
+
+    let fulfilled_attempt = sdkwork_order_service::OrderPaymentSettlementAttempt {
+        order_id: "order-fail-fulfilled".to_owned(),
+        ..attempt
+    };
+    let fulfilled = store
+        .mark_owner_order_payment_failed(&fulfilled_attempt, "failed")
+        .await
+        .expect("fulfilled order must be preserved without error");
+    assert!(fulfilled.terminal_order_preserved);
+    assert_eq!("fulfilled", fulfilled.order_status);
+
+    // The paid order must still read paid/success afterwards.
+    let row = sqlx::query(
+        "SELECT status, payment_status FROM commerce_order WHERE id = 'order-fail-paid'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("reload order");
+    let status: String = row.try_get("status").unwrap_or_default();
+    let payment_status: String = row.try_get("payment_status").unwrap_or_default();
+    assert_eq!("paid", status);
+    assert_eq!("success", payment_status);
+}
+
+#[tokio::test]
+async fn payment_failure_webhook_marks_pending_order_cancelled_but_preserves_terminal() {
+    let Some(pool) = fixture().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
+    insert_order(
+        &pool,
+        "order-fail-1",
+        "pending_payment",
+        "pending",
+        None,
+        None,
+    )
+    .await
+    .expect("seed pending order");
+    insert_order(
+        &pool,
+        "order-fail-2",
+        "paid",
+        "success",
+        Some("unfulfilled"),
+        None,
+    )
+    .await
+    .expect("seed paid order");
+
+    let store = PostgresCommerceOrderStore::new(pool.clone());
+    let attempt = sdkwork_order_service::OrderPaymentSettlementAttempt {
+        tenant_id: "tenant-1".to_owned(),
+        organization_id: Some("0".to_owned()),
+        owner_user_id: "user-1".to_owned(),
+        order_id: "order-fail-1".to_owned(),
+        payment_attempt_id: Some("attempt-1".to_owned()),
+        out_trade_no: Some("trade-1".to_owned()),
+    };
+    let outcome = store
+        .mark_owner_order_payment_failed(&attempt, "failed")
+        .await
+        .expect("pending order must be marked cancelled");
+    assert!(!outcome.terminal_order_preserved);
+    assert_eq!("cancelled", outcome.order_status);
+
+    let row = sqlx::query(
+        "SELECT payment_status, cancelled_at FROM commerce_order WHERE id = 'order-fail-1'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("reload order");
+    let payment_status: String = row.try_get("payment_status").unwrap_or_default();
+    let cancelled_at: Option<String> = row.try_get("cancelled_at").ok().flatten();
+    assert_eq!("failed", payment_status);
+    assert!(cancelled_at
+        .as_deref()
+        .is_some_and(|value| !value.is_empty()));
+
+    // A late failure callback must never overwrite a confirmed success.
+    let terminal_attempt = sdkwork_order_service::OrderPaymentSettlementAttempt {
+        order_id: "order-fail-2".to_owned(),
+        ..attempt
+    };
+    let preserved = store
+        .mark_owner_order_payment_failed(&terminal_attempt, "closed")
+        .await
+        .expect("terminal order must be preserved");
+    assert!(preserved.terminal_order_preserved);
+    assert_eq!("paid", preserved.order_status);
 }
 
 #[tokio::test]

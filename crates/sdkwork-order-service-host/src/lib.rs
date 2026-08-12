@@ -4,13 +4,13 @@ use sdkwork_order_integration_account::{
     account_points_credit_port_from_env, account_value_ledger_port_from_env,
 };
 use sdkwork_order_integration_membership::membership_purchase_fulfillment_port_from_database_pool;
+use sdkwork_order_integration_partner::order_partner_relation_port_from_database_pool;
 use sdkwork_order_integration_payment::{
     owner_order_payment_reconciliation_port_from_database_pool,
     payment_refund_executor_port_from_database_pool,
 };
 use sdkwork_order_integration_physical_commerce::physical_commerce_ports_from_env;
 use sdkwork_order_integration_promotion::promotion_coupon_redemption_port_from_database_pool;
-use sdkwork_order_integration_partner::order_partner_relation_port_from_database_pool;
 pub use sdkwork_order_service::order_service_contract;
 use sdkwork_order_service::{
     AccountPointsCreditPort, AccountValueLedgerPort, CouponRedemptionPort,
@@ -22,8 +22,10 @@ use sdkwork_order_service::{
 };
 use std::sync::Arc;
 
+pub mod compensation;
 pub mod expiration;
 
+pub use compensation::spawn_payment_compensation_worker;
 pub use expiration::spawn_order_expiration_scheduler;
 
 pub struct OrderServiceHost {
@@ -122,8 +124,7 @@ impl OrderServiceHost {
     ) -> Self {
         let owner_order_payment_reconciliation_port =
             owner_order_payment_reconciliation_port_from_database_pool(database.pool());
-        let partner_relation_port =
-            order_partner_relation_port_from_database_pool(database.pool());
+        let partner_relation_port = order_partner_relation_port_from_database_pool(database.pool());
         Self {
             database,
             account_credit_port,

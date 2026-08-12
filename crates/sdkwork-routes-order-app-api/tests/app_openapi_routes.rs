@@ -4,16 +4,16 @@ use axum::Router;
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_postgres_pool_from_env;
 use sdkwork_order_service::{
     AccountPointsCreditFuture, AccountPointsCreditPort, NoopAccountValueLedgerPort,
-    NoopCouponRedemptionPort, NoopMembershipPurchaseFulfillmentPort,
-    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
+    NoopCouponRedemptionPort, NoopMembershipPurchaseFulfillmentPort, PointsRechargeCreditOutcome,
+    PointsRechargeCreditRequest,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_routes_order_app_api::{
     app_after_sales_router_with_postgres_pool, app_checkout_router_with_postgres_pool,
     app_fulfillment_router_with_postgres_pool, app_membership_order_router_with_postgres_pool,
     app_order_router_with_postgres_pool, app_payment_webhook_router_with_postgres_pool,
-    app_recharge_checkout_router_with_postgres_pool, app_shipment_router_with_postgres_pool,
-    openapi_contract::mount_app_openapi,
+    app_recharge_checkout_router_with_postgres_pool, app_refund_webhook_router_with_postgres_pool,
+    app_shipment_router_with_postgres_pool, openapi_contract::mount_app_openapi,
 };
 use serde_json::Value;
 use std::sync::Arc;
@@ -70,11 +70,12 @@ fn build_test_app_router(pool: sqlx::PgPool) -> Router {
             .merge(app_shipment_router_with_postgres_pool(pool.clone()))
             .merge(app_after_sales_router_with_postgres_pool(pool.clone()))
             .merge(app_payment_webhook_router_with_postgres_pool(
-                pool,
+                pool.clone(),
                 Arc::new(NoopAccountPointsCreditPort),
                 Arc::new(NoopAccountValueLedgerPort),
                 Arc::new(NoopMembershipPurchaseFulfillmentPort),
-            )),
+            ))
+            .merge(app_refund_webhook_router_with_postgres_pool(pool)),
     )
 }
 

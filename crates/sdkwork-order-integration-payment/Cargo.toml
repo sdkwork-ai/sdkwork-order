@@ -11,6 +11,7 @@ path = "src/lib.rs"
 
 [dependencies]
 sdkwork_contract_service.workspace = true
+sdkwork_order_repository_sqlx.workspace = true
 sdkwork_order_service.workspace = true
 sdkwork_payment_providers.workspace = true
 sdkwork_payment_repository_sqlx.workspace = true
@@ -20,6 +21,8 @@ sdkwork-database-sqlx.workspace = true
 dotenvy = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
+sdkwork_order_repository_sqlx = { workspace = true, features = ["test-support"] }

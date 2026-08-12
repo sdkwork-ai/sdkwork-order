@@ -108,6 +108,12 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "orders",
         "orders.payments.webhooks.receive",
     ),
+    HttpRoute::public(
+        HttpMethod::Post,
+        "/app/v3/api/orders/refunds/webhooks/{providerCode}",
+        "orders",
+        "orders.refunds.webhooks.receive",
+    ),
     // === After-sales ===
     HttpRoute::dual_token(
         HttpMethod::Get,
@@ -293,7 +299,9 @@ mod tests {
         let manifest = app_route_manifest();
         assert!(!manifest.routes().is_empty());
         for route in manifest.routes() {
-            if route.path.contains("/payments/webhooks/") {
+            if route.path.contains("/payments/webhooks/")
+                || route.path.contains("/refunds/webhooks/")
+            {
                 assert_eq!(
                     route.auth,
                     RouteAuth::Public,
