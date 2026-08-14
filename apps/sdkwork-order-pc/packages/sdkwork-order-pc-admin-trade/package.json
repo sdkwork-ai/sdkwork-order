@@ -1,19 +1,19 @@
 {
-  "name": "@sdkwork/order-pc-admin-orders",
+  "name": "@sdkwork/order-pc-admin-trade",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Operator order list, detail, cancel, close, and timeline for backend-admin surface.",
+  "description": "Trading center admin surface: workbench, after-sales reviews, shipments and packages, refund and withdrawal reviews.",
   "exports": {
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./service": {
-      "types": "./src/service.ts",
-      "import": "./src/service.ts",
-      "default": "./src/service.ts"
+    "./contribution": {
+      "types": "./src/contribution.ts",
+      "import": "./src/contribution.ts",
+      "default": "./src/contribution.ts"
     },
     "./i18n": {
       "types": "./src/i18n/index.ts",
@@ -30,17 +30,21 @@
   },
   "dependencies": {
     "@sdkwork/order-pc-admin-core": "workspace:*",
+    "@sdkwork/order-pc-admin-orders": "workspace:*",
     "@sdkwork/order-pc-core": "workspace:*",
     "@sdkwork/order-service": "workspace:*",
     "lucide-react": "catalog:"
   },
   "devDependencies": {
     "@sdkwork/ui-pc-react": "workspace:*",
+    "@testing-library/react": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "jsdom": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "@sdkwork/ui-pc-react": "workspace:*",

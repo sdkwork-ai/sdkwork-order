@@ -1,14 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
 import { SdkworkOrderAdminOrdersPage } from "../src/pages/AdminOrdersPage";
-
 describe("order admin capabilities", () => {
   it("keeps detail access but hides cancel and close for read-only operators", async () => {
     const service = {
       cancelOrder: vi.fn(),
       closeOrder: vi.fn(),
       getOrder: vi.fn(),
+      getOrderEvents: vi.fn().mockResolvedValue([]),
+      getOrderShipments: vi.fn().mockResolvedValue([]),
       listOrders: vi.fn().mockResolvedValue({
         items: [{
           orderId: "order-1",
@@ -35,7 +35,7 @@ describe("order admin capabilities", () => {
     );
 
     await waitFor(() => expect(screen.getByText("Commercial order")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /查看订单详情/u })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /详情/u })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "取消" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "关闭" })).not.toBeInTheDocument();
   });
@@ -45,6 +45,8 @@ describe("order admin capabilities", () => {
       cancelOrder: vi.fn().mockResolvedValue(undefined),
       closeOrder: vi.fn().mockResolvedValue(undefined),
       getOrder: vi.fn(),
+      getOrderEvents: vi.fn().mockResolvedValue([]),
+      getOrderShipments: vi.fn().mockResolvedValue([]),
       listOrders: vi.fn().mockResolvedValue({
         items: [{
           orderId: "order-2",

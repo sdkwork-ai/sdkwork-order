@@ -2,7 +2,9 @@ import type {
   CancelOrderRequest,
   CloseOrderRequest,
   OrderDetail,
+  OrderEvent,
   OrderSummary,
+  ShipmentSummary,
   SdkworkOrderBackendClient,
 } from "@sdkwork/order-pc-admin-core";
 import {
@@ -30,6 +32,8 @@ export interface OrderAdminListResult {
 export interface OrderAdminService {
   listOrders(query: OrderAdminListQuery): Promise<OrderAdminListResult>;
   getOrder(orderId: string): Promise<OrderDetail>;
+  getOrderEvents(orderId: string): Promise<OrderEvent[]>;
+  getOrderShipments(orderId: string): Promise<ShipmentSummary[]>;
   cancelOrder(orderId: string, body?: CancelOrderRequest): Promise<void>;
   closeOrder(orderId: string, body?: CloseOrderRequest): Promise<void>;
 }
@@ -64,6 +68,18 @@ export function createOrderAdminService(
     async getOrder(orderId) {
       const raw = await client.orders.admin.retrieve(orderId);
       return unwrapSdkworkOrderResource<OrderDetail>(raw);
+    },
+    async getOrderEvents(orderId) {
+      const raw = await client.orders.admin.events.list(orderId, { page: "1", pageSize: "100" });
+      return unwrapSdkworkOrderListPage<OrderEvent>(raw).items;
+    },
+    async getOrderShipments(orderId) {
+      const raw = await client.shipments.list({
+        page: "1",
+        pageSize: "20",
+        orderId,
+      });
+      return unwrapSdkworkOrderListPage<ShipmentSummary>(raw).items;
     },
     async cancelOrder(orderId, body) {
       const requestBody = body ?? { reason: "platform-cancel" };

@@ -53,4 +53,26 @@ describe("createOrderAdminService", () => {
       idempotencyKey: expect.any(String),
     });
   });
+
+  it("lists shipments by order id for the fulfillment section", async () => {
+    const shipmentsList = vi.fn().mockResolvedValue({
+      code: 0,
+      data: {
+        items: [{ shipmentId: "sh-1", shipmentNo: "SH-1", fulfillmentId: "f-1", carrierCode: "sf", trackingNo: "SF1", status: "shipped" }],
+        pageInfo: { mode: "offset", page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+      },
+      traceId: "trace-2",
+    });
+    const client = {
+      orders: { admin: { list: vi.fn(), retrieve: vi.fn(), events: { list: vi.fn() }, cancel: vi.fn(), close: vi.fn() } },
+      shipments: { list: shipmentsList },
+    };
+
+    const service = createOrderAdminService(client as never);
+    const shipments = await service.getOrderShipments("o-1");
+
+    expect(shipments).toHaveLength(1);
+    expect(shipments[0]?.shipmentNo).toBe("SH-1");
+    expect(shipmentsList).toHaveBeenCalledWith({ page: "1", pageSize: "20", orderId: "o-1" });
+  });
 });

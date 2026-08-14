@@ -255,27 +255,41 @@ SELECT
     CAST(
         COALESCE(
             SUM(
-                CAST(
-                    COALESCE(
-                        (
-                            SELECT b.payable_amount
-                            FROM commerce_order_amount_breakdown b
-                            WHERE b.tenant_id = o.tenant_id
-                              AND b.order_id = o.id
-                              AND b.allocation_type = 'order_total'
-                            LIMIT 1
-                        ),
-                        '0'
-                    ) AS BIGINT
-                )
+                -- Stored amounts are canonical integer cents, but legacy
+                -- writers have emitted major-unit decimals (e.g. "0.01");
+                -- normalize those to cents before summing, mirroring
+                -- `normalize_stored_money`. Truly invalid values fall through
+                -- to the plain bigint cast so they still fail loudly.
+                CASE
+                    WHEN payable ~ '^[0-9]+$' THEN CAST(payable AS BIGINT)
+                    WHEN payable ~ '^[0-9]+\.[0-9]{1,2}$'
+                        THEN CAST(split_part(payable, '.', 1) AS BIGINT) * 100
+                           + CAST(rpad(split_part(payable, '.', 2), 2, '0') AS BIGINT)
+                    ELSE CAST(payable AS BIGINT)
+                END
             ),
             0
         ) AS TEXT
     ) AS total_amount
-FROM commerce_order o
-WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
-  AND o.owner_user_id = CAST($3 AS TEXT)
+FROM (
+    SELECT
+        o.status,
+        COALESCE(
+            (
+                SELECT b.payable_amount
+                FROM commerce_order_amount_breakdown b
+                WHERE b.tenant_id = o.tenant_id
+                  AND b.order_id = o.id
+                  AND b.allocation_type = 'order_total'
+                LIMIT 1
+            ),
+            '0'
+        ) AS payable
+    FROM commerce_order o
+    WHERE o.tenant_id = CAST($1 AS TEXT)
+      AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+      AND o.owner_user_id = CAST($3 AS TEXT)
+) o
 "#;
 
 const LIST_PAYMENT_METHODS: &str = r#"

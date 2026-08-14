@@ -1,3 +1,4 @@
+import type { AuthTokenManager } from "@sdkwork/sdk-common";
 import {
   createClient,
   type SdkworkOrderBackendClient,
@@ -21,6 +22,12 @@ export interface BootstrapSdkworkOrderBackendSdkInput {
   tenantId?: string;
   organizationId?: string;
   platform?: string;
+  /**
+   * Live token manager injected by embedding hosts (e.g. the cloudrouter
+   * portal). When present it supplies per-request session tokens and takes
+   * precedence over the static auth/access token pair.
+   */
+  tokenManager?: AuthTokenManager;
 }
 
 export function createOrderBackendTransportClient(
@@ -34,6 +41,7 @@ export function createOrderBackendTransportClient(
     tenantId: input.tenantId,
     organizationId: input.organizationId,
     platform: input.platform ?? "pc",
+    tokenManager: input.tokenManager,
   };
   return createClient(config);
 }

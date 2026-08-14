@@ -143,6 +143,19 @@ export default defineConfig({
       ...loadUiDistAliases(),
       ...loadUiRuntimeAliases(),
       ...loadTsconfigAliases(),
+      // The testing library is a catalog dependency of sibling workspaces
+      // (sdkwork-cloudrouter) whose installs re-link it inside this repo's
+      // packages to a react-dom peer bound to a different react instance.
+      // Pinning it to the repo-root instance keeps the render layer on the
+      // same react as the aliased component layer.
+      {
+        find: /^@testing-library\/react$/,
+        replacement: path.join(root, "node_modules/@testing-library/react"),
+      },
+      {
+        find: /^@testing-library\/dom$/,
+        replacement: path.join(root, "node_modules/@testing-library/dom"),
+      },
       {
         find: "lucide-react",
         replacement: path.join(root, "node_modules/lucide-react"),
@@ -159,7 +172,20 @@ export default defineConfig({
     setupFiles: [path.join(root, "vitest.setup.ts")],
     server: {
       deps: {
-        inline: [/@radix-ui\/.*/, /@sdkwork\/ui-pc-react/],
+        // The order workspace is a member of sibling workspaces
+        // (sdkwork-cloudrouter) whose catalogs resolve `react`, `react-dom`,
+        // and the i18n/testing libraries to different pnpm store instances.
+        // Externalized those import their own react copy and every hook call
+        // breaks with "Cannot read properties of null". Inlining the whole
+        // react ecosystem keeps every react import on the local aliased
+        // instances regardless of which workspace installed last.
+        inline: [
+          /react/,
+          /react-dom/,
+          /@radix-ui\/.*/,
+          /@sdkwork\/ui-pc-react/,
+          /@testing-library\/react/,
+        ],
       },
     },
     include: [

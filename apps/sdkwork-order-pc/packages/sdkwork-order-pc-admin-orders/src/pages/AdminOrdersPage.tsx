@@ -10,6 +10,11 @@ import {
   Search,
 } from "lucide-react";
 import {
+  AdminOrdersIntlProvider,
+  useAdminOrdersI18n,
+  type AdminOrdersIntlProps,
+} from "../i18n/intl";
+import {
   Button,
   ConfirmDialog,
   DataTable,
@@ -33,7 +38,9 @@ import {
 import {
   getSdkworkOrderBackendSdkClient,
   type OrderDetail,
+  type OrderEvent,
   type OrderSummary,
+  type ShipmentSummary,
 } from "@sdkwork/order-pc-admin-core";
 import { createOrderAdminService, type OrderAdminService } from "../order-admin-service";
 
@@ -45,7 +52,7 @@ type OrderMutation = {
   orderLabel: string;
 };
 
-export interface SdkworkOrderAdminOrdersPageProps {
+export interface SdkworkOrderAdminOrdersPageProps extends AdminOrdersIntlProps {
   capabilities: SdkworkOrderAdminCapabilities;
   service?: OrderAdminService;
 }
@@ -53,6 +60,17 @@ export interface SdkworkOrderAdminOrdersPageProps {
 export interface SdkworkOrderAdminCapabilities {
   canManageOrders: boolean;
 }
+
+const STATUS_FILTER_OPTIONS = [
+  { labelKey: "admin.orders.status.pending_payment", value: "pending_payment" },
+  { labelKey: "admin.orders.status.paid", value: "paid" },
+  { labelKey: "admin.orders.status.fulfilled", value: "fulfilled" },
+  { labelKey: "admin.orders.status.completed", value: "completed" },
+  { labelKey: "admin.orders.status.cancelled", value: "cancelled" },
+  { labelKey: "admin.orders.status.expired", value: "expired" },
+  { labelKey: "admin.orders.status.refunding", value: "refunding" },
+  { labelKey: "admin.orders.status.refunded", value: "refunded" },
+];
 
 function formatTimestamp(value?: string): string {
   if (!value) return "--";
@@ -62,14 +80,43 @@ function formatTimestamp(value?: string): string {
 
 function resolveStatusVariant(status: string): StatusBadgeVariant {
   const normalized = status.toLowerCase();
-  if (["paid", "completed", "succeeded", "success"].includes(normalized)) return "success";
-  if (["pending", "pending_payment", "processing", "shipping"].includes(normalized)) return "warning";
-  if (["failed", "cancelled", "canceled", "rejected"].includes(normalized)) return "danger";
+  if (["paid", "completed", "succeeded", "success", "fulfilled"].includes(normalized)) return "success";
+  if (["pending", "pending_payment", "processing", "shipping", "refunding"].includes(normalized)) return "warning";
+  if (["failed", "cancelled", "canceled", "rejected", "expired"].includes(normalized)) return "danger";
   if (["closed", "refunded", "archived"].includes(normalized)) return "secondary";
   return "default";
 }
 
-export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedService }: SdkworkOrderAdminOrdersPageProps) {
+function resolveActorLabel(actorType: string, t: (key: string, fallback: string) => string): string {
+  const normalized = actorType.toLowerCase();
+  if (["system", "platform"].includes(normalized)) return t("admin.orders.actor.system", "System");
+  if (["user", "buyer", "customer"].includes(normalized)) return t("admin.orders.actor.user", "User");
+  if (["partner"].includes(normalized)) return t("admin.orders.actor.partner", "Partner");
+  if (["operator", "admin", "manager"].includes(normalized)) return t("admin.orders.actor.operator", "Operator");
+  return actorType || t("admin.orders.actor.unknown", "Unknown actor");
+}
+
+export function SdkworkOrderAdminOrdersPage({
+  capabilities,
+  service: injectedService,
+  locale,
+  messages,
+}: SdkworkOrderAdminOrdersPageProps) {
+  return (
+    <AdminOrdersIntlProvider locale={locale} messages={messages}>
+      <AdminOrdersPageInner capabilities={capabilities} service={injectedService} />
+    </AdminOrdersIntlProvider>
+  );
+}
+
+function AdminOrdersPageInner({
+  capabilities,
+  service: injectedService,
+}: {
+  capabilities: SdkworkOrderAdminCapabilities;
+  service?: OrderAdminService;
+}) {
+  const { t } = useAdminOrdersI18n();
   const service = useMemo(
     () => injectedService ?? createOrderAdminService(getSdkworkOrderBackendSdkClient()),
     [injectedService],
@@ -89,6 +136,8 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OrderDetail | null>(null);
+  const [events, setEvents] = useState<OrderEvent[]>([]);
+  const [shipments, setShipments] = useState<ShipmentSummary[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [mutationTarget, setMutationTarget] = useState<OrderMutation | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -109,34 +158,46 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
       setTotalPages(Math.max(1, result.totalPages));
     }).catch(() => {
       if (!active) return;
-      setListError("订单列表加载失败，请检查 commerce.orders.read 权限与网络连接。");
+      setListError(t("admin.orders.message.listFailed", "Order list loading failed. Check commerce.orders.read permission and network."));
       setOrders([]);
       setTotalItems(0);
     }).finally(() => {
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [page, refreshKey, searchQuery, service, statusFilter]);
+  }, [page, refreshKey, searchQuery, service, statusFilter, t]);
 
   useEffect(() => {
     if (!selectedId) {
       setDetail(null);
+      setEvents([]);
+      setShipments([]);
       setDetailError(null);
       return;
     }
     let active = true;
     setDetailLoading(true);
     setDetailError(null);
-    void service.getOrder(selectedId)
-      .then((value) => { if (active) setDetail(value); })
-      .catch(() => {
-        if (!active) return;
-        setDetail(null);
-        setDetailError("订单详情加载失败，请稍后重试。");
-      })
-      .finally(() => { if (active) setDetailLoading(false); });
+    void Promise.all([
+      service.getOrder(selectedId),
+      service.getOrderEvents(selectedId).catch(() => [] as OrderEvent[]),
+      service.getOrderShipments(selectedId).catch(() => [] as ShipmentSummary[]),
+    ]).then(([value, orderEvents, orderShipments]) => {
+      if (!active) return;
+      setDetail(value);
+      setEvents(orderEvents);
+      setShipments(orderShipments);
+    }).catch(() => {
+      if (!active) return;
+      setDetail(null);
+      setEvents([]);
+      setShipments([]);
+      setDetailError(t("admin.orders.message.detailFailed", "Order detail loading failed. Please retry later."));
+    }).finally(() => {
+      if (active) setDetailLoading(false);
+    });
     return () => { active = false; };
-  }, [selectedId, service]);
+  }, [selectedId, service, t]);
 
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -165,10 +226,14 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
       } else {
         await service.closeOrder(target.orderId);
       }
-      setMessage(`订单 ${target.orderLabel} 已${target.action === "cancel" ? "取消" : "关闭"}。`);
+      setMessage(t(
+        target.action === "cancel" ? "admin.orders.message.cancelled" : "admin.orders.message.closed",
+        target.action === "cancel" ? "Order {{label}} has been cancelled." : "Order {{label}} has been closed.",
+        { label: target.orderLabel },
+      ));
       setRefreshKey((current) => current + 1);
     } catch {
-      setListError("操作失败，请检查 commerce.orders.manage 权限与订单当前状态。");
+      setListError(t("admin.orders.message.actionFailed", "Operation failed. Check commerce.orders.manage permission and the current order status."));
     } finally {
       setBusyId(null);
       setMutationTarget(null);
@@ -178,7 +243,7 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
   const columns = useMemo<DataTableColumn<OrderSummary>[]>(() => [
     {
       id: "order",
-      header: "订单",
+      header: t("admin.orders.column.order", "Order"),
       width: "34%",
       cell: (order) => (
         <button
@@ -197,7 +262,7 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
     },
     {
       id: "status",
-      header: "状态",
+      header: t("admin.orders.column.status", "Status"),
       width: "18%",
       cell: (order) => (
         <StatusBadge
@@ -211,7 +276,7 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
     {
       align: "right",
       id: "amount",
-      header: "金额",
+      header: t("admin.orders.column.amount", "Amount"),
       width: "20%",
       cell: (order) => (
         <span className="font-mono text-sm font-semibold tabular-nums text-[var(--sdk-color-text-primary)]">
@@ -221,7 +286,7 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
     },
     {
       id: "partner",
-      header: "归属合作伙伴",
+      header: t("admin.orders.column.partner", "Partner"),
       width: "16%",
       cell: (order) =>
         order.partnerName ? (
@@ -239,7 +304,7 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
     },
     {
       id: "createdAt",
-      header: "创建时间",
+      header: t("admin.orders.column.createdAt", "Created at"),
       width: "28%",
       cell: (order) => (
         <time className="whitespace-nowrap text-sm text-[var(--sdk-color-text-secondary)]" dateTime={order.createdAt}>
@@ -247,33 +312,39 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
         </time>
       ),
     },
-  ], []);
+  ], [t]);
 
   const activeFilterCount = Number(Boolean(statusFilter)) + Number(Boolean(searchQuery));
 
   return (
-    <div aria-label="订单监管" className="space-y-4">
+    <div aria-label={t("admin.orders.title", "Order supervision")} className="space-y-4">
       <form onSubmit={applyFilters}>
         <FilterBar
-          summary={activeFilterCount ? `已应用 ${activeFilterCount} 个筛选条件` : undefined}
-          title="筛选条件"
+          summary={activeFilterCount ? t("admin.orders.filter.applied", "{{count}} filter(s) applied", { count: activeFilterCount }) : undefined}
+          title={t("admin.orders.filter.title", "Filters")}
         >
           <FilterBarSection>
             <label className="min-w-[12rem] flex-1 space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
-              <span>状态</span>
-              <Input
-                placeholder="例如 pending_payment"
+              <span>{t("admin.orders.filter.status", "Status")}</span>
+              <select
+                aria-label={t("admin.orders.filter.status", "Status")}
+                className="h-9 w-full rounded-[var(--sdk-radius-field)] border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] px-3 text-sm text-[var(--sdk-color-text-primary)] outline-none transition-colors focus-visible:border-[var(--sdk-color-brand-primary)]"
                 value={draftStatus}
                 onChange={(event) => setDraftStatus(event.target.value)}
-              />
+              >
+                <option value="">{t("admin.orders.filter.status", "Status")}</option>
+                {STATUS_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{t(option.labelKey, option.value)}</option>
+                ))}
+              </select>
             </label>
             <label className="min-w-[16rem] flex-[1.5] space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
-              <span>搜索</span>
+              <span>{t("admin.orders.filter.search", "Search")}</span>
               <div className="relative">
                 <Search aria-hidden="true" className="pointer-events-none absolute left-3 inset-y-0 my-auto h-4 w-4 text-[var(--sdk-color-text-muted)]" />
                 <Input
                   className="pl-9"
-                  placeholder="订单号、主题或关联标识"
+                  placeholder={t("admin.orders.filter.searchPlaceholder", "Order no., subject or reference")}
                   value={draftQuery}
                   onChange={(event) => setDraftQuery(event.target.value)}
                 />
@@ -283,11 +354,11 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
           <FilterBarActions>
             <Button disabled={loading} type="button" variant="outline" onClick={resetFilters}>
               <RotateCcw aria-hidden="true" className="mr-2 h-4 w-4" />
-              重置
+              {t("admin.orders.filter.reset", "Reset")}
             </Button>
             <Button disabled={loading} type="submit">
               <Search aria-hidden="true" className="mr-2 h-4 w-4" />
-              查询
+              {t("admin.orders.filter.query", "Query")}
             </Button>
           </FilterBarActions>
         </FilterBar>
@@ -299,21 +370,21 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
       <DataTable
         columns={columns}
         density="compact"
-        description={`当前显示 ${orders.length} 条，共 ${totalItems} 条订单`}
-        emptyDescription={activeFilterCount ? "请调整筛选条件后重试。" : "平台订单将在这里集中展示。"}
-        emptyTitle={activeFilterCount ? "没有符合条件的订单" : "暂无订单"}
+        description={t("admin.orders.table.description", "Showing {{count}} of {{total}} orders", { count: orders.length, total: totalItems })}
+        emptyDescription={activeFilterCount ? t("admin.orders.table.filteredEmptyDescription", "No orders match. Adjust the filters and retry.") : t("admin.orders.table.emptyDescription", "Platform orders will be listed here.")}
+        emptyTitle={t("admin.orders.table.emptyTitle", "No orders")}
         footer={(
           <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="min-w-0 truncate text-sm tabular-nums text-[var(--sdk-color-text-secondary)]">
-              共 {totalItems.toLocaleString()} 条记录
+              {t("admin.orders.table.totalRecords", "{{count}} records in total", { count: totalItems })}
             </span>
             <div className="grid w-full grid-cols-[2.25rem_minmax(4.5rem,1fr)_2.25rem] items-center gap-1 sm:w-auto sm:grid-cols-[2.25rem_minmax(4.5rem,auto)_2.25rem]">
               <Button
-                aria-label="上一页"
+                aria-label={t("admin.orders.table.prevPage", "Previous page")}
                 className="h-9 w-9 p-0"
                 disabled={page <= 1 || loading}
                 size="icon"
-                title="上一页"
+                title={t("admin.orders.table.prevPage", "Previous page")}
                 type="button"
                 variant="outline"
                 onClick={() => setPage((value) => value - 1)}
@@ -321,7 +392,7 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
                 <ChevronLeft aria-hidden="true" className="h-4 w-4" />
               </Button>
               <span
-                aria-label={`第 ${page} 页，共 ${totalPages} 页`}
+                aria-label={t("admin.orders.table.pageInfo", "Page {{page}} of {{totalPages}}", { page, totalPages })}
                 className="flex h-9 items-center justify-center gap-2 rounded-[var(--sdk-radius-field)] border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] px-3 text-sm tabular-nums text-[var(--sdk-color-text-muted)]"
               >
                 <strong className="font-semibold text-[var(--sdk-color-text-primary)]">{page}</strong>
@@ -329,11 +400,11 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
                 <span aria-hidden="true">{totalPages}</span>
               </span>
               <Button
-                aria-label="下一页"
+                aria-label={t("admin.orders.table.nextPage", "Next page")}
                 className="h-9 w-9 p-0"
                 disabled={page >= totalPages || loading}
                 size="icon"
-                title="下一页"
+                title={t("admin.orders.table.nextPage", "Next page")}
                 type="button"
                 variant="outline"
                 onClick={() => setPage((value) => value + 1)}
@@ -345,68 +416,164 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
         )}
         getRowId={(order) => order.orderId}
         loading={loading && orders.length === 0}
-        loadingLabel="正在加载订单..."
+        loadingLabel={t("admin.orders.loading", "Loading orders...")}
         onRowClick={(order) => setSelectedId(order.orderId)}
         rowActions={(order) => (
           <div className="flex items-center justify-end gap-1">
-            <Button aria-label={`查看订单详情：${order.subject || order.orderSn || order.orderId}`} disabled={busyId === order.orderId} size="sm" title="查看详情" type="button" variant="ghost" onClick={() => setSelectedId(order.orderId)}>
-              <Eye aria-hidden="true" className="mr-1.5 h-4 w-4" />详情
+            <Button aria-label={`${t("admin.orders.action.detail", "Details")} — ${order.subject || order.orderSn || order.orderId}`} disabled={busyId === order.orderId} size="sm" title={t("admin.orders.action.detail", "Details")} type="button" variant="ghost" onClick={() => setSelectedId(order.orderId)}>
+              <Eye aria-hidden="true" className="mr-1.5 h-4 w-4" />{t("admin.orders.action.detail", "Details")}
             </Button>
             {capabilities.canManageOrders ? (
               <>
-                <Button disabled={Boolean(busyId)} size="sm" title="取消订单" type="button" variant="outline" onClick={() => setMutationTarget({ action: "cancel", orderId: order.orderId, orderLabel: order.orderSn || order.orderId })}>
-                  <Ban aria-hidden="true" className="mr-1.5 h-4 w-4" />取消
+                <Button disabled={Boolean(busyId)} size="sm" title={t("admin.orders.action.cancel", "Cancel")} type="button" variant="outline" onClick={() => setMutationTarget({ action: "cancel", orderId: order.orderId, orderLabel: order.orderSn || order.orderId })}>
+                  <Ban aria-hidden="true" className="mr-1.5 h-4 w-4" />{t("admin.orders.action.cancel", "Cancel")}
                 </Button>
-                <Button disabled={Boolean(busyId)} size="sm" title="关闭订单" type="button" variant="outline" onClick={() => setMutationTarget({ action: "close", orderId: order.orderId, orderLabel: order.orderSn || order.orderId })}>
-                  <Archive aria-hidden="true" className="mr-1.5 h-4 w-4" />关闭
+                <Button disabled={Boolean(busyId)} size="sm" title={t("admin.orders.action.close", "Close")} type="button" variant="outline" onClick={() => setMutationTarget({ action: "close", orderId: order.orderId, orderLabel: order.orderSn || order.orderId })}>
+                  <Archive aria-hidden="true" className="mr-1.5 h-4 w-4" />{t("admin.orders.action.close", "Close")}
                 </Button>
               </>
             ) : null}
           </div>
         )}
-        rowActionsLabel="操作"
+        rowActionsLabel={t("admin.orders.action.detail", "Details")}
         rows={orders}
         stickyHeader
-        title="订单列表"
+        title={t("admin.orders.table.title", "Order list")}
         toolbar={(
-          <Button aria-label="刷新订单" disabled={loading} size="icon" title="刷新订单" type="button" variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>
+          <Button aria-label={t("admin.orders.refresh", "Refresh")} disabled={loading} size="icon" title={t("admin.orders.refresh", "Refresh")} type="button" variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>
             <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         )}
       />
 
       <Drawer open={Boolean(selectedId)} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
-        <DrawerContent size="md">
+        <DrawerContent size="xl">
           <DrawerHeader>
-            <DrawerTitle>订单详情</DrawerTitle>
+            <DrawerTitle>{t("admin.orders.detail.title", "Order detail")}</DrawerTitle>
             <DrawerDescription>{detail?.orderSn ?? selectedId}</DrawerDescription>
           </DrawerHeader>
           <DrawerBody>
-            {detailLoading ? <LoadingBlock label="正在加载订单详情..." /> : null}
+            {detailLoading ? <LoadingBlock label={t("admin.orders.loadingDetail", "Loading order detail...")} /> : null}
             {detailError ? <StatusNotice tone="danger">{detailError}</StatusNotice> : null}
             {detail ? (
-              <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
-                <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">订单号</dt><dd className="mt-1 break-all font-mono text-sm text-[var(--sdk-color-text-primary)]">{detail.orderSn}</dd></div>
-                <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">状态</dt><dd className="mt-1"><StatusBadge label={detail.statusName || detail.status} showIcon status={detail.status} variant={resolveStatusVariant(detail.status)} /></dd></div>
-                <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">金额</dt><dd className="mt-1 font-mono text-sm font-semibold tabular-nums text-[var(--sdk-color-text-primary)]">{detail.totalAmount}</dd></div>
-                <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">数量</dt><dd className="mt-1 text-sm tabular-nums text-[var(--sdk-color-text-primary)]">{detail.quantity}</dd></div>
-              </dl>
+              <div className="space-y-6">
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.orderSn", "Order no.")}</dt><dd className="mt-1 break-all font-mono text-sm text-[var(--sdk-color-text-primary)]">{detail.orderSn}</dd></div>
+                  <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.status", "Status")}</dt><dd className="mt-1"><StatusBadge label={detail.statusName || detail.status} showIcon status={detail.status} variant={resolveStatusVariant(detail.status)} /></dd></div>
+                  <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.amount", "Amount")}</dt><dd className="mt-1 font-mono text-sm font-semibold tabular-nums text-[var(--sdk-color-text-primary)]">{detail.totalAmount}</dd></div>
+                  {detail.paidAmount ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.paidAmount", "Paid amount")}</dt><dd className="mt-1 font-mono text-sm tabular-nums text-[var(--sdk-color-text-primary)]">{detail.paidAmount}</dd></div> : null}
+                  {detail.discountAmount ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.discountAmount", "Discount")}</dt><dd className="mt-1 font-mono text-sm tabular-nums text-[var(--sdk-color-text-primary)]">{detail.discountAmount}</dd></div> : null}
+                  <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.quantity", "Quantity")}</dt><dd className="mt-1 text-sm tabular-nums text-[var(--sdk-color-text-primary)]">{detail.quantity}</dd></div>
+                  {detail.paymentMethod ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.paymentMethod", "Payment method")}</dt><dd className="mt-1 text-sm text-[var(--sdk-color-text-primary)]">{detail.paymentMethod}</dd></div> : null}
+                  {detail.outTradeNo ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.outTradeNo", "Out trade no.")}</dt><dd className="mt-1 break-all font-mono text-sm text-[var(--sdk-color-text-primary)]">{detail.outTradeNo}</dd></div> : null}
+                  {detail.transactionId ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.transactionId", "Transaction ID")}</dt><dd className="mt-1 break-all font-mono text-sm text-[var(--sdk-color-text-primary)]">{detail.transactionId}</dd></div> : null}
+                  {detail.payTime ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.payTime", "Paid at")}</dt><dd className="mt-1 text-sm text-[var(--sdk-color-text-primary)]">{formatTimestamp(detail.payTime)}</dd></div> : null}
+                  {detail.expireTime ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.expireTime", "Expires at")}</dt><dd className="mt-1 text-sm text-[var(--sdk-color-text-primary)]">{formatTimestamp(detail.expireTime)}</dd></div> : null}
+                  {detail.partnerName ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.partner", "Partner")}</dt><dd className="mt-1 text-sm text-[var(--sdk-color-text-primary)]">{detail.partnerName}</dd></div> : null}
+                </dl>
+
+                {detail.items.length > 0 ? (
+                  <section>
+                    <h4 className="mb-2 text-sm font-semibold text-[var(--sdk-color-text-primary)]">{t("admin.orders.detail.items", "Items")}</h4>
+                    <div className="overflow-x-auto rounded-lg border border-[var(--sdk-color-border-default)]">
+                      <table className="w-full min-w-[32rem] text-left text-sm">
+                        <thead className="border-b border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-muted)]">
+                          <tr className="text-xs font-medium text-[var(--sdk-color-text-muted)]">
+                            <th className="px-4 py-2.5">{t("admin.orders.detail.item.product", "Product")}</th>
+                            <th className="px-4 py-2.5 text-right">{t("admin.orders.detail.item.price", "Unit price")}</th>
+                            <th className="px-4 py-2.5 text-right">{t("admin.orders.detail.item.quantity", "Qty")}</th>
+                            <th className="px-4 py-2.5 text-right">{t("admin.orders.detail.item.subtotal", "Subtotal")}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--sdk-color-border-default)]">
+                          {detail.items.map((item) => (
+                            <tr key={item.id}>
+                              <td className="px-4 py-2.5 text-[var(--sdk-color-text-primary)]">{item.productName}</td>
+                              <td className="px-4 py-2.5 text-right font-mono tabular-nums text-[var(--sdk-color-text-secondary)]">{item.unitPrice}</td>
+                              <td className="px-4 py-2.5 text-right tabular-nums text-[var(--sdk-color-text-secondary)]">{item.quantity}</td>
+                              <td className="px-4 py-2.5 text-right font-mono font-semibold tabular-nums text-[var(--sdk-color-text-primary)]">{item.totalAmount}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                ) : null}
+
+                <section>
+                  <h4 className="mb-2 text-sm font-semibold text-[var(--sdk-color-text-primary)]">
+                    {t("admin.orders.detail.fulfillment", "Fulfillment")}
+                  </h4>
+                  {shipments.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-[var(--sdk-color-border-default)] px-4 py-4 text-center text-sm text-[var(--sdk-color-text-muted)]">
+                      {t("admin.orders.detail.fulfillment.empty", "No shipments for this order yet.")}
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-[var(--sdk-color-border-default)] rounded-lg border border-[var(--sdk-color-border-default)]">
+                      {shipments.map((shipment) => (
+                        <li key={shipment.shipmentId} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="truncate font-mono text-sm font-semibold text-[var(--sdk-color-text-primary)]">
+                              {shipment.shipmentNo}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs text-[var(--sdk-color-text-muted)]">
+                              {[shipment.carrierCode, shipment.trackingNo].filter(Boolean).join(" · ") || shipment.fulfillmentId}
+                            </p>
+                          </div>
+                          <StatusBadge label={shipment.status} showIcon status={shipment.status} variant={resolveStatusVariant(shipment.status)} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section>
+                  <h4 className="mb-2 text-sm font-semibold text-[var(--sdk-color-text-primary)]">{t("admin.orders.detail.events", "Order timeline")}</h4>
+                  {events.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-[var(--sdk-color-border-default)] px-4 py-6 text-center text-sm text-[var(--sdk-color-text-muted)]">
+                      {t("admin.orders.detail.events.empty", "No events recorded yet.")}
+                    </p>
+                  ) : (
+                    <ol className="relative ml-2 space-y-4 border-l border-[var(--sdk-color-border-default)] pl-4">
+                      {[...events]
+                        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+                        .map((event) => (
+                        <li key={event.id} className="relative">
+                          <span aria-hidden="true" className="absolute -left-[1.31rem] top-1 h-2 w-2 rounded-full bg-[var(--sdk-color-brand-primary)]" />
+                          <p className="text-sm font-medium text-[var(--sdk-color-text-primary)]">
+                            {event.message || `${event.fromStatus ?? ""} → ${event.toStatus}`}
+                          </p>
+                          <p className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[var(--sdk-color-text-muted)]">
+                            <span>{resolveActorLabel(event.actorType, t)}</span>
+                            {event.eventType ? <span className="font-mono">{event.eventType}</span> : null}
+                            <time dateTime={event.createdAt}>{formatTimestamp(event.createdAt)}</time>
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </section>
+              </div>
             ) : null}
           </DrawerBody>
-          <DrawerFooter><Button onClick={() => setSelectedId(null)} type="button" variant="secondary">关闭</Button></DrawerFooter>
+          <DrawerFooter><Button onClick={() => setSelectedId(null)} type="button" variant="secondary">{t("admin.orders.detail.close", "Close")}</Button></DrawerFooter>
         </DrawerContent>
       </Drawer>
 
       <ConfirmDialog
-        cancelLabel="返回"
+        cancelLabel={t("admin.orders.confirm.back", "Back")}
         closeOnConfirm={false}
-        confirmLabel={mutationTarget?.action === "cancel" ? "确认取消" : "确认关闭"}
+        confirmLabel={mutationTarget?.action === "cancel" ? t("admin.orders.confirm.cancelLabel", "Confirm cancel") : t("admin.orders.confirm.closeLabel", "Confirm close")}
         confirmLoading={Boolean(busyId)}
-        description={mutationTarget ? `${mutationTarget.action === "cancel" ? "取消" : "关闭"}订单 ${mutationTarget.orderLabel} 后，后续履约流程将受到影响。` : undefined}
+        description={mutationTarget ? t(
+          mutationTarget.action === "cancel" ? "admin.orders.confirm.cancelDescription" : "admin.orders.confirm.closeDescription",
+          mutationTarget.action === "cancel" ? "Cancelling order {{label}} affects downstream fulfillment." : "Closing order {{label}} affects downstream fulfillment.",
+          { label: mutationTarget.orderLabel },
+        ) : undefined}
         onConfirm={() => { if (mutationTarget) void mutateOrder(mutationTarget); }}
         onOpenChange={(open) => { if (!open && !busyId) setMutationTarget(null); }}
         open={Boolean(mutationTarget)}
-        title={mutationTarget?.action === "cancel" ? "取消订单" : "关闭订单"}
+        title={mutationTarget?.action === "cancel" ? t("admin.orders.confirm.cancelTitle", "Cancel order") : t("admin.orders.confirm.closeTitle", "Close order")}
         tone="warning"
       />
     </div>

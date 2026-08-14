@@ -2,6 +2,13 @@ import { useMemo } from "react";
 
 import { sdkworkOrderPcRuntimeIdentity } from "@sdkwork/order-pc-core";
 import { SdkworkOrderAdminOrdersPage } from "@sdkwork/order-pc-admin-orders";
+import {
+  SdkworkOrderAfterSalesPage,
+  SdkworkOrderRefundsPage,
+  SdkworkOrderShipmentsPage,
+  SdkworkOrderTradeWorkbenchPage,
+  SdkworkOrderWithdrawalsPage,
+} from "@sdkwork/order-pc-admin-trade";
 import { SdkworkOrderPage } from "@sdkwork/order-pc-order";
 import { SdkworkThemeProvider } from "@sdkwork/ui-pc-react";
 
@@ -10,6 +17,28 @@ function resolveStandaloneSurface(): "app" | "backend-admin" {
     return "app";
   }
   return window.location.pathname.startsWith("/admin") ? "backend-admin" : "app";
+}
+
+export function resolveAdminScreen(pathname: string): string {
+  if (pathname.startsWith("/admin/trade/orders")) {
+    return "trade-orders";
+  }
+  if (pathname.startsWith("/admin/trade/after-sales")) {
+    return "trade-after-sales";
+  }
+  if (pathname.startsWith("/admin/trade/shipments")) {
+    return "trade-shipments";
+  }
+  if (pathname.startsWith("/admin/trade/refunds")) {
+    return "trade-refunds";
+  }
+  if (pathname.startsWith("/admin/trade/withdrawals")) {
+    return "trade-withdrawals";
+  }
+  if (pathname.startsWith("/admin/trade")) {
+    return "trade-workbench";
+  }
+  return "orders";
 }
 
 export interface OrderAppShellProps {
@@ -44,10 +73,11 @@ export interface OrderAppShellProps {
  * Composes:
  * - `SdkworkThemeProvider` — provides the design tokens via CSS variables.
  * - `SdkworkOrderPage` — the order capability PC surface.
+ * - Trading center admin pages — dispatched by the `/admin/trade/*` path.
  *
  * The shell intentionally stays thin: routing, global navigation, and session
- * provisioning are owned by composition hosts (`sdkwork-mall`, …), not by this
- * standalone capability build.
+ * provisioning are owned by composition hosts (`sdkwork-mall`,
+ * `sdkwork-cloudrouter`, …), not by this standalone capability build.
  */
 export function OrderAppShell({
   authConfigured = true,
@@ -67,10 +97,25 @@ export function OrderAppShell({
     ),
     [orderController, locale, messages],
   );
-  const adminPage = useMemo(
-    () => <SdkworkOrderAdminOrdersPage capabilities={{ canManageOrders: true }} />,
-    [],
-  );
+  const adminPage = useMemo(() => {
+    const screen = resolveAdminScreen(window.location.pathname);
+    switch (screen) {
+      case "trade-orders":
+        return <SdkworkOrderAdminOrdersPage capabilities={{ canManageOrders: true }} />;
+      case "trade-after-sales":
+        return <SdkworkOrderAfterSalesPage canManage />;
+      case "trade-shipments":
+        return <SdkworkOrderShipmentsPage canManage />;
+      case "trade-refunds":
+        return <SdkworkOrderRefundsPage canManage />;
+      case "trade-withdrawals":
+        return <SdkworkOrderWithdrawalsPage canManage />;
+      case "trade-workbench":
+        return <SdkworkOrderTradeWorkbenchPage />;
+      default:
+        return <SdkworkOrderAdminOrdersPage capabilities={{ canManageOrders: true }} />;
+    }
+  }, [surface]);
 
   return (
     <SdkworkThemeProvider defaultTheme={theme}>
@@ -88,12 +133,17 @@ export function OrderAppShell({
           ) : null}
           <p className="order-shell-subtitle">
             {surface === "backend-admin"
-              ? "Order backend-admin surface — operator list, cancel, and close."
+              ? "Order backend-admin surface — trading center, order supervision, reviews, and fulfillment."
               : "Order capability PC surface — aligned with sdkwork-specs building-block model."}
           </p>
           <nav className="order-shell-nav" aria-label="Order surfaces">
             <a href="/app/order">买家订单</a>
             <a href="/admin/orders">订单监管</a>
+            <a href="/admin/trade/overview">交易中心</a>
+            <a href="/admin/trade/after-sales">售后单</a>
+            <a href="/admin/trade/shipments">发货管理</a>
+            <a href="/admin/trade/refunds">退款单</a>
+            <a href="/admin/trade/withdrawals">提现单</a>
           </nav>
         </header>
         <section className="order-shell-body" role="main">
