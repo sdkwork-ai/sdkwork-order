@@ -1,7 +1,7 @@
 import { backendApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { CancelOrderRequest, CloseOrderRequest, ConfirmOrderPaymentRequest, OrderCancellation, OrderDetail, OrderEvent, OrderSummary, PageInfo, SdkWorkCommandData } from '../types';
+import type { AdminCreateRefundRequest, CancelOrderRequest, CloseOrderRequest, ConfirmOrderPaymentRequest, OrderCancellation, OrderDetail, OrderEvent, OrderSummary, PageInfo, SdkWorkCommandData } from '../types';
 
 
 export interface OrderAdminOrdersOrdersPaymentConfirmationsCreateParams {
@@ -51,6 +51,30 @@ export class OrderAdminOrdersOrdersAdminEventsApi {
   }
 }
 
+export interface OrderAdminOrdersOrdersAdminRefundRequestsCreateParams {
+  idempotencyKey: string;
+}
+
+export class OrderAdminOrdersOrdersAdminRefundRequestsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Create an order refund request from the admin surface */
+  async create(orderId: string, body: AdminCreateRefundRequest, params: OrderAdminOrdersOrdersAdminRefundRequestsCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/refund_requests`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+  }
+}
+
 export interface OrderAdminOrdersOrdersAdminCancellationsListParams {
   status?: string;
   page?: string;
@@ -79,6 +103,8 @@ export class OrderAdminOrdersOrdersAdminCancellationsApi {
 export interface OrderAdminOrdersOrdersAdminListParams {
   status?: string;
   q?: string;
+  createdFrom?: string;
+  createdTo?: string;
   page?: string;
   pageSize?: string;
 }
@@ -94,11 +120,13 @@ export interface OrderAdminOrdersOrdersAdminCloseParams {
 export class OrderAdminOrdersOrdersAdminApi {
   private client: HttpClient;
   public readonly cancellations: OrderAdminOrdersOrdersAdminCancellationsApi;
+  public readonly refundRequests: OrderAdminOrdersOrdersAdminRefundRequestsApi;
   public readonly events: OrderAdminOrdersOrdersAdminEventsApi;
 
   constructor(client: HttpClient) {
     this.client = client;
     this.cancellations = new OrderAdminOrdersOrdersAdminCancellationsApi(client);
+    this.refundRequests = new OrderAdminOrdersOrdersAdminRefundRequestsApi(client);
     this.events = new OrderAdminOrdersOrdersAdminEventsApi(client);
   }
 
@@ -108,6 +136,8 @@ export class OrderAdminOrdersOrdersAdminApi {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'q', value: params?.q, style: 'form', explode: true, allowReserved: false },
+      { name: 'created_from', value: params?.createdFrom, style: 'form', explode: true, allowReserved: false },
+      { name: 'created_to', value: params?.createdTo, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);

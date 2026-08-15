@@ -6,6 +6,10 @@ pub struct OrderManagementListQuery {
     pub organization_id: Option<String>,
     pub status: Option<String>,
     pub q: Option<String>,
+    /// Inclusive lower bound on the order creation timestamp.
+    pub created_from: Option<String>,
+    /// Inclusive upper bound on the order creation timestamp.
+    pub created_to: Option<String>,
     pub page: i64,
     pub page_size: i64,
 }
@@ -177,6 +181,28 @@ impl OrderManagementListQuery {
         page: Option<i64>,
         page_size: Option<i64>,
     ) -> Result<Self, CommerceServiceError> {
+        Self::with_created_range(
+            tenant_id,
+            organization_id,
+            status,
+            q,
+            None,
+            None,
+            page,
+            page_size,
+        )
+    }
+
+    pub fn with_created_range(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        status: Option<&str>,
+        q: Option<&str>,
+        created_from: Option<&str>,
+        created_to: Option<&str>,
+        page: Option<i64>,
+        page_size: Option<i64>,
+    ) -> Result<Self, CommerceServiceError> {
         crate::validation::require_non_empty("tenant_id", tenant_id)?;
         let (page, page_size) = crate::validation::offset_list_params(page, page_size)?;
         Ok(Self {
@@ -184,6 +210,8 @@ impl OrderManagementListQuery {
             organization_id: optional_text(organization_id),
             status: optional_text(status),
             q: optional_text(q),
+            created_from: optional_text(created_from),
+            created_to: optional_text(created_to),
             page,
             page_size,
         })

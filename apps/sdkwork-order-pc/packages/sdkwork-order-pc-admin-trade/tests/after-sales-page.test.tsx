@@ -44,7 +44,7 @@ describe("SdkworkOrderAfterSalesPage", () => {
     render(<SdkworkOrderAfterSalesPage canManage={false} service={createServiceStub() as never} />);
 
     await waitFor(() => expect(screen.getByText("AS-2026-1")).toBeInTheDocument());
-    expect(screen.getByText("refund")).toBeInTheDocument();
+    expect(screen.getByText("退款")).toBeInTheDocument();
     expect(screen.getByText(/99\.00/)).toBeInTheDocument();
   });
 
@@ -75,6 +75,7 @@ describe("SdkworkOrderAfterSalesPage", () => {
       expect(service.reviewAfterSales).toHaveBeenCalledWith(
         "as-1",
         expect.objectContaining({ action: "approve", approvedAmount: "50.00", reviewComment: "partial refund" }),
+        expect.any(String),
       );
     });
   });

@@ -37,15 +37,15 @@ ON CONFLICT (id) DO UPDATE SET
     updated_at = EXCLUDED.updated_at;
 
 -- Platform cash-to-points exchange rule. `rate` is the base points per base
--- currency unit and `remark` carries the recharge settings payload
--- (`baseCurrencyCode` + `currencyToCnyRates`) shared by the order read store
--- and the Cloud Router admin store.
+-- currency unit; `base_currency_code` and the `commerce_exchange_currency_rate`
+-- child rows carry the structured recharge settings shared by the order read
+-- store and the Cloud Router admin store. `remark` is a plain free-text note.
 INSERT INTO commerce_exchange_rule (
     id, tenant_id, organization_id, rule_no, source_asset_type, target_asset_type,
-    rate, status, remark, request_no, idempotency_key, created_at, updated_at
+    rate, status, base_currency_code, remark, request_no, idempotency_key, created_at, updated_at
 ) VALUES
     ('platform-exchange-rule-cash-points', '100001', '0', 'CASH_TO_POINTS', 'cash', 'points', '10', 'active',
-     '{"baseCurrencyCode":"CNY","currencyToCnyRates":{"CNY":"1","USD":"7"}}',
+     'CNY', NULL,
      'seed-exchange-rule-1', 'seed-exchange-rule-1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO UPDATE SET
     rule_no = EXCLUDED.rule_no,
@@ -53,9 +53,21 @@ ON CONFLICT (id) DO UPDATE SET
     target_asset_type = EXCLUDED.target_asset_type,
     rate = EXCLUDED.rate,
     status = EXCLUDED.status,
+    base_currency_code = EXCLUDED.base_currency_code,
     remark = EXCLUDED.remark,
     request_no = EXCLUDED.request_no,
     idempotency_key = EXCLUDED.idempotency_key,
+    updated_at = EXCLUDED.updated_at;
+
+INSERT INTO commerce_exchange_currency_rate (
+    id, rule_id, currency_code, rate, created_at, updated_at
+) VALUES
+    ('platform-rate-cash-points-CNY', 'platform-exchange-rule-cash-points', 'CNY', '1',
+     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('platform-rate-cash-points-USD', 'platform-exchange-rule-cash-points', 'USD', '7',
+     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (rule_id, currency_code) DO UPDATE SET
+    rate = EXCLUDED.rate,
     updated_at = EXCLUDED.updated_at;
 
 -- Token Bank recharge plans. Amounts are stored as major-unit decimals.

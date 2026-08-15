@@ -3,9 +3,12 @@ import { SdkworkOrderAdminOrdersPage } from "@sdkwork/order-pc-admin-orders";
 import type { TradeAdminService } from "./trade-admin-service";
 import type { TradeAdminIntlProps } from "./i18n/intl";
 import {
+  SdkworkOrderAccountValuePackagesPage,
   SdkworkOrderAfterSalesPage,
+  SdkworkOrderCancellationsPage,
   SdkworkOrderRefundsPage,
   SdkworkOrderShipmentsPage,
+  SdkworkOrderTokenBankPlansPage,
   SdkworkOrderTradeWorkbenchPage,
   SdkworkOrderWithdrawalsPage,
 } from "./pages";
@@ -17,6 +20,8 @@ import {
 export interface TradeAdminCapabilities {
   canManageOrders: boolean;
   canReviewTrade: boolean;
+  /** `commerce.orders.fulfill` — reconcile a provider payment on an order. */
+  canConfirmPayment?: boolean;
 }
 
 /** Optional service injection for embedding hosts and tests. */
@@ -42,10 +47,10 @@ function resolveSection(sectionId?: string): SdkworkOrderAdminTradeSection {
  * Trading center admin application owned by `sdkwork-order`.
  *
  * Dispatches the trading center section (route `:sectionId?`) to the
- * workbench, order supervision, after-sales, shipments, refunds, and
- * withdrawal screens. Operation capabilities and copy locale are injected by
- * the embedding host — this package never reads host session, permission, or
- * i18n state.
+ * workbench, order supervision, after-sales, shipments, refunds, withdrawal,
+ * cancellation, and asset catalog screens. Operation capabilities and copy
+ * locale are injected by the embedding host — this package never reads host
+ * session, permission, or i18n state.
  */
 export function SdkworkOrderTradeCenterAdminApp({
   sectionId,
@@ -58,7 +63,7 @@ export function SdkworkOrderTradeCenterAdminApp({
     case "orders":
       return (
         <SdkworkOrderAdminOrdersPage
-          capabilities={{ canManageOrders: capabilities.canManageOrders }}
+          capabilities={{ canManageOrders: capabilities.canManageOrders, canConfirmPayment: capabilities.canConfirmPayment }}
           locale={locale}
           service={services?.orders}
         />
@@ -71,6 +76,12 @@ export function SdkworkOrderTradeCenterAdminApp({
       return <SdkworkOrderRefundsPage canManage={capabilities.canReviewTrade} locale={locale} messages={messages} service={services?.trade} />;
     case "withdrawals":
       return <SdkworkOrderWithdrawalsPage canManage={capabilities.canReviewTrade} locale={locale} messages={messages} service={services?.trade} />;
+    case "cancellations":
+      return <SdkworkOrderCancellationsPage locale={locale} messages={messages} service={services?.trade} />;
+    case "account-value-packages":
+      return <SdkworkOrderAccountValuePackagesPage canManage={capabilities.canManageOrders} locale={locale} messages={messages} service={services?.trade} />;
+    case "token-bank-plans":
+      return <SdkworkOrderTokenBankPlansPage canManage={capabilities.canManageOrders} locale={locale} messages={messages} service={services?.trade} />;
     default:
       return <SdkworkOrderTradeWorkbenchPage locale={locale} messages={messages} service={services?.trade} />;
   }

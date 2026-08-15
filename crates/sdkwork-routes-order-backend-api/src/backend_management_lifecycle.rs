@@ -182,7 +182,7 @@ async fn close_management_order_payments(
     }
 }
 
-async fn resolve_management_order_owner_user_id(
+pub(crate) async fn resolve_management_order_owner_user_id(
     orders: &BackendManagementOrderStore,
     tenant_id: &str,
     organization_id: Option<&str>,

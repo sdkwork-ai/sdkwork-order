@@ -14,6 +14,7 @@ function createServiceStub() {
       pendingRefunds: 0,
       pendingShipments: 0,
       pendingWithdrawals: 0,
+      pendingCancellations: 0,
       recentOrders: [],
     })),
   };
@@ -42,8 +43,28 @@ describe("SdkworkOrderTradeCenterAdminApp", () => {
         services={{ orders: service as never }}
       />,
     );
-    expect(await screen.findByText("订单列表")).toBeInTheDocument();
+    expect(await screen.findByText("暂无订单")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "取消" })).not.toBeInTheDocument();
+  });
+
+  it("renders the cancellations screen for the cancellations section", async () => {
+    const service = {
+      listCancellations: vi.fn(async () => ({
+        items: [],
+        page: 1,
+        pageSize: 20,
+        totalItems: 0,
+        totalPages: 1,
+      })),
+    };
+    render(
+      <SdkworkOrderTradeCenterAdminApp
+        capabilities={CAPABILITIES}
+        sectionId="cancellations"
+        services={{ trade: service as never }}
+      />,
+    );
+    expect(await screen.findByText("暂无数据")).toBeInTheDocument();
   });
 
   it("falls back to the workbench for unknown sections", async () => {

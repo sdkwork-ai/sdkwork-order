@@ -1,5 +1,6 @@
+import { useTradeAdminLink } from "../navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Eye, RefreshCw, RotateCcw, Search, ShieldCheck } from "lucide-react";
+import { Eye, RefreshCw, RotateCcw, Search, ShieldCheck , Download} from "lucide-react";
 import {
   TradeAdminIntlProvider,
   useTradeAdminI18n,
@@ -32,7 +33,12 @@ import {
 } from "../trade-admin-service";
 import {
   DetailRow,
+  exportTradeListCsv,
+  tradeCsvFilename,
+  readTradeUrlStatusFilter,
+  formatAmount,
   formatTimestamp,
+  resolveTradeStatusLabel,
   TradeListPagination,
   TradeStatusBadge,
   TradeStatusSelect,
@@ -47,14 +53,21 @@ export interface SdkworkOrderAfterSalesPageProps extends TradeAdminIntlProps {
 }
 
 const AFTER_SALES_STATUS_OPTIONS = [
-  { label: "submitted", value: "submitted" },
-  { label: "approved", value: "approved" },
-  { label: "processing", value: "processing" },
-  { label: "completed", value: "completed" },
-  { label: "rejected", value: "rejected" },
-  { label: "cancelled", value: "cancelled" },
-  { label: "withdrawn", value: "withdrawn" },
+  { labelKey: "admin.trade.afterSales.status.submitted", value: "submitted" },
+  { labelKey: "admin.trade.afterSales.status.approved", value: "approved" },
+  { labelKey: "admin.trade.afterSales.status.processing", value: "processing" },
+  { labelKey: "admin.trade.afterSales.status.completed", value: "completed" },
+  { labelKey: "admin.trade.afterSales.status.rejected", value: "rejected" },
+  { labelKey: "admin.trade.afterSales.status.cancelled", value: "cancelled" },
+  { labelKey: "admin.trade.afterSales.status.withdrawn", value: "withdrawn" },
 ];
+
+/** Maps known after-sales type codes to localized labels; unknown codes stay raw. */
+function resolveAfterSalesTypeLabel(type: string | undefined, t: (key: string, fallback?: string) => string): string {
+  if (!type) return t("admin.trade.common.noValue", "-");
+  const label = t(`admin.trade.afterSales.type.${type.toLowerCase()}`, "");
+  return label !== "" ? label : type;
+}
 
 type ReviewTarget = {
   request: AfterSalesRequestSummary;
@@ -81,13 +94,15 @@ function AfterSalesPageInner({
   canManage: boolean;
   service?: TradeAdminService;
 }) {
-  const { t } = useTradeAdminI18n();
+  const { t, locale } = useTradeAdminI18n();
+  const OrderLink = useTradeAdminLink();
   const service = useMemo(
     () => injectedService ?? createTradeAdminService(getSdkworkOrderBackendSdkClient()),
     [injectedService],
   );
   const [requests, setRequests] = useState<AfterSalesRequestSummary[]>([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [draftStatus, setDraftStatus] = useState("");
   const [draftType, setDraftType] = useState("");
   const [draftOrderId, setDraftOrderId] = useState("");
@@ -103,9 +118,22 @@ function AfterSalesPageInner({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AfterSalesRequestSummary | null>(null);
   const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null);
+  // One idempotency key per review intent: a double click on confirm reuses
+  // the same key so the backend never executes the review twice.
+  const [reviewIdempotencyKey, setReviewIdempotencyKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const urlStatus = readTradeUrlStatusFilter();
+  useEffect(() => {
+    if (urlStatus) {
+      setStatusFilter(urlStatus);
+      setDraftStatus(urlStatus);
+    }
+    // Apply deep links only when the URL status changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlStatus]);
+
 
   useEffect(() => {
     let active = true;
@@ -113,7 +141,7 @@ function AfterSalesPageInner({
     setListError(null);
     void service.listAfterSales({
       page,
-      pageSize: DEFAULT_PAGE_SIZE,
+      pageSize,
       status: statusFilter || undefined,
       afterSalesType: typeFilter || undefined,
       orderId: orderIdFilter || undefined,
@@ -131,7 +159,7 @@ function AfterSalesPageInner({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [orderIdFilter, page, refreshKey, service, statusFilter, t, typeFilter]);
+  }, [orderIdFilter, page, pageSize, refreshKey, service, statusFilter, t, typeFilter]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -173,6 +201,31 @@ function AfterSalesPageInner({
     setRefreshKey((current) => current + 1);
   };
 
+  const changePageSize = (nextPageSize: number) => {
+    setPageSize(nextPageSize);
+    setPage(1);
+  };
+  const handleExport = () => {
+    exportTradeListCsv(
+      tradeCsvFilename(t("admin.trade.afterSales.title", "After-sales requests")),
+      [
+        t("admin.trade.afterSales.no", "After-sales no."),
+        t("admin.trade.afterSales.orderId", "Order ID"),
+        t("admin.trade.afterSales.type", "Type"),
+        t("admin.trade.filter.status", "Status"),
+        t("admin.trade.afterSales.requestedAmount", "Requested amount"),
+      ],
+      requests.map((request) => [
+        request.afterSalesNo,
+        request.orderId,
+        request.afterSalesType ?? "",
+        resolveTradeStatusLabel(request.status, t, "afterSales"),
+        request.requestedAmount,
+      ]),
+    );
+  };
+
+
   async function submitReview(input: AfterSalesReviewInput) {
     if (!reviewTarget) return;
     const target = reviewTarget;
@@ -180,13 +233,15 @@ function AfterSalesPageInner({
     setMessage(null);
     setListError(null);
     try {
-      await service.reviewAfterSales(target.request.afterSalesRequestId, input);
+      await service.reviewAfterSales(target.request.afterSalesRequestId, input, reviewIdempotencyKey);
+      setReviewIdempotencyKey("");
       setMessage(t("admin.trade.afterSales.reviewSuccess", "After-sales request {{no}} has been {{action}}.", {
         no: target.request.afterSalesNo,
         action: t(input.action === "approve" ? "admin.trade.afterSales.action.approve" : "admin.trade.afterSales.action.reject", input.action === "approve" ? "approved" : "rejected"),
       }));
       setRefreshKey((current) => current + 1);
       setReviewTarget(null);
+      setReviewIdempotencyKey("");
       if (selectedId === target.request.afterSalesRequestId) {
         setSelectedId(null);
       }
@@ -232,14 +287,14 @@ function AfterSalesPageInner({
       header: t("admin.trade.afterSales.type", "Type"),
       width: "14%",
       cell: (request) => (
-        <span className="text-sm text-[var(--sdk-color-text-secondary)]">{request.afterSalesType || t("admin.trade.common.noValue", "-")}</span>
+        <span className="text-sm text-[var(--sdk-color-text-secondary)]">{resolveAfterSalesTypeLabel(request.afterSalesType, t)}</span>
       ),
     },
     {
       id: "status",
       header: t("admin.trade.filter.status", "Status"),
       width: "16%",
-      cell: (request) => <TradeStatusBadge status={request.status} />,
+      cell: (request) => <TradeStatusBadge domain="afterSales" status={request.status} />,
     },
     {
       align: "right",
@@ -248,50 +303,58 @@ function AfterSalesPageInner({
       width: "20%",
       cell: (request) => (
         <span className="font-mono text-sm font-semibold tabular-nums text-[var(--sdk-color-text-primary)]">
-          {request.requestedAmount} {request.currencyCode}
+          {formatAmount(request.requestedAmount, locale, request.currencyCode)}
         </span>
       ),
     },
-  ], [t]);
+  ], [locale, t]);
 
   const activeFilterCount = Number(Boolean(statusFilter)) + Number(Boolean(typeFilter)) + Number(Boolean(orderIdFilter));
 
   return (
-    <div aria-label={t("admin.trade.afterSales.title", "After-sales requests")} className="space-y-4">
+    <div aria-label={t("admin.trade.afterSales.title", "After-sales requests")} className="flex min-h-0 flex-1 flex-col">
       <form onSubmit={applyFilters}>
-        <FilterBar
-          summary={activeFilterCount ? t("admin.trade.list.appliedFilters", "{{count}} filter(s) applied", { count: activeFilterCount }) : undefined}
-          title={t("admin.trade.filter.title", "Filters")}
-        >
-          <FilterBarSection>
-            <label className="min-w-[10rem] flex-1 space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
-              <span>{t("admin.trade.filter.status", "Status")}</span>
+        <FilterBar>
+          <FilterBarSection wrap={false}>
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.trade.filter.status", "Status")}</span>
               <TradeStatusSelect
                 ariaLabel={t("admin.trade.filter.status", "Status")}
+                className="w-36"
                 options={AFTER_SALES_STATUS_OPTIONS}
-                placeholder={t("admin.trade.filter.statusPlaceholder", "e.g. submitted")}
+                placeholder={t("admin.trade.filter.statusAll", "All statuses")}
                 value={draftStatus}
                 onChange={setDraftStatus}
               />
             </label>
-            <label className="min-w-[10rem] flex-1 space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
-              <span>{t("admin.trade.filter.afterSalesType", "After-sales type")}</span>
-              <Input
-                placeholder={t("admin.trade.filter.afterSalesTypePlaceholder", "e.g. refund")}
-                value={draftType}
-                onChange={(event) => setDraftType(event.target.value)}
-              />
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.trade.filter.afterSalesType", "After-sales type")}</span>
+              <div className="w-36">
+                <Input
+                  placeholder={t("admin.trade.filter.afterSalesTypePlaceholder", "e.g. refund")}
+                  value={draftType}
+                  onChange={(event) => setDraftType(event.target.value)}
+                />
+              </div>
             </label>
-            <label className="min-w-[14rem] flex-1 space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
-              <span>{t("admin.trade.filter.orderId", "Order ID")}</span>
-              <Input
-                placeholder={t("admin.trade.filter.orderIdPlaceholder", "Order ID or order number")}
-                value={draftOrderId}
-                onChange={(event) => setDraftOrderId(event.target.value)}
-              />
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.trade.filter.orderId", "Order ID")}</span>
+              <div className="w-44">
+                <Input
+                  placeholder={t("admin.trade.filter.orderIdPlaceholder", "Order ID or order number")}
+                  value={draftOrderId}
+                  onChange={(event) => setDraftOrderId(event.target.value)}
+                />
+              </div>
             </label>
           </FilterBarSection>
           <FilterBarActions>
+            <Button aria-label={t("admin.trade.list.export", "Export")} disabled={loading} size="icon" title={t("admin.trade.list.export", "Export")} type="button" variant="outline" onClick={handleExport}>
+              <Download aria-hidden="true" className="h-4 w-4" />
+            </Button>
+            <Button aria-label={t("admin.trade.list.refresh", "Refresh")} disabled={loading} size="icon" title={t("admin.trade.list.refresh", "Refresh")} type="button" variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
             <Button disabled={loading} type="button" variant="outline" onClick={resetFilters}>
               <RotateCcw aria-hidden="true" className="mr-2 h-4 w-4" />
               {t("admin.trade.list.reset", "Reset")}
@@ -308,12 +371,24 @@ function AfterSalesPageInner({
       {message ? <StatusNotice tone="success">{message}</StatusNotice> : null}
 
       <DataTable
+        className="min-h-0 flex-1"
         columns={columns}
         density="compact"
-        description={`${t("admin.trade.afterSales.title", "After-sales requests")} — ${requests.length} / ${totalItems}`}
         emptyDescription={activeFilterCount ? t("admin.trade.list.filteredEmptyDescription", "No records match the current filters. Adjust the filters and retry.") : t("admin.trade.list.emptyDescription", "Records matching the current filters will appear here.")}
         emptyTitle={t("admin.trade.list.emptyTitle", "No records")}
-        footer={<TradeListPagination loading={loading} onPrev={() => setPage((value) => value - 1)} onNext={() => setPage((value) => value + 1)} page={page} totalItems={totalItems} totalPages={totalPages} />}
+        footer={<TradeListPagination
+          loading={loading}
+          onFirst={() => setPage(1)}
+          onJump={(next) => setPage(next)}
+          onLast={() => setPage(totalPages)}
+          onNext={() => setPage((value) => value + 1)}
+          onPageSizeChange={changePageSize}
+          onPrev={() => setPage((value) => value - 1)}
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          totalPages={totalPages}
+        />}
         getRowId={(request) => request.afterSalesRequestId}
         loading={loading && requests.length === 0}
         loadingLabel={t("admin.trade.afterSales.title", "After-sales requests")}
@@ -324,7 +399,10 @@ function AfterSalesPageInner({
               <Eye aria-hidden="true" className="mr-1.5 h-4 w-4" />{t("admin.trade.list.detail", "Details")}
             </Button>
             {canManage ? (
-              <Button aria-label={`${t("admin.trade.afterSales.review", "Review")} — ${request.afterSalesNo}`} disabled={busy} size="sm" title={t("admin.trade.afterSales.review", "Review")} type="button" variant="outline" onClick={() => setReviewTarget({ request, action: "approve" })}>
+              <Button aria-label={`${t("admin.trade.afterSales.review", "Review")} — ${request.afterSalesNo}`} disabled={busy} size="sm" title={t("admin.trade.afterSales.review", "Review")} type="button" variant="outline" onClick={() => {
+                    setReviewTarget({ request, action: "approve" });
+                    setReviewIdempotencyKey(crypto.randomUUID());
+                  }}>
                 <ShieldCheck aria-hidden="true" className="mr-1.5 h-4 w-4" />{t("admin.trade.afterSales.review", "Review")}
               </Button>
             ) : null}
@@ -332,13 +410,11 @@ function AfterSalesPageInner({
         )}
         rowActionsLabel={t("admin.trade.list.detail", "Details")}
         rows={requests}
+        slotProps={{
+          surface: { className: "min-h-0 flex-1 flex flex-col" },
+          viewport: { className: "min-h-0 flex-1" },
+        }}
         stickyHeader
-        title={t("admin.trade.afterSales.title", "After-sales requests")}
-        toolbar={(
-          <Button aria-label={t("admin.trade.list.refresh", "Refresh")} disabled={loading} size="icon" title={t("admin.trade.list.refresh", "Refresh")} type="button" variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>
-            <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        )}
       />
 
       <Drawer open={Boolean(selectedId)} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
@@ -353,12 +429,16 @@ function AfterSalesPageInner({
             {detail ? (
               <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
                 <DetailRow label={t("admin.trade.afterSales.no", "After-sales no.")}>{detail.afterSalesNo}</DetailRow>
-                <DetailRow label={t("admin.trade.filter.status", "Status")}><TradeStatusBadge status={detail.status} /></DetailRow>
-                <DetailRow label={t("admin.trade.afterSales.orderId", "Order ID")}>{detail.orderId}</DetailRow>
-                <DetailRow label={t("admin.trade.afterSales.type", "Type")}>{detail.afterSalesType || t("admin.trade.common.noValue", "-")}</DetailRow>
+                <DetailRow label={t("admin.trade.filter.status", "Status")}><TradeStatusBadge domain="afterSales" status={detail.status} /></DetailRow>
+                <DetailRow label={t("admin.trade.afterSales.orderId", "Order ID")}>
+                  <OrderLink href={`/admin/trade/orders?q=${detail.orderId}`} className="font-mono text-[var(--sdk-color-brand-primary)] hover:underline">
+                    {detail.orderId}
+                  </OrderLink>
+                </DetailRow>
+                <DetailRow label={t("admin.trade.afterSales.type", "Type")}>{resolveAfterSalesTypeLabel(detail.afterSalesType, t)}</DetailRow>
                 <DetailRow label={t("admin.trade.afterSales.reasonCode", "Reason code")}>{detail.reasonCode || t("admin.trade.common.noValue", "-")}</DetailRow>
                 <DetailRow label={t("admin.trade.afterSales.requestedAmount", "Requested amount")}>
-                  <span className="font-mono font-semibold tabular-nums">{detail.requestedAmount} {detail.currencyCode}</span>
+                  <span className="font-mono font-semibold tabular-nums">{formatAmount(detail.requestedAmount, locale, detail.currencyCode)}</span>
                 </DetailRow>
               </dl>
             ) : null}
@@ -373,10 +453,10 @@ function AfterSalesPageInner({
         action={reviewTarget?.action ?? "approve"}
         busy={busy}
         label={reviewTarget
-          ? `${t("admin.trade.afterSales.requestedAmount", "Requested amount")}: ${reviewTarget.request.requestedAmount} ${reviewTarget.request.currencyCode}`
+          ? `${t("admin.trade.afterSales.requestedAmount", "Requested amount")}: ${formatAmount(reviewTarget.request.requestedAmount, locale, reviewTarget.request.currencyCode)}`
           : ""}
         onConfirm={(input) => { if (reviewTarget) void submitReview({ ...input, action: reviewTarget.action }); }}
-        onOpenChange={(open) => { if (!open) setReviewTarget(null); }}
+        onOpenChange={(open) => { if (!open) { setReviewTarget(null); setReviewIdempotencyKey(""); } }}
         open={Boolean(reviewTarget)}
         requestNo={reviewTarget?.request.afterSalesNo ?? ""}
         title={reviewTarget?.action === "reject"

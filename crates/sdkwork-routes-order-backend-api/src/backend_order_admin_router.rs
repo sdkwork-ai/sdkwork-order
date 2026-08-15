@@ -5,10 +5,13 @@ use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use sdkwork_contract_service::CommerceServiceError;
+use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::PostgresCommerceOrderStore;
+use sdkwork_order_repository_sqlx::{OrderRefundBounds, PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
 use sdkwork_order_service::{
+    AccountValueAssetCode,
+    AccountValueRequestView,
+    CreateOrderRefundRequestCommand,
     CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
     OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
     OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
@@ -21,14 +24,17 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::api_response::{
+    success_created_item,
     conflict as api_conflict, map_service_error, not_found as api_not_found,
     offset_list_page_params_from_query, success_command, success_item, success_items, validation,
 };
 use crate::backend_acl::require_backend_operator;
 use crate::backend_command_headers::resolve_required_backend_write_command_headers;
+use crate::backend_commerce_admin_router::map_account_value_request;
 use crate::backend_management_lifecycle::{
     cancel_management_order_with_payments, close_management_order_with_payments,
-    BackendManagementOrderStore, BackendManagementPaymentStore,
+    resolve_management_order_owner_user_id, BackendManagementOrderStore,
+    BackendManagementPaymentStore,
 };
 
 /// Permission codes enforced on the backend order admin API surface.
@@ -47,6 +53,7 @@ mod permissions {
 struct BackendOrderAdminState {
     orders: BackendManagementOrderStore,
     payments: BackendManagementPaymentStore,
+    recharge: PostgresCommerceRechargeStore,
     inventory: Arc<dyn PhysicalInventoryReservationPort>,
 }
 
@@ -54,6 +61,8 @@ struct BackendOrderAdminState {
 struct OrderListParams {
     status: Option<String>,
     q: Option<String>,
+    created_from: Option<String>,
+    created_to: Option<String>,
     page: Option<i64>,
     page_size: Option<i64>,
 }
@@ -183,10 +192,11 @@ pub fn backend_order_admin_router_with_postgres_pool(
             pool.clone(),
         ))),
         BackendManagementPaymentStore::Postgres {
-            pool,
+            pool: pool.clone(),
             registry,
             credentials,
         },
+        PostgresCommerceRechargeStore::new(pool),
         inventory,
     )
 }
@@ -194,11 +204,13 @@ pub fn backend_order_admin_router_with_postgres_pool(
 fn build_backend_order_admin_router(
     orders: BackendManagementOrderStore,
     payments: BackendManagementPaymentStore,
+    recharge: PostgresCommerceRechargeStore,
     inventory: Arc<dyn PhysicalInventoryReservationPort>,
 ) -> Router {
     let state = BackendOrderAdminState {
         orders,
         payments,
+        recharge,
         inventory,
     };
     Router::new()
@@ -213,6 +225,10 @@ fn build_backend_order_admin_router(
             post(cancel_order),
         )
         .route("/backend/v3/api/orders/{orderId}/close", post(close_order))
+        .route(
+            "/backend/v3/api/orders/{orderId}/refund_requests",
+            post(create_refund_request),
+        )
         .route(
             "/backend/v3/api/orders/{orderId}/events",
             get(list_order_events),
@@ -236,6 +252,23 @@ impl BackendManagementOrderStore {
         match self {
             Self::Postgres(store) => store.retrieve_management_order(query).await,        }
     }
+
+    async fn load_order_refund_bounds(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        order_id: &str,
+        refund_amount: &str,
+    ) -> Result<Option<OrderRefundBounds>, CommerceServiceError> {
+        match self {
+            Self::Postgres(store) => {
+                store
+                    .load_order_refund_bounds(tenant_id, organization_id, order_id, refund_amount)
+                    .await
+            }
+        }
+    }
+
 
     async fn list_management_order_events(
         &self,
@@ -265,11 +298,13 @@ async fn list_orders(
         Ok(subject) => subject,
         Err(response) => return *response,
     };
-    let query = match OrderManagementListQuery::new(
+    let query = match OrderManagementListQuery::with_created_range(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         params.status.as_deref(),
         params.q.as_deref(),
+        params.created_from.as_deref(),
+        params.created_to.as_deref(),
         params.page,
         params.page_size,
     ) {
@@ -412,6 +447,140 @@ async fn close_order(
     {
         Ok(()) => success_command(ctx, Some(order_id), Some("closed".to_owned())),
         Err(error) if error.code() == "conflict" => api_conflict(ctx, error.message()),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+
+
+fn validate_admin_refund_amount(value: &str, field_name: &str) -> Result<CommerceMoney, String> {
+    let cents = admin_money_cents(value).map_err(|_| format!("{field_name} must be a decimal amount"))?;
+    if cents <= 0 {
+        return Err(format!("{field_name} must be greater than zero"));
+    }
+    CommerceMoney::new(&cents.to_string()).map_err(str::to_string)
+}
+
+fn validate_admin_currency_code(value: Option<&str>) -> Result<String, String> {
+    let currency_code = value.unwrap_or_default().trim().to_ascii_uppercase();
+    if currency_code.len() != 3
+        || !currency_code
+            .chars()
+            .all(|character| character.is_ascii_uppercase())
+    {
+        return Err("currency code must be a 3-letter uppercase code".to_string());
+    }
+    Ok(currency_code)
+}
+
+fn admin_money_cents(amount: &str) -> Result<i64, ()> {
+    let value = amount.trim();
+    let mut parts = value.split('.');
+    let whole = parts
+        .next()
+        .unwrap_or_default()
+        .parse::<i64>()
+        .map_err(|_| ())?;
+    let fraction = parts.next().unwrap_or_default();
+    if parts.next().is_some() || fraction.len() > 2 {
+        return Err(());
+    }
+    let mut padded = fraction.to_string();
+    while padded.len() < 2 {
+        padded.push('0');
+    }
+    let cents = if padded.is_empty() {
+        0
+    } else {
+        padded.parse::<i64>().map_err(|_| ())?
+    };
+    whole
+        .checked_mul(100)
+        .and_then(|amount| amount.checked_add(cents))
+        .ok_or(())
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminCreateRefundRequestBody {
+    amount: String,
+    currency_code: Option<String>,
+    target_asset: Option<String>,
+    reason_code: Option<String>,
+    reason_message: Option<String>,
+}
+
+/// Creates a refund request for a paid order from the admin surface.
+///
+/// The refund request id is derived from the idempotency key, so replaying
+/// the same key returns the same request. The repository layer validates the
+/// paid state and the cumulative refund ceiling before inserting.
+async fn create_refund_request(
+    State(state): State<BackendOrderAdminState>,
+    Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
+    headers: HeaderMap,
+    Path(order_id): Path<String>,
+    Json(body): Json<AdminCreateRefundRequestBody>,
+) -> Response {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let write_headers =
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("admin-refund-{order_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
+    let amount = match validate_admin_refund_amount(&body.amount, "refund amount") {
+        Ok(value) => value,
+        Err(message) => return validation(ctx, message),
+    };
+    let currency_code = match validate_admin_currency_code(Some(body.currency_code.as_deref().unwrap_or("CNY"))) {
+        Ok(value) => value,
+        Err(message) => return validation(ctx, message),
+    };
+    let target_asset = match AccountValueAssetCode::parse(body.target_asset.as_deref().unwrap_or("token_bank")) {
+        Ok(value) => value,
+        Err(error) => return validation(ctx, error.message()),
+    };
+    let owner_user_id =
+        match resolve_management_order_owner_user_id(&state.orders, &subject.tenant_id, subject.organization_id.as_deref(), &order_id).await {
+            Ok(owner) => owner,
+            Err(error) => return map_service_error(ctx, error),
+        };
+    // The refund request id is derived from the idempotency key so the same
+    // admin action always resolves to the same request (duplicate-safe).
+    let refund_request_id = format!(
+        "refund-{}-{}-{}",
+        subject.tenant_id, owner_user_id, write_headers.idempotency_key
+    );
+    let mut command = match CreateOrderRefundRequestCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &owner_user_id,
+        &refund_request_id,
+        &order_id,
+        target_asset,
+        amount,
+        &currency_code,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return map_service_error(ctx, error),
+    };
+    command.request_no = write_headers.request_no;
+    command.reason_code = body.reason_code;
+    command.reason_detail = body.reason_message;
+    match state
+        .recharge
+        .create_admin_order_refund_request(command)
+        .await
+    {
+        Ok(view) => success_created_item(ctx, map_account_value_request(view)),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -574,5 +743,37 @@ fn format_order_status_name(status: &str) -> String {
         "cancelled" | "canceled" | "closed" => "Cancelled".to_owned(),
         "expired" | "timeout" => "Expired".to_owned(),
         other => other.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod admin_refund_request_tests {
+    use super::{admin_money_cents, validate_admin_currency_code, validate_admin_refund_amount};
+
+    #[test]
+    fn refund_amount_must_be_positive() {
+        assert!(validate_admin_refund_amount("0.00", "refund amount").is_err());
+        assert!(validate_admin_refund_amount("-1.00", "refund amount").is_err());
+        assert!(validate_admin_refund_amount("abc", "refund amount").is_err());
+        assert!(validate_admin_refund_amount("1.234", "refund amount").is_err());
+        assert!(validate_admin_refund_amount("50.00", "refund amount").is_ok());
+        assert!(validate_admin_refund_amount("100", "refund amount").is_ok());
+    }
+
+    #[test]
+    fn refund_amount_converts_to_smallest_units() {
+        assert_eq!(admin_money_cents("50.00").unwrap(), 5_000);
+        assert_eq!(admin_money_cents("1.5").unwrap(), 150);
+        assert_eq!(admin_money_cents("100").unwrap(), 10_000);
+        assert!(admin_money_cents("1.2.3").is_err());
+        assert!(admin_money_cents("1.234").is_err());
+    }
+
+    #[test]
+    fn currency_code_must_be_three_uppercase_letters() {
+        assert!(validate_admin_currency_code(None).is_err());
+        assert_eq!(validate_admin_currency_code(Some("usd")).unwrap(), "USD");
+        assert!(validate_admin_currency_code(Some("US")).is_err());
+        assert!(validate_admin_currency_code(Some("US1")).is_err());
     }
 }

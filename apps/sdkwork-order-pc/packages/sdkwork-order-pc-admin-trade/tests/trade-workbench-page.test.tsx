@@ -12,6 +12,7 @@ function createServiceStub() {
       pendingRefunds: 7,
       pendingShipments: 5,
       pendingWithdrawals: 2,
+      pendingCancellations: 1,
       recentOrders: [
         {
           orderId: "order-1",
@@ -36,11 +37,13 @@ describe("SdkworkOrderTradeWorkbenchPage", () => {
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
 
     expect(screen.getByText("待审核售后")).toBeInTheDocument();
     expect(screen.getByText("待审核退款")).toBeInTheDocument();
     expect(screen.getByText("待审核提现")).toBeInTheDocument();
     expect(screen.getByText("待发货")).toBeInTheDocument();
+    expect(screen.getByText("待审核取消")).toBeInTheDocument();
 
     await waitFor(() => expect(screen.getByText("Token Bank 100")).toBeInTheDocument());
     expect(screen.getByText("ORDER-1")).toBeInTheDocument();
@@ -56,6 +59,7 @@ describe("SdkworkOrderTradeWorkbenchPage", () => {
     expect(screen.getByRole("link", { name: /发货管理/u })).toHaveAttribute("href", "/admin/trade/shipments");
     expect(screen.getByRole("link", { name: /退款单审核/u })).toHaveAttribute("href", "/admin/trade/refunds");
     expect(screen.getByRole("link", { name: /提现单审核/u })).toHaveAttribute("href", "/admin/trade/withdrawals");
+    expect(screen.getByRole("link", { name: /取消审核/u })).toHaveAttribute("href", "/admin/trade/cancellations");
     expect(screen.getByRole("link", { name: /查看全部/u })).toHaveAttribute("href", "/admin/trade/orders");
   });
 
@@ -66,6 +70,6 @@ describe("SdkworkOrderTradeWorkbenchPage", () => {
     render(<SdkworkOrderTradeWorkbenchPage service={service as never} />);
 
     await waitFor(() => expect(screen.getByText(/工作台加载失败/u)).toBeInTheDocument());
-    expect(screen.getAllByText("0")).toHaveLength(4);
+    expect(screen.getAllByText("0")).toHaveLength(5);
   });
 });

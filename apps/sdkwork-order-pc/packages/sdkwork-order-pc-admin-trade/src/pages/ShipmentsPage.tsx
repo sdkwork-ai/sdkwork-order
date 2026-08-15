@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Eye, PackagePlus, Pencil, RefreshCw, RotateCcw, Search } from "lucide-react";
+import { Eye, PackagePlus, Pencil, RefreshCw, RotateCcw, Search , Download} from "lucide-react";
 import {
   TradeAdminIntlProvider,
   useTradeAdminI18n,
@@ -43,7 +43,12 @@ import {
 } from "../trade-admin-service";
 import {
   DetailRow,
+  exportTradeListCsv,
+  tradeCsvFilename,
+  readTradeUrlFilter,
+  readTradeUrlStatusFilter,
   formatTimestamp,
+  resolveTradeStatusLabel,
   TradeListPagination,
   TradeStatusBadge,
   TradeStatusSelect,
@@ -57,15 +62,15 @@ export interface SdkworkOrderShipmentsPageProps extends TradeAdminIntlProps {
 }
 
 const SHIPMENT_STATUS_OPTIONS = [
-  { label: "created", value: "created" },
-  { label: "shipped", value: "shipped" },
-  { label: "delivered", value: "delivered" },
+  { labelKey: "admin.trade.shipments.status.created", value: "created" },
+  { labelKey: "admin.trade.shipments.status.shipped", value: "shipped" },
+  { labelKey: "admin.trade.shipments.status.delivered", value: "delivered" },
 ];
 
 const PACKAGE_STATUS_OPTIONS = [
-  { label: "created", value: "created" },
-  { label: "shipped", value: "shipped" },
-  { label: "delivered", value: "delivered" },
+  { labelKey: "admin.trade.shipments.status.created", value: "created" },
+  { labelKey: "admin.trade.shipments.status.shipped", value: "shipped" },
+  { labelKey: "admin.trade.shipments.status.delivered", value: "delivered" },
 ];
 
 type PackageDraft = {
@@ -127,6 +132,7 @@ function ShipmentsPageInner({
   );
   const [shipments, setShipments] = useState<ShipmentSummary[]>([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [draftStatus, setDraftStatus] = useState("");
   const [draftOrderId, setDraftOrderId] = useState("");
   const [draftFulfillmentId, setDraftFulfillmentId] = useState("");
@@ -147,6 +153,26 @@ function ShipmentsPageInner({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const urlStatus = readTradeUrlStatusFilter();
+  const urlOrderId = readTradeUrlFilter("orderId");
+  useEffect(() => {
+    if (urlStatus) {
+      setStatusFilter(urlStatus);
+      setDraftStatus(urlStatus);
+    }
+    // Apply deep links only when the URL status changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlStatus]);
+
+  useEffect(() => {
+    if (urlOrderId) {
+      setOrderIdFilter(urlOrderId);
+      setDraftOrderId(urlOrderId);
+    }
+    // Apply deep links only when the URL order id changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlOrderId]);
+
 
   useEffect(() => {
     let active = true;
@@ -154,7 +180,7 @@ function ShipmentsPageInner({
     setListError(null);
     void service.listShipments({
       page,
-      pageSize: DEFAULT_PAGE_SIZE,
+      pageSize,
       status: statusFilter || undefined,
       orderId: orderIdFilter || undefined,
       fulfillmentId: fulfillmentIdFilter || undefined,
@@ -172,7 +198,7 @@ function ShipmentsPageInner({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [fulfillmentIdFilter, orderIdFilter, page, refreshKey, service, statusFilter, t]);
+  }, [fulfillmentIdFilter, orderIdFilter, page, pageSize, refreshKey, service, statusFilter, t]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -221,6 +247,31 @@ function ShipmentsPageInner({
     setPage(1);
     setRefreshKey((current) => current + 1);
   };
+
+  const changePageSize = (nextPageSize: number) => {
+    setPageSize(nextPageSize);
+    setPage(1);
+  };
+  const handleExport = () => {
+    exportTradeListCsv(
+      tradeCsvFilename(t("admin.trade.shipments.title", "Shipment management")),
+      [
+        t("admin.trade.shipments.no", "Shipment no."),
+        t("admin.trade.filter.status", "Status"),
+        t("admin.trade.shipments.carrierCode", "Carrier"),
+        t("admin.trade.shipments.trackingNo", "Tracking no."),
+        t("admin.trade.shipments.fulfillmentId", "Fulfillment"),
+      ],
+      shipments.map((shipment) => [
+        shipment.shipmentNo,
+        resolveTradeStatusLabel(shipment.status, t, "shipments"),
+        shipment.carrierCode ?? "",
+        shipment.trackingNo ?? "",
+        shipment.fulfillmentId ?? "",
+      ]),
+    );
+  };
+
 
   const openCreatePackage = () => {
     setPackageDraft(EMPTY_PACKAGE_DRAFT);
@@ -291,7 +342,7 @@ function ShipmentsPageInner({
       id: "status",
       header: t("admin.trade.filter.status", "Status"),
       width: "16%",
-      cell: (shipment) => <TradeStatusBadge status={shipment.status} />,
+      cell: (shipment) => <TradeStatusBadge domain="shipments" status={shipment.status} />,
     },
     {
       id: "carrier",
@@ -326,41 +377,49 @@ function ShipmentsPageInner({
   const activeFilterCount = Number(Boolean(statusFilter)) + Number(Boolean(orderIdFilter)) + Number(Boolean(fulfillmentIdFilter));
 
   return (
-    <div aria-label={t("admin.trade.shipments.title", "Shipment management")} className="space-y-4">
+    <div aria-label={t("admin.trade.shipments.title", "Shipment management")} className="flex min-h-0 flex-1 flex-col">
       <form onSubmit={applyFilters}>
-        <FilterBar
-          summary={activeFilterCount ? t("admin.trade.list.appliedFilters", "{{count}} filter(s) applied", { count: activeFilterCount }) : undefined}
-          title={t("admin.trade.filter.title", "Filters")}
-        >
-          <FilterBarSection>
-            <label className="min-w-[10rem] flex-1 space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
-              <span>{t("admin.trade.filter.status", "Status")}</span>
+        <FilterBar>
+          <FilterBarSection wrap={false}>
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.trade.filter.status", "Status")}</span>
               <TradeStatusSelect
                 ariaLabel={t("admin.trade.filter.status", "Status")}
+                className="w-36"
                 options={SHIPMENT_STATUS_OPTIONS}
-                placeholder={t("admin.trade.filter.statusPlaceholder", "e.g. submitted")}
+                placeholder={t("admin.trade.filter.statusAll", "All statuses")}
                 value={draftStatus}
                 onChange={setDraftStatus}
               />
             </label>
-            <label className="min-w-[12rem] flex-1 space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
-              <span>{t("admin.trade.shipments.orderId", "Order ID")}</span>
-              <Input
-                placeholder={t("admin.trade.filter.orderIdPlaceholder", "Order ID or order number")}
-                value={draftOrderId}
-                onChange={(event) => setDraftOrderId(event.target.value)}
-              />
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.trade.shipments.orderId", "Order ID")}</span>
+              <div className="w-44">
+                <Input
+                  placeholder={t("admin.trade.filter.orderIdPlaceholder", "Order ID or order number")}
+                  value={draftOrderId}
+                  onChange={(event) => setDraftOrderId(event.target.value)}
+                />
+              </div>
             </label>
-            <label className="min-w-[12rem] flex-1 space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
-              <span>{t("admin.trade.shipments.fulfillmentId", "Fulfillment")}</span>
-              <Input
-                placeholder={t("admin.trade.filter.fulfillmentIdPlaceholder", "Fulfillment ID")}
-                value={draftFulfillmentId}
-                onChange={(event) => setDraftFulfillmentId(event.target.value)}
-              />
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.trade.shipments.fulfillmentId", "Fulfillment")}</span>
+              <div className="w-44">
+                <Input
+                  placeholder={t("admin.trade.filter.fulfillmentIdPlaceholder", "Fulfillment ID")}
+                  value={draftFulfillmentId}
+                  onChange={(event) => setDraftFulfillmentId(event.target.value)}
+                />
+              </div>
             </label>
           </FilterBarSection>
           <FilterBarActions>
+            <Button aria-label={t("admin.trade.list.export", "Export")} disabled={loading} size="icon" title={t("admin.trade.list.export", "Export")} type="button" variant="outline" onClick={handleExport}>
+              <Download aria-hidden="true" className="h-4 w-4" />
+            </Button>
+            <Button aria-label={t("admin.trade.list.refresh", "Refresh")} disabled={loading} size="icon" title={t("admin.trade.list.refresh", "Refresh")} type="button" variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
             <Button disabled={loading} type="button" variant="outline" onClick={resetFilters}>
               <RotateCcw aria-hidden="true" className="mr-2 h-4 w-4" />
               {t("admin.trade.list.reset", "Reset")}
@@ -377,12 +436,24 @@ function ShipmentsPageInner({
       {message ? <StatusNotice tone="success">{message}</StatusNotice> : null}
 
       <DataTable
+        className="min-h-0 flex-1"
         columns={columns}
         density="compact"
-        description={`${t("admin.trade.shipments.title", "Shipment management")} — ${shipments.length} / ${totalItems}`}
         emptyDescription={activeFilterCount ? t("admin.trade.list.filteredEmptyDescription", "No records match the current filters. Adjust the filters and retry.") : t("admin.trade.list.emptyDescription", "Records matching the current filters will appear here.")}
         emptyTitle={t("admin.trade.list.emptyTitle", "No records")}
-        footer={<TradeListPagination loading={loading} onPrev={() => setPage((value) => value - 1)} onNext={() => setPage((value) => value + 1)} page={page} totalItems={totalItems} totalPages={totalPages} />}
+        footer={<TradeListPagination
+          loading={loading}
+          onFirst={() => setPage(1)}
+          onJump={(next) => setPage(next)}
+          onLast={() => setPage(totalPages)}
+          onNext={() => setPage((value) => value + 1)}
+          onPageSizeChange={changePageSize}
+          onPrev={() => setPage((value) => value - 1)}
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          totalPages={totalPages}
+        />}
         getRowId={(shipment) => shipment.shipmentId}
         loading={loading && shipments.length === 0}
         loadingLabel={t("admin.trade.shipments.title", "Shipment management")}
@@ -396,13 +467,11 @@ function ShipmentsPageInner({
         )}
         rowActionsLabel={t("admin.trade.list.detail", "Details")}
         rows={shipments}
+        slotProps={{
+          surface: { className: "min-h-0 flex-1 flex flex-col" },
+          viewport: { className: "min-h-0 flex-1" },
+        }}
         stickyHeader
-        title={t("admin.trade.shipments.title", "Shipment management")}
-        toolbar={(
-          <Button aria-label={t("admin.trade.list.refresh", "Refresh")} disabled={loading} size="icon" title={t("admin.trade.list.refresh", "Refresh")} type="button" variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>
-            <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        )}
       />
 
       <Drawer open={Boolean(selectedId)} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
@@ -418,7 +487,7 @@ function ShipmentsPageInner({
               <div className="space-y-6">
                 <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
                   <DetailRow label={t("admin.trade.shipments.no", "Shipment no.")}>{detail.shipmentNo}</DetailRow>
-                  <DetailRow label={t("admin.trade.filter.status", "Status")}><TradeStatusBadge status={detail.status} /></DetailRow>
+                  <DetailRow label={t("admin.trade.filter.status", "Status")}><TradeStatusBadge domain="shipments" status={detail.status} /></DetailRow>
                   <DetailRow label={t("admin.trade.shipments.carrierCode", "Carrier")}>{detail.carrierCode || t("admin.trade.common.noValue", "-")}</DetailRow>
                   <DetailRow label={t("admin.trade.shipments.trackingNo", "Tracking no.")}>{detail.trackingNo || t("admin.trade.common.noValue", "-")}</DetailRow>
                   <DetailRow label={t("admin.trade.shipments.fulfillmentId", "Fulfillment")}>{detail.fulfillmentId || t("admin.trade.common.noValue", "-")}</DetailRow>
@@ -449,11 +518,13 @@ function ShipmentsPageInner({
                               {item.packageNo || item.packageId}
                             </p>
                             <p className="mt-0.5 truncate font-mono text-xs text-[var(--sdk-color-text-muted)]">
-                              {item.trackingNo ? `Tracking: ${item.trackingNo}` : item.packageType}
+                              {item.trackingNo
+                                ? `${t("admin.trade.shipments.trackingNo", "Tracking no.")}: ${item.trackingNo}`
+                                : item.packageType}
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-3">
-                            <TradeStatusBadge status={item.status} />
+                            <TradeStatusBadge domain="shipments" status={item.status} />
                             {canManage ? (
                               <Button aria-label={`${t("admin.trade.shipments.editPackage", "Edit package")} — ${item.packageNo}`} disabled={busy} size="sm" title={t("admin.trade.shipments.editPackage", "Edit package")} type="button" variant="ghost" onClick={() => openEditPackage(item)}>
                                 <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
@@ -516,7 +587,7 @@ function ShipmentsPageInner({
                   <TradeStatusSelect
                     ariaLabel={t("admin.trade.shipments.packageStatus", "Package status")}
                     options={PACKAGE_STATUS_OPTIONS}
-                    placeholder={t("admin.trade.shipments.packageStatusPlaceholder", "e.g. created")}
+                    placeholder={t("admin.trade.common.selectPlaceholder", "Select")}
                     value={packageDraft.status}
                     onChange={(status) => setPackageDraft((draft) => ({ ...draft, status }))}
                   />

@@ -8,6 +8,12 @@ export {
   type AdminOrdersMessageKey,
   type AdminOrdersMessagesOverrides,
 } from "./i18n/intl";
+export {
+  OrderAdminLinkProvider,
+  useOrderAdminLink,
+  type OrderAdminLinkComponent,
+  type OrderAdminLinkProps,
+} from "./navigation";
 export { createOrderAdminService, type OrderAdminService } from "./order-admin-service";
 export {
   SdkworkOrderAdminOrdersPage,

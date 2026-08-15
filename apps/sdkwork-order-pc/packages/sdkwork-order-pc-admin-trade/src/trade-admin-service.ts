@@ -1,13 +1,18 @@
 import type {
+  AccountValuePackageResponse,
+  AccountValuePackageWriteCommand,
   AccountValueRequestResponse,
   AccountValueRequestReviewCommand,
   AfterSalesRequestSummary,
   CreateShipmentPackageRequest,
+  OrderCancellation,
   OrderSummary,
   ReviewAfterSalesRequest,
   ShipmentPackageSummary,
   ShipmentSummary,
   SdkworkOrderBackendClient,
+  TokenBankPlanResponse,
+  TokenBankPlanWriteCommand,
   UpdateShipmentPackageRequest,
 } from "@sdkwork/order-pc-admin-core";
 import {
@@ -33,6 +38,11 @@ export interface TradeAdminListQuery extends TradeOperationsQuery {
   orderId?: string;
 }
 
+/** Extended list query for the account value package catalog. */
+export interface AccountValuePackageListQuery extends TradeOperationsQuery {
+  targetAsset?: string;
+}
+
 /** Review body for refund/withdrawal requests. */
 export interface TradeRequestReviewInput {
   reasonCode?: string;
@@ -54,6 +64,7 @@ export const TRADE_PENDING_STATUS = {
   refunds: "pending",
   shipments: "created",
   withdrawals: "pending",
+  cancellations: "pending",
 } as const;
 
 export interface TradeWorkbenchSummary {
@@ -61,6 +72,7 @@ export interface TradeWorkbenchSummary {
   pendingRefunds: number;
   pendingShipments: number;
   pendingWithdrawals: number;
+  pendingCancellations: number;
   recentOrders: OrderSummary[];
 }
 
@@ -68,7 +80,7 @@ export interface TradeAdminService {
   getWorkbenchSummary(): Promise<TradeWorkbenchSummary>;
   listAfterSales(query?: TradeAdminListQuery): Promise<TradeOperationsPage<AfterSalesRequestSummary>>;
   getAfterSales(afterSalesRequestId: string): Promise<AfterSalesRequestSummary>;
-  reviewAfterSales(afterSalesRequestId: string, input: AfterSalesReviewInput): Promise<AfterSalesRequestSummary>;
+  reviewAfterSales(afterSalesRequestId: string, input: AfterSalesReviewInput, idempotencyKey?: string): Promise<AfterSalesRequestSummary>;
   listShipments(query?: TradeAdminListQuery): Promise<TradeOperationsPage<ShipmentSummary>>;
   getShipment(shipmentId: string): Promise<ShipmentSummary>;
   listShipmentPackages(shipmentId: string): Promise<TradeOperationsPage<ShipmentPackageSummary>>;
@@ -79,9 +91,21 @@ export interface TradeAdminService {
     body: UpdateShipmentPackageRequest,
   ): Promise<ShipmentPackageSummary>;
   listRefundRequests(query?: TradeOperationsQuery): Promise<TradeOperationsPage<AccountValueRequestResponse>>;
-  reviewRefundRequest(id: string, action: TradeReviewAction, input?: TradeRequestReviewInput): Promise<void>;
+  reviewRefundRequest(id: string, action: TradeReviewAction, input?: TradeRequestReviewInput, idempotencyKey?: string): Promise<void>;
   listWithdrawalRequests(query?: TradeOperationsQuery): Promise<TradeOperationsPage<AccountValueRequestResponse>>;
-  reviewWithdrawalRequest(id: string, action: TradeReviewAction, input?: TradeRequestReviewInput): Promise<void>;
+  reviewWithdrawalRequest(id: string, action: TradeReviewAction, input?: TradeRequestReviewInput, idempotencyKey?: string): Promise<void>;
+  listCancellations(query?: TradeOperationsQuery): Promise<TradeOperationsPage<OrderCancellation>>;
+  listAccountValuePackages(query?: AccountValuePackageListQuery): Promise<TradeOperationsPage<AccountValuePackageResponse>>;
+  createAccountValuePackage(body: AccountValuePackageWriteCommand): Promise<AccountValuePackageResponse>;
+  updateAccountValuePackage(
+    packageId: string,
+    body: AccountValuePackageWriteCommand,
+  ): Promise<AccountValuePackageResponse>;
+  retireAccountValuePackage(packageId: string): Promise<void>;
+  listTokenBankPlans(query?: TradeOperationsQuery): Promise<TradeOperationsPage<TokenBankPlanResponse>>;
+  createTokenBankPlan(body: TokenBankPlanWriteCommand): Promise<TokenBankPlanResponse>;
+  updateTokenBankPlan(planCode: string, body: TokenBankPlanWriteCommand): Promise<TokenBankPlanResponse>;
+  retireTokenBankPlan(planCode: string): Promise<void>;
 }
 
 function reviewBody(input: TradeRequestReviewInput | undefined): AccountValueRequestReviewCommand {
@@ -138,7 +162,7 @@ export function createTradeAdminService(client: SdkworkOrderBackendClient): Trad
 
   return {
     getWorkbenchSummary: async () => {
-      const [pendingAfterSales, pendingRefunds, pendingShipments, pendingWithdrawals, recentPage] =
+      const [pendingAfterSales, pendingRefunds, pendingShipments, pendingWithdrawals, pendingCancellations, recentPage] =
         await Promise.all([
           countPending(async () => {
             const page = await client.afterSales.management.list({
@@ -166,6 +190,15 @@ export function createTradeAdminService(client: SdkworkOrderBackendClient): Trad
             const listPage = unwrapSdkworkOrderListPage<AccountValueRequestResponse>(page);
             return { totalItems: resolveSdkworkOffsetPagination(listPage.pageInfo, 1, 1).total };
           }),
+          countPending(async () => {
+            const page = await client.orders.admin.cancellations.list({
+              page: "1",
+              pageSize: "1",
+              status: TRADE_PENDING_STATUS.cancellations,
+            });
+            const listPage = unwrapSdkworkOrderListPage<OrderCancellation>(page);
+            return { totalItems: resolveSdkworkOffsetPagination(listPage.pageInfo, 1, 1).total };
+          }),
           client.orders.admin.list({ page: "1", pageSize: "5" }).then((page) => unwrapSdkworkOrderListPage<OrderSummary>(page)),
         ]);
       return {
@@ -173,6 +206,7 @@ export function createTradeAdminService(client: SdkworkOrderBackendClient): Trad
         pendingRefunds,
         pendingShipments,
         pendingWithdrawals,
+        pendingCancellations,
         recentOrders: recentPage.items,
       };
     },
@@ -185,7 +219,7 @@ export function createTradeAdminService(client: SdkworkOrderBackendClient): Trad
         orderId: query.orderId,
       })),
     getAfterSales: (afterSalesRequestId) => client.afterSales.management.retrieve(afterSalesRequestId),
-    reviewAfterSales: (afterSalesRequestId, input) => {
+    reviewAfterSales: (afterSalesRequestId, input, idempotencyKey) => {
       const body: ReviewAfterSalesRequest = {
         reviewAction: input.action,
       };
@@ -193,7 +227,7 @@ export function createTradeAdminService(client: SdkworkOrderBackendClient): Trad
       if (input.reasonCode) body.reasonCode = input.reasonCode;
       if (input.reasonDetail) body.reasonDetail = input.reasonDetail;
       if (input.reviewComment) body.reviewComment = input.reviewComment;
-      return client.afterSales.reviews.create(afterSalesRequestId, body, createSdkworkIdempotencyParams());
+      return client.afterSales.reviews.create(afterSalesRequestId, body, createSdkworkIdempotencyParams(idempotencyKey));
     },
     listShipments: (query = {}) => listAdminPage<ShipmentSummary>(query, () =>
       client.shipments.list({
@@ -210,18 +244,49 @@ export function createTradeAdminService(client: SdkworkOrderBackendClient): Trad
     updateShipmentPackage: (shipmentId, packageId, body) =>
       client.shipments.packages.update(shipmentId, packageId, body, createSdkworkIdempotencyParams()),
     listRefundRequests: (query = {}) => operations.listRefundRequests(query),
-    reviewRefundRequest: (id, action, input) => {
+    reviewRefundRequest: (id, action, input, idempotencyKey) => {
       const body = reviewBody(input);
       const api = client.backend.refundRequests;
       const method = action === "approve" ? api.approve : action === "reject" ? api.reject : api.retry;
-      return method(id, createSdkworkIdempotencyParams(), body).then(() => undefined);
+      return method(id, createSdkworkIdempotencyParams(idempotencyKey), body).then(() => undefined);
     },
     listWithdrawalRequests: (query = {}) => operations.listWithdrawalRequests(query),
-    reviewWithdrawalRequest: (id, action, input) => {
+    reviewWithdrawalRequest: (id, action, input, idempotencyKey) => {
       const body = reviewBody(input);
       const api = client.backend.withdrawalRequests;
       const method = action === "approve" ? api.approve : action === "reject" ? api.reject : api.retry;
-      return method(id, createSdkworkIdempotencyParams(), body).then(() => undefined);
+      return method(id, createSdkworkIdempotencyParams(idempotencyKey), body).then(() => undefined);
     },
+    listCancellations: (query = {}) => listAdminPage<OrderCancellation>(query, () =>
+      client.orders.admin.cancellations.list({
+        page: String(query.page ?? 1),
+        pageSize: String(query.pageSize ?? 20),
+        status: query.status,
+      })),
+    listAccountValuePackages: (query = {}) => listAdminPage<AccountValuePackageResponse>(query, () =>
+      client.backend.accountValuePackages.list({
+        page: query.page ?? 1,
+        pageSize: query.pageSize ?? 20,
+        status: query.status,
+        targetAsset: query.targetAsset,
+      })),
+    createAccountValuePackage: (body) =>
+      client.backend.accountValuePackages.create(body, createSdkworkIdempotencyParams()),
+    updateAccountValuePackage: (packageId, body) =>
+      client.backend.accountValuePackages.update(packageId, body, createSdkworkIdempotencyParams()),
+    retireAccountValuePackage: (packageId) =>
+      client.backend.accountValuePackages.retire(packageId, createSdkworkIdempotencyParams()).then(() => undefined),
+    listTokenBankPlans: (query = {}) => listAdminPage<TokenBankPlanResponse>(query, () =>
+      client.backend.tokenBankPlans.list({
+        page: query.page ?? 1,
+        pageSize: query.pageSize ?? 20,
+        status: query.status,
+      })),
+    createTokenBankPlan: (body) =>
+      client.backend.tokenBankPlans.create(body, createSdkworkIdempotencyParams()),
+    updateTokenBankPlan: (planCode, body) =>
+      client.backend.tokenBankPlans.update(planCode, body, createSdkworkIdempotencyParams()),
+    retireTokenBankPlan: (planCode) =>
+      client.backend.tokenBankPlans.retire(planCode, createSdkworkIdempotencyParams()).then(() => undefined),
   };
 }

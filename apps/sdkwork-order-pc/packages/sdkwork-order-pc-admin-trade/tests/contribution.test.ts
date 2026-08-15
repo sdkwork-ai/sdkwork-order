@@ -24,7 +24,7 @@ describe("trading center contribution metadata", () => {
       ...(TRADE_ADMIN_MENU.items ?? []).map((item) => item.path),
       ...TRADE_ADMIN_MENU.groups.flatMap((group) => group.items.map((item) => item.path)),
     ];
-    expect(paths).toHaveLength(6);
+    expect(paths).toHaveLength(9);
     for (const path of paths) {
       expect(path.startsWith("/admin/trade/")).toBe(true);
     }
@@ -39,6 +39,9 @@ describe("trading center contribution metadata", () => {
       "trade/shipments",
       "trade/refunds",
       "trade/withdrawals",
+      "trade/cancellations",
+      "trade/account-value-packages",
+      "trade/token-bank-plans",
     ]);
     const redirect = TRADE_ADMIN_ROUTE_RECORDS.find((record) => record.path === "trade");
     expect(redirect?.redirectTo).toBe("/admin/trade/overview");

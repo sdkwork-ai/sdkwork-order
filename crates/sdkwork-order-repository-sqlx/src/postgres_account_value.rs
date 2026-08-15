@@ -779,6 +779,155 @@ impl PostgresCommerceRechargeStore {
         .ok_or_else(|| CommerceServiceError::storage("refund request was not persisted"))
     }
 
+    /// Admin-surface refund request creation.
+    ///
+    /// Safety contract against duplicate and over-refunds:
+    /// 1. Replaying the same Idempotency-Key returns the persisted request
+    ///    (idempotent replay validation first).
+    /// 2. The order must be paid.
+    /// 3. The cumulative in-flight refund amount plus this refund must not
+    ///    exceed the order payable amount (evaluated in SQL).
+    /// 4. `INSERT ... ON CONFLICT DO NOTHING` keeps the idempotency key
+    ///    unique at the database level.
+    pub async fn create_admin_order_refund_request(
+        &self,
+        command: CreateOrderRefundRequestCommand,
+    ) -> Result<AccountValueRequestView, CommerceServiceError> {
+        if let Some(view) = self
+            .load_refund_request_by_idempotency(
+                &command.tenant_id,
+                command.organization_id.as_deref(),
+                &command.owner_user_id,
+                &command.idempotency_key,
+            )
+            .await?
+        {
+            self.validate_refund_request_replay(&command, &view).await?;
+            return Ok(view);
+        }
+
+        let bounds = sqlx::query(
+            r#"
+            SELECT
+                COALESCE(NULLIF(o.payment_status, ''), 'none') AS payment_status,
+                COALESCE(
+                    (SELECT b.payable_amount FROM commerce_order_amount_breakdown b
+                     WHERE b.tenant_id = o.tenant_id AND b.order_id = o.id
+                       AND b.allocation_type = 'order_total'
+                     LIMIT 1),
+                    '0'
+                )::NUMERIC
+                >=
+                COALESCE(
+                    (SELECT SUM(CAST(r.amount AS NUMERIC)) FROM commerce_order_refund_request r
+                     WHERE r.tenant_id = o.tenant_id AND r.original_order_id = o.id
+                       AND r.status NOT IN ('rejected', 'provider_refund_failed')),
+                    0
+                ) + CAST($4 AS NUMERIC) AS within_refund_bounds
+            FROM commerce_order o
+            WHERE o.tenant_id = CAST($1 AS TEXT)
+              AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+              AND o.id = CAST($3 AS TEXT)
+            LIMIT 1
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(&command.original_order_id)
+        .bind(command.amount.as_str())
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to load admin refund bounds", error))?;
+
+        let (payment_status, within_refund_bounds) = match bounds {
+            Some(row) => (
+                row.get::<String, _>("payment_status"),
+                row.get::<bool, _>("within_refund_bounds"),
+            ),
+            None => {
+                return Err(CommerceServiceError::not_found(
+                    "order was not found for refund request",
+                ))
+            }
+        };
+        if !matches!(
+            payment_status.trim().to_ascii_lowercase().as_str(),
+            "success" | "succeeded" | "paid"
+        ) {
+            return Err(CommerceServiceError::conflict(
+                "order is not paid; refund requests require a paid order",
+            ));
+        }
+        if !within_refund_bounds {
+            return Err(CommerceServiceError::conflict(
+                "refund amount exceeds the remaining refundable amount of the order",
+            ));
+        }
+
+        let now = current_command_timestamp();
+        let inserted = sqlx::query(
+            r#"
+            INSERT INTO commerce_order_refund_request
+                (id, tenant_id, organization_id, request_no, original_order_id, owner_user_id,
+                 target_asset, amount, currency_code, provider_amount, provider_currency_code,
+                 status, reason_code, reason_detail, review_comment, provider_reference_id,
+                 account_effect_reference_id, idempotency_key, created_at, updated_at)
+            VALUES
+                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, CAST($6 AS TEXT), $7, $8, $9,
+                 $10, $11, 'requested', $12, $13, NULL, NULL, NULL, $14, $15, $16)
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(&command.refund_request_id)
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(&command.request_no)
+        .bind(&command.original_order_id)
+        .bind(&command.owner_user_id)
+        .bind(command.target_asset.as_str())
+        .bind(command.amount.as_str())
+        .bind(&command.currency_code)
+        .bind(command.provider_amount.as_ref().map(CommerceMoney::as_str))
+        .bind(command.provider_currency_code.as_deref())
+        .bind(command.reason_code.as_deref())
+        .bind(command.reason_detail.as_deref())
+        .bind(&command.idempotency_key)
+        .bind(&now)
+        .bind(&now)
+        .execute(self.pool())
+        .await
+        .map_err(|error| store_error("failed to create admin refund request", error))?
+        .rows_affected();
+
+        if inserted == 0 {
+            let view = self
+                .load_refund_request_by_idempotency(
+                    &command.tenant_id,
+                    command.organization_id.as_deref(),
+                    &command.owner_user_id,
+                    &command.idempotency_key,
+                )
+                .await?
+                .ok_or_else(|| {
+                    CommerceServiceError::storage(
+                        "admin refund request idempotency conflict has no persisted request",
+                    )
+                })?;
+            self.validate_refund_request_replay(&command, &view).await?;
+            return Ok(view);
+        }
+
+        self.retrieve_order_refund_request(AccountValueRequestDetailQuery {
+            tenant_id: command.tenant_id,
+            organization_id: command.organization_id,
+            owner_user_id: Some(command.owner_user_id),
+            subject: Some(AccountValueOrderSubject::RefundRequest),
+            request_id: command.refund_request_id,
+        })
+        .await?
+        .ok_or_else(|| CommerceServiceError::storage("admin refund request was not persisted"))
+    }
+
     pub async fn list_order_refund_requests(
         &self,
         query: AccountValueRequestListQuery,

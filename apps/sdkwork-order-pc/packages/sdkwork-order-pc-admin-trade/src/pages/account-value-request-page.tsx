@@ -1,5 +1,6 @@
+import { useTradeAdminLink } from "../navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Eye, RefreshCw, RotateCcw, Search, ShieldCheck } from "lucide-react";
+import { Eye, RefreshCw, RotateCcw, Search, ShieldCheck , Download} from "lucide-react";
 import {
   TradeAdminIntlProvider,
   useTradeAdminI18n,
@@ -30,7 +31,12 @@ import type {
 } from "../trade-admin-service";
 import {
   DetailRow,
+  exportTradeListCsv,
+  tradeCsvFilename,
+  readTradeUrlStatusFilter,
+  formatAmount,
   formatTimestamp,
+  resolveTradeStatusLabel,
   TradeListPagination,
   TradeStatusBadge,
   TradeStatusSelect,
@@ -40,11 +46,11 @@ import { RequestReviewDialog } from "../components/review-dialogs";
 const DEFAULT_PAGE_SIZE = 20;
 
 const REQUEST_STATUS_OPTIONS = [
-  { label: "pending", value: "pending" },
-  { label: "approved", value: "approved" },
-  { label: "rejected", value: "rejected" },
-  { label: "failed", value: "failed" },
-  { label: "completed", value: "completed" },
+  { labelKey: "admin.trade.status.pending", value: "pending" },
+  { labelKey: "admin.trade.status.approved", value: "approved" },
+  { labelKey: "admin.trade.status.rejected", value: "rejected" },
+  { labelKey: "admin.trade.status.failed", value: "failed" },
+  { labelKey: "admin.trade.status.completed", value: "completed" },
 ];
 
 /** i18n key prefixes per request family (refund / withdrawal). */
@@ -110,9 +116,11 @@ function AccountValueRequestListPageInner({
   listKind,
   service,
 }: Omit<AccountValueRequestListPageProps, "locale" | "messages">) {
-  const { t } = useTradeAdminI18n();
+  const { t, locale } = useTradeAdminI18n();
+  const OrderLink = useTradeAdminLink();
   const [requests, setRequests] = useState<AccountValueRequestResponse[]>([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [draftStatus, setDraftStatus] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [totalItems, setTotalItems] = useState(0);
@@ -122,9 +130,22 @@ function AccountValueRequestListPageInner({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AccountValueRequestResponse | null>(null);
   const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null);
+  // One idempotency key per review intent: a double click on confirm reuses
+  // the same key so the backend never executes the review twice.
+  const [reviewIdempotencyKey, setReviewIdempotencyKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const urlStatus = readTradeUrlStatusFilter();
+  useEffect(() => {
+    if (urlStatus) {
+      setStatusFilter(urlStatus);
+      setDraftStatus(urlStatus);
+    }
+    // Apply deep links only when the URL status changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlStatus]);
+
 
   const listRequests = useMemo(
     () => (listKind === "refunds" ? service.listRefundRequests : service.listWithdrawalRequests),
@@ -141,7 +162,7 @@ function AccountValueRequestListPageInner({
     setListError(null);
     void listRequests({
       page,
-      pageSize: DEFAULT_PAGE_SIZE,
+      pageSize,
       status: statusFilter || undefined,
     }).then((result) => {
       if (!active) return;
@@ -157,7 +178,7 @@ function AccountValueRequestListPageInner({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [listRequests, page, refreshKey, statusFilter, t]);
+  }, [listRequests, page, pageSize, refreshKey, statusFilter, t]);
 
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -173,6 +194,33 @@ function AccountValueRequestListPageInner({
     setRefreshKey((current) => current + 1);
   };
 
+  const changePageSize = (nextPageSize: number) => {
+    setPageSize(nextPageSize);
+    setPage(1);
+  };
+  const handleExport = () => {
+    exportTradeListCsv(
+      tradeCsvFilename(t(copy.title, "Requests")),
+      [
+        t(copy.no, "Request no."),
+        t(copy.subject, "Subject"),
+        t(copy.targetAsset, "Target asset"),
+        t(copy.amount, "Amount"),
+        t("admin.trade.filter.status", "Status"),
+        t(copy.createdAt, "Created at"),
+      ],
+      requests.map((request) => [
+        request.requestNo ?? request.accountValueRequestId ?? "",
+        request.subject ?? "",
+        request.targetAsset ?? "",
+        request.amount ?? "",
+        resolveTradeStatusLabel(request.status ?? "", t),
+        request.createdAt ?? "",
+      ]),
+    );
+  };
+
+
   async function submitReview(input: TradeRequestReviewInput) {
     if (!reviewTarget) return;
     const target = reviewTarget;
@@ -180,7 +228,8 @@ function AccountValueRequestListPageInner({
     setMessage(null);
     setListError(null);
     try {
-      await reviewRequest(target.request.accountValueRequestId ?? "", target.action, input);
+      await reviewRequest(target.request.accountValueRequestId ?? "", target.action, input, reviewIdempotencyKey);
+      setReviewIdempotencyKey("");
       const actionLabel = target.action === "approve"
         ? t(copy.actionApprove, "approved")
         : target.action === "reject"
@@ -229,7 +278,7 @@ function AccountValueRequestListPageInner({
       width: "18%",
       cell: (request) => (
         <span className="font-mono text-sm font-semibold tabular-nums text-[var(--sdk-color-text-primary)]">
-          {request.amount ?? t("admin.trade.common.noValue", "-")} {request.currencyCode ?? ""}
+          {formatAmount(request.amount, locale, request.currencyCode)}
         </span>
       ),
     },
@@ -253,34 +302,38 @@ function AccountValueRequestListPageInner({
       width: "26%",
       cell: (request) => (
         <time className="whitespace-nowrap text-sm text-[var(--sdk-color-text-secondary)]" dateTime={request.createdAt}>
-          {formatTimestamp(request.createdAt)}
+          {formatTimestamp(request.createdAt, locale)}
         </time>
       ),
     },
-  ], [copy, t]);
+  ], [copy, locale, t]);
 
   const activeFilterCount = Number(Boolean(statusFilter));
 
   return (
-    <div aria-label={t(copy.title, "Requests")} className="space-y-4">
+    <div aria-label={t(copy.title, "Requests")} className="flex min-h-0 flex-1 flex-col">
       <form onSubmit={applyFilters}>
-        <FilterBar
-          summary={activeFilterCount ? t("admin.trade.list.appliedFilters", "{{count}} filter(s) applied", { count: activeFilterCount }) : undefined}
-          title={t("admin.trade.filter.title", "Filters")}
-        >
-          <FilterBarSection>
-            <label className="min-w-[12rem] flex-1 space-y-1.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
-              <span>{t("admin.trade.filter.status", "Status")}</span>
+        <FilterBar>
+          <FilterBarSection wrap={false}>
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.trade.filter.status", "Status")}</span>
               <TradeStatusSelect
                 ariaLabel={t("admin.trade.filter.status", "Status")}
+                className="w-36"
                 options={REQUEST_STATUS_OPTIONS}
-                placeholder={t("admin.trade.filter.statusPlaceholder", "e.g. submitted")}
+                placeholder={t("admin.trade.filter.statusAll", "All statuses")}
                 value={draftStatus}
                 onChange={setDraftStatus}
               />
             </label>
           </FilterBarSection>
           <FilterBarActions>
+            <Button aria-label={t("admin.trade.list.export", "Export")} disabled={loading} size="icon" title={t("admin.trade.list.export", "Export")} type="button" variant="outline" onClick={handleExport}>
+              <Download aria-hidden="true" className="h-4 w-4" />
+            </Button>
+            <Button aria-label={t("admin.trade.list.refresh", "Refresh")} disabled={loading} size="icon" title={t("admin.trade.list.refresh", "Refresh")} type="button" variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
             <Button disabled={loading} type="button" variant="outline" onClick={resetFilters}>
               <RotateCcw aria-hidden="true" className="mr-2 h-4 w-4" />
               {t("admin.trade.list.reset", "Reset")}
@@ -297,12 +350,24 @@ function AccountValueRequestListPageInner({
       {message ? <StatusNotice tone="success">{message}</StatusNotice> : null}
 
       <DataTable
+        className="min-h-0 flex-1"
         columns={columns}
         density="compact"
-        description={`${t(copy.title, "Requests")} — ${requests.length} / ${totalItems}`}
         emptyDescription={activeFilterCount ? t("admin.trade.list.filteredEmptyDescription", "No records match the current filters. Adjust the filters and retry.") : t("admin.trade.list.emptyDescription", "Records matching the current filters will appear here.")}
         emptyTitle={t("admin.trade.list.emptyTitle", "No records")}
-        footer={<TradeListPagination loading={loading} onPrev={() => setPage((value) => value - 1)} onNext={() => setPage((value) => value + 1)} page={page} totalItems={totalItems} totalPages={totalPages} />}
+        footer={<TradeListPagination
+          loading={loading}
+          onFirst={() => setPage(1)}
+          onJump={(next) => setPage(next)}
+          onLast={() => setPage(totalPages)}
+          onNext={() => setPage((value) => value + 1)}
+          onPageSizeChange={changePageSize}
+          onPrev={() => setPage((value) => value - 1)}
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          totalPages={totalPages}
+        />}
         getRowId={(request) => request.accountValueRequestId ?? request.requestNo ?? "row"}
         loading={loading && requests.length === 0}
         loadingLabel={t(copy.title, "Requests")}
@@ -328,7 +393,10 @@ function AccountValueRequestListPageInner({
                 title={t(copy.review, "Review")}
                 type="button"
                 variant="outline"
-                onClick={() => setReviewTarget({ request, action: "approve" })}
+                onClick={() => {
+                  setReviewTarget({ request, action: "approve" });
+                  setReviewIdempotencyKey(crypto.randomUUID());
+                }}
               >
                 <ShieldCheck aria-hidden="true" className="mr-1.5 h-4 w-4" />{t(copy.review, "Review")}
               </Button>
@@ -337,13 +405,11 @@ function AccountValueRequestListPageInner({
         )}
         rowActionsLabel={t("admin.trade.list.detail", "Details")}
         rows={requests}
+        slotProps={{
+          surface: { className: "min-h-0 flex-1 flex flex-col" },
+          viewport: { className: "min-h-0 flex-1" },
+        }}
         stickyHeader
-        title={t(copy.title, "Requests")}
-        toolbar={(
-          <Button aria-label={t("admin.trade.list.refresh", "Refresh")} disabled={loading} size="icon" title={t("admin.trade.list.refresh", "Refresh")} type="button" variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>
-            <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        )}
       />
 
       <Drawer open={Boolean(selectedId)} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
@@ -360,13 +426,19 @@ function AccountValueRequestListPageInner({
                 <DetailRow label={t(copy.subject, "Subject")}>{detail.subject ?? t("admin.trade.common.noValue", "-")}</DetailRow>
                 <DetailRow label={t(copy.targetAsset, "Target asset")}>{detail.targetAsset ?? t("admin.trade.common.noValue", "-")}</DetailRow>
                 <DetailRow label={t(copy.amount, "Amount")}>
-                  <span className="font-mono font-semibold tabular-nums">{detail.amount ?? t("admin.trade.common.noValue", "-")} {detail.currencyCode ?? ""}</span>
+                  <span className="font-mono font-semibold tabular-nums">{formatAmount(detail.amount, locale, detail.currencyCode)}</span>
                 </DetailRow>
-                <DetailRow label={t(copy.originalOrder, "Original order")}>{detail.originalOrderId ?? t("admin.trade.common.noValue", "-")}</DetailRow>
+                <DetailRow label={t(copy.originalOrder, "Original order")}>
+                  {detail.originalOrderId ? (
+                    <OrderLink href={`/admin/trade/orders?q=${detail.originalOrderId}`} className="font-mono text-[var(--sdk-color-brand-primary)] hover:underline">
+                      {detail.originalOrderId}
+                    </OrderLink>
+                  ) : t("admin.trade.common.noValue", "-")}
+                </DetailRow>
                 <DetailRow label={t(copy.owner, "Owner")}>{detail.ownerUserId ?? t("admin.trade.common.noValue", "-")}</DetailRow>
                 <DetailRow label={t(copy.providerReference, "Provider reference")}>{detail.providerReferenceId ?? t("admin.trade.common.noValue", "-")}</DetailRow>
-                <DetailRow label={t(copy.createdAt, "Created at")}>{formatTimestamp(detail.createdAt)}</DetailRow>
-                <DetailRow label={t(copy.updatedAt, "Updated at")}>{formatTimestamp(detail.updatedAt)}</DetailRow>
+                <DetailRow label={t(copy.createdAt, "Created at")}>{formatTimestamp(detail.createdAt, locale)}</DetailRow>
+                <DetailRow label={t(copy.updatedAt, "Updated at")}>{formatTimestamp(detail.updatedAt, locale)}</DetailRow>
               </dl>
             ) : null}
           </DrawerBody>
@@ -381,7 +453,7 @@ function AccountValueRequestListPageInner({
         busy={busy}
         label={reviewTarget?.request.subject ?? reviewTarget?.request.requestNo ?? "-"}
         onConfirm={(input) => { if (reviewTarget) void submitReview(input); }}
-        onOpenChange={(open) => { if (!open) setReviewTarget(null); }}
+        onOpenChange={(open) => { if (!open) { setReviewTarget(null); setReviewIdempotencyKey(""); } }}
         open={Boolean(reviewTarget)}
         requestNo={reviewTarget?.request.requestNo ?? reviewTarget?.request.accountValueRequestId ?? ""}
         title={t(copy.reviewTitle, "Review request")}

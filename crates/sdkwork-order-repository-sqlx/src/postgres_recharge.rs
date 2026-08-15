@@ -14,7 +14,6 @@ use sdkwork_order_service::{
     RechargeSettingsSnapshot,
 };
 use sdkwork_utils_rust::{build_commerce_cashier_url, commerce_cashier_scene};
-use serde::Deserialize;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::recharge_platform_catalog::materialize_platform_catalog_sql;
@@ -96,46 +95,62 @@ LIMIT $4 OFFSET $5
 
 const LOAD_RECHARGE_SETTINGS_SCOPED: &str = r#"
 SELECT
-    CAST(rate AS TEXT) AS rate,
-    CAST(COALESCE(remark, '') AS TEXT) AS remark
-FROM commerce_exchange_rule
+    CAST(rule.rate AS TEXT) AS rate,
+    rule.base_currency_code AS base_currency_code,
+    COALESCE(
+        jsonb_object_agg(rate_row.currency_code, rate_row.rate)
+            FILTER (WHERE rate_row.currency_code IS NOT NULL),
+        '{}'::jsonb
+    ) AS currency_rates
+FROM commerce_exchange_rule rule
+LEFT JOIN commerce_exchange_currency_rate rate_row
+    ON rate_row.rule_id = rule.id
 WHERE (
-        (tenant_id = CAST($1 AS TEXT) AND organization_id = CAST($2 AS TEXT))
-        OR (tenant_id = CAST($1 AS TEXT) AND organization_id = '0')
+        (rule.tenant_id = CAST($1 AS TEXT) AND rule.organization_id = CAST($2 AS TEXT))
+        OR (rule.tenant_id = CAST($1 AS TEXT) AND rule.organization_id = '0')
       )
-  AND LOWER(source_asset_type) = 'cash'
-  AND LOWER(target_asset_type) = 'points'
-  AND status = 'active'
+  AND LOWER(rule.source_asset_type) = 'cash'
+  AND LOWER(rule.target_asset_type) = 'points'
+  AND rule.status = 'active'
+GROUP BY rule.id
 ORDER BY
     CASE
-        WHEN tenant_id = CAST($1 AS TEXT) AND organization_id = CAST($2 AS TEXT) THEN 0
-        WHEN tenant_id = CAST($1 AS TEXT) AND organization_id = '0' THEN 1
+        WHEN rule.tenant_id = CAST($1 AS TEXT) AND rule.organization_id = CAST($2 AS TEXT) THEN 0
+        WHEN rule.tenant_id = CAST($1 AS TEXT) AND rule.organization_id = '0' THEN 1
         ELSE 2
     END ASC,
     CASE
-        WHEN rule_no = $3 THEN 0
+        WHEN rule.rule_no = $3 THEN 0
         ELSE 1
     END ASC,
-    id ASC
+    rule.id ASC
 LIMIT 1
 "#;
 
 const LOAD_RECHARGE_SETTINGS_PUBLIC: &str = r#"
 SELECT
-    CAST(rate AS TEXT) AS rate,
-    CAST(COALESCE(remark, '') AS TEXT) AS remark
-FROM commerce_exchange_rule
-WHERE LOWER(source_asset_type) = 'cash'
-  AND tenant_id = '__PLATFORM_TENANT__'
-  AND (organization_id = '0' OR organization_id = '0')
-  AND LOWER(target_asset_type) = 'points'
-  AND status = 'active'
+    CAST(rule.rate AS TEXT) AS rate,
+    rule.base_currency_code AS base_currency_code,
+    COALESCE(
+        jsonb_object_agg(rate_row.currency_code, rate_row.rate)
+            FILTER (WHERE rate_row.currency_code IS NOT NULL),
+        '{}'::jsonb
+    ) AS currency_rates
+FROM commerce_exchange_rule rule
+LEFT JOIN commerce_exchange_currency_rate rate_row
+    ON rate_row.rule_id = rule.id
+WHERE LOWER(rule.source_asset_type) = 'cash'
+  AND rule.tenant_id = '__PLATFORM_TENANT__'
+  AND (rule.organization_id = '0' OR rule.organization_id = '0')
+  AND LOWER(rule.target_asset_type) = 'points'
+  AND rule.status = 'active'
+GROUP BY rule.id
 ORDER BY
     CASE
-        WHEN rule_no = $1 THEN 0
+        WHEN rule.rule_no = $1 THEN 0
         ELSE 1
     END ASC,
-    id ASC
+    rule.id ASC
 LIMIT 1
 "#;
 
@@ -551,15 +566,6 @@ struct RechargeProductSku {
 struct RechargeSettingsModel {
     base_currency_code: String,
     base_points_per_cny: String,
-    currency_to_cny_rates: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-struct RechargeSettingsRemark {
-    #[serde(default)]
-    base_currency_code: Option<String>,
-    #[serde(default)]
     currency_to_cny_rates: BTreeMap<String, String>,
 }
 
@@ -1408,45 +1414,28 @@ fn map_settings_row(
         .filter(|value| !value.trim().is_empty())
         .map(|value| normalize_decimal_string(&value))
         .unwrap_or_else(|| DEFAULT_BASE_POINTS_PER_CNY.to_string());
-    let remark_json = row
-        .map(|row| string_cell(row, "remark"))
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(default_recharge_remark_json);
-    let remark = parse_recharge_settings_remark(&remark_json)?;
-    let mut currency_to_cny_rates = remark.currency_to_cny_rates;
-    if currency_to_cny_rates.is_empty() {
-        currency_to_cny_rates = default_currency_to_cny_rates();
-    }
+    let mut currency_to_cny_rates = row
+        .and_then(|row| jsonb_string_map_cell(row, "currency_rates"))
+        .filter(|rates| !rates.is_empty())
+        .unwrap_or_else(default_currency_to_cny_rates);
     currency_to_cny_rates
         .entry(DEFAULT_BASE_CURRENCY_CODE.to_string())
         .or_insert_with(|| "1".to_string());
-    let base_currency_code = remark
-        .base_currency_code
+    let base_currency_code = row
+        .and_then(|row| optional_string_cell(row, "base_currency_code"))
+        .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_BASE_CURRENCY_CODE.to_string())
         .trim()
         .to_ascii_uppercase();
+    currency_to_cny_rates
+        .entry(base_currency_code.clone())
+        .or_insert_with(|| "1".to_string());
 
     Ok(RechargeSettingsModel {
         base_currency_code,
         base_points_per_cny,
         currency_to_cny_rates,
     })
-}
-
-fn parse_recharge_settings_remark(
-    json: &str,
-) -> Result<RechargeSettingsRemark, CommerceServiceError> {
-    serde_json::from_str::<RechargeSettingsRemark>(json).map_err(|error| {
-        CommerceServiceError::storage(format!("invalid recharge settings remark json: {error}"))
-    })
-}
-
-fn default_recharge_remark_json() -> String {
-    serde_json::json!({
-        "baseCurrencyCode": DEFAULT_BASE_CURRENCY_CODE,
-        "currencyToCnyRates": default_currency_to_cny_rates(),
-    })
-    .to_string()
 }
 
 fn default_currency_to_cny_rates() -> BTreeMap<String, String> {
@@ -2245,6 +2234,21 @@ fn optional_string_cell(row: &sqlx::postgres::PgRow, column: &str) -> Option<Str
     row.try_get::<Option<String>, _>(column).ok().flatten()
 }
 
+/// Reads a JSON object column (e.g. `jsonb_object_agg`) as a string map.
+fn jsonb_string_map_cell(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Option<BTreeMap<String, String>> {
+    let value = row.try_get::<serde_json::Value, _>(column).ok()?;
+    let object = value.as_object()?;
+    Some(
+        object
+            .iter()
+            .map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_owned()))
+            .collect(),
+    )
+}
+
 fn string_cell(row: &sqlx::postgres::PgRow, column: &str) -> String {
     optional_string_cell(row, column).unwrap_or_default()
 }
@@ -2337,7 +2341,7 @@ fn decimal_sql_match_keys(amount: &str) -> DecimalSqlMatchKeys {
     };
     let two_decimal = match amount.split_once('.') {
         Some((whole, fraction)) if fraction.len() == 1 => format!("{whole}.{fraction}0"),
-        Some((whole, fraction)) if fraction.len() == 2 => amount.clone(),
+        Some((_whole, fraction)) if fraction.len() == 2 => amount.clone(),
         _ => format!("{amount}.00"),
     };
     DecimalSqlMatchKeys {

@@ -1,4 +1,5 @@
 import type {
+  AdminCreateRefundRequest,
   CancelOrderRequest,
   CloseOrderRequest,
   OrderDetail,
@@ -19,6 +20,10 @@ export interface OrderAdminListQuery {
   pageSize?: number;
   status?: string;
   q?: string;
+  /** Inclusive lower bound on the order creation time (ISO date-time). */
+  createdFrom?: string;
+  /** Inclusive upper bound on the order creation time (ISO date-time). */
+  createdTo?: string;
 }
 
 export interface OrderAdminListResult {
@@ -34,8 +39,24 @@ export interface OrderAdminService {
   getOrder(orderId: string): Promise<OrderDetail>;
   getOrderEvents(orderId: string): Promise<OrderEvent[]>;
   getOrderShipments(orderId: string): Promise<ShipmentSummary[]>;
-  cancelOrder(orderId: string, body?: CancelOrderRequest): Promise<void>;
-  closeOrder(orderId: string, body?: CloseOrderRequest): Promise<void>;
+  cancelOrder(orderId: string, body?: CancelOrderRequest, idempotencyKey?: string): Promise<void>;
+  closeOrder(orderId: string, body?: CloseOrderRequest, idempotencyKey?: string): Promise<void>;
+  /**
+   * Reconciles the provider payment for an order by the payment request
+   * number and runs the shared order settlement saga.
+   */
+  confirmOrderPayment(orderId: string, requestNo: string, idempotencyKey?: string): Promise<void>;
+  /**
+   * Creates a refund request (partial or full) for a paid order. The refund
+   * request id is derived from the idempotency key, so the same key always
+   * resolves to the same request — callers must keep one key per refund
+   * intent to avoid duplicate refunds.
+   */
+  createRefundRequest(
+    orderId: string,
+    input: Omit<AdminCreateRefundRequest, "amount"> & { amount: string },
+    idempotencyKey: string,
+  ): Promise<void>;
 }
 
 export function createOrderAdminService(
@@ -50,6 +71,8 @@ export function createOrderAdminService(
         pageSize: String(pageSize),
         status: query.status,
         q: query.q,
+        createdFrom: query.createdFrom,
+        createdTo: query.createdTo,
       });
       const listPage = unwrapSdkworkOrderListPage<OrderSummary>(raw);
       const pagination = resolveSdkworkOffsetPagination(
@@ -81,20 +104,39 @@ export function createOrderAdminService(
       });
       return unwrapSdkworkOrderListPage<ShipmentSummary>(raw).items;
     },
-    async cancelOrder(orderId, body) {
+    async cancelOrder(orderId, body, idempotencyKey) {
       const requestBody = body ?? { reason: "platform-cancel" };
       await client.orders.admin.cancel(
         orderId,
-        createSdkworkIdempotencyParams(),
+        createSdkworkIdempotencyParams(idempotencyKey),
         requestBody,
       );
     },
-    async closeOrder(orderId, body) {
+    async closeOrder(orderId, body, idempotencyKey) {
       const requestBody = body ?? { reason: "platform-close" };
       await client.orders.admin.close(
         orderId,
-        createSdkworkIdempotencyParams(),
+        createSdkworkIdempotencyParams(idempotencyKey),
         requestBody,
+      );
+    },
+    async confirmOrderPayment(orderId, requestNo, idempotencyKey) {
+      await client.orders.paymentConfirmations.create(
+        orderId,
+        { requestNo: requestNo.trim() },
+        createSdkworkIdempotencyParams(idempotencyKey),
+      );
+    },
+    async createRefundRequest(orderId, input, idempotencyKey) {
+      await client.orders.admin.refundRequests.create(
+        orderId,
+        {
+          amount: input.amount.trim(),
+          ...(input.currencyCode ? { currencyCode: input.currencyCode } : {}),
+          ...(input.reasonCode ? { reasonCode: input.reasonCode } : {}),
+          ...(input.reasonMessage ? { reasonMessage: input.reasonMessage } : {}),
+        },
+        createSdkworkIdempotencyParams(idempotencyKey),
       );
     },
   };

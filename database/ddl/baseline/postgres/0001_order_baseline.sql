@@ -257,12 +257,36 @@ CREATE TABLE IF NOT EXISTS commerce_exchange_rule (
     target_asset_type TEXT NOT NULL,
     rate TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
+    base_currency_code TEXT,
     remark TEXT,
     request_no TEXT,
     idempotency_key TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_commerce_exchange_rule_rate_decimal
+        CHECK (rate ~ '^[0-9]+(\.[0-9]{1,6})?$' AND rate::numeric > 0),
+    CONSTRAINT ck_commerce_exchange_rule_base_currency_code
+        CHECK (base_currency_code IS NULL OR base_currency_code ~ '^[A-Z]{3}$')
 );
+
+CREATE TABLE IF NOT EXISTS commerce_exchange_currency_rate (
+    id TEXT NOT NULL PRIMARY KEY,
+    rule_id TEXT NOT NULL REFERENCES commerce_exchange_rule(id) ON DELETE CASCADE,
+    currency_code TEXT NOT NULL,
+    rate TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_commerce_exchange_currency_rate_code
+        CHECK (currency_code ~ '^[A-Z]{3}$'),
+    CONSTRAINT ck_commerce_exchange_currency_rate_decimal
+        CHECK (rate ~ '^[0-9]+(\.[0-9]{1,6})?$' AND rate::numeric > 0)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_exchange_currency_rate_pair
+    ON commerce_exchange_currency_rate(rule_id, currency_code);
+
+CREATE INDEX IF NOT EXISTS idx_exchange_currency_rate_rule
+    ON commerce_exchange_currency_rate(rule_id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_exchange_rule_pair
     ON commerce_exchange_rule(tenant_id, organization_id, source_asset_type, target_asset_type);

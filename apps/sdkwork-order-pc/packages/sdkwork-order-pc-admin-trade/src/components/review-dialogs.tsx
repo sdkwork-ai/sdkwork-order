@@ -66,7 +66,7 @@ export function RequestReviewDialog({
               <label className={fieldLabelClass()}>
                 <span>{t("admin.trade.refunds.reasonCode", "Reason code")}</span>
                 <Input
-                  placeholder={t("admin.trade.filter.statusPlaceholder", "e.g. submitted")}
+                  placeholder={t("admin.trade.review.reasonCodePlaceholder", "e.g. quality")}
                   value={reasonCode}
                   onChange={(event) => setReasonCode(event.target.value)}
                 />

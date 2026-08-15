@@ -55,6 +55,23 @@ describe("SdkworkOrderRefundsPage", () => {
         "rf-1",
         "approve",
         expect.objectContaining({ reasonCode: "approve-manual" }),
+        expect.any(String),
+      );
+    });
+  });
+
+  it("shows the paged range summary and switches page size", async () => {
+    const service = createServiceStub();
+    render(<SdkworkOrderRefundsPage canManage={false} service={service as never} />);
+
+    await waitFor(() => expect(screen.getByText("RF-2026-1")).toBeInTheDocument());
+    expect(screen.getByText("第 1-1 条，共 1 条")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("每页条数"), { target: { value: "50" } });
+
+    await waitFor(() => {
+      expect(service.listRefundRequests).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, pageSize: 50 }),
       );
     });
   });

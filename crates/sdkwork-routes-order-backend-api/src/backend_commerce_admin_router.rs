@@ -222,7 +222,7 @@ struct TokenBankPlanResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AccountValueRequestResponse {
+pub(crate) struct AccountValueRequestResponse {
     account_value_request_id: String,
     request_no: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1733,7 +1733,7 @@ fn map_token_bank_plan(value: TokenBankPlanItem) -> TokenBankPlanResponse {
     }
 }
 
-fn map_account_value_request(value: AccountValueRequestView) -> AccountValueRequestResponse {
+pub(crate) fn map_account_value_request(value: AccountValueRequestView) -> AccountValueRequestResponse {
     AccountValueRequestResponse {
         account_value_request_id: value.request_id,
         request_no: value.request_no,

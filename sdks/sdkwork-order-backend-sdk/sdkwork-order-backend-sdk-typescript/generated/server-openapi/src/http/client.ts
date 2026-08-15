@@ -447,7 +447,10 @@ export class HttpClient extends BaseHttpClient {
         body: requestBody,
         headers: preparedHeaders,
       }),
-      { maxRetries: 3 }
+      // Per-request retry overrides (e.g. disabling 5xx retries for
+      // idempotent-terminal operations like turn execution) flow through
+      // options.retry; the default keeps maxRetries: 3.
+      { maxRetries: 3, ...options.retry }
     );
     return this.unwrapSdkworkV3Payload<T>(payload, sdkworkUnwrapKind);
   }

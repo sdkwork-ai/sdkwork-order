@@ -15,6 +15,7 @@ export type { OrderEvent } from './order-event';
 export type { OrderCancellation } from './order-cancellation';
 export type { CancelOrderRequest } from './cancel-order-request';
 export type { CloseOrderRequest } from './close-order-request';
+export type { AdminCreateRefundRequest } from './admin-create-refund-request';
 export type { AfterSalesRequestSummary } from './after-sales-request-summary';
 export type { AfterSalesRequestListResponse } from './after-sales-request-list-response';
 export type { AfterSalesRequestItemResponse } from './after-sales-request-item-response';

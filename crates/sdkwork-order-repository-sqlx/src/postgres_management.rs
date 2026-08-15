@@ -12,6 +12,16 @@ use crate::money_amount::commerce_money_stored;
 use crate::order_limits::MAX_ORDER_LINE_ITEMS;
 use crate::postgres_order::PostgresCommerceOrderStore;
 
+/// Refund safety bounds resolved for an order before an admin refund request.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrderRefundBounds {
+    pub owner_user_id: String,
+    pub payment_status: String,
+    pub payable_amount: String,
+    pub refunded_amount: String,
+    pub within_refund_bounds: bool,
+}
+
 const LIST_MANAGEMENT_ORDERS: &str = r#"
 SELECT
     o.id AS order_id,
@@ -80,8 +90,10 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
         OR o.subject ILIKE $4
         OR CAST(o.id AS TEXT) ILIKE $4
       )
+  AND ($5 IS NULL OR o.created_at >= CAST($5 AS TIMESTAMPTZ))
+  AND ($6 IS NULL OR o.created_at <= CAST($6 AS TIMESTAMPTZ))
 ORDER BY o.created_at DESC, o.id DESC
-LIMIT $5 OFFSET $6
+LIMIT $7 OFFSET $8
 "#;
 
 impl PostgresCommerceOrderStore {
@@ -95,6 +107,8 @@ impl PostgresCommerceOrderStore {
             .bind(query.organization_id.as_deref())
             .bind(query.status.as_deref())
             .bind(search.as_deref())
+            .bind(query.created_from.as_deref())
+            .bind(query.created_to.as_deref())
             .bind(query.limit())
             .bind(query.offset())
             .fetch_all(self.pool())
@@ -116,6 +130,72 @@ impl PostgresCommerceOrderStore {
             page_size: query.page_size,
             total,
         })
+    }
+
+    /// Refund safety bounds for an order: payment state, payable amount, and
+    /// the cumulative amount of in-flight refunds. The over-refund check is
+    /// evaluated in SQL so amount arithmetic never happens in application code.
+    pub async fn load_order_refund_bounds(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        order_id: &str,
+        refund_amount: &str,
+    ) -> Result<Option<OrderRefundBounds>, CommerceServiceError> {
+        let row = sqlx::query(
+            r#"
+            SELECT
+                o.owner_user_id,
+                COALESCE(NULLIF(o.payment_status, ''), 'none') AS payment_status,
+                COALESCE(
+                    (SELECT b.payable_amount FROM commerce_order_amount_breakdown b
+                     WHERE b.tenant_id = o.tenant_id AND b.order_id = o.id
+                       AND b.allocation_type = 'order_total'
+                     LIMIT 1),
+                    '0'
+                ) AS payable_amount,
+                COALESCE(
+                    (SELECT SUM(CAST(r.amount AS NUMERIC)) FROM commerce_order_refund_request r
+                     WHERE r.tenant_id = o.tenant_id AND r.original_order_id = o.id
+                       AND r.status NOT IN ('rejected', 'provider_refund_failed')),
+                    0
+                )::TEXT AS refunded_amount,
+                COALESCE(
+                    (SELECT b.payable_amount FROM commerce_order_amount_breakdown b
+                     WHERE b.tenant_id = o.tenant_id AND b.order_id = o.id
+                       AND b.allocation_type = 'order_total'
+                     LIMIT 1),
+                    '0'
+                )::NUMERIC
+                >=
+                COALESCE(
+                    (SELECT SUM(CAST(r.amount AS NUMERIC)) FROM commerce_order_refund_request r
+                     WHERE r.tenant_id = o.tenant_id AND r.original_order_id = o.id
+                       AND r.status NOT IN ('rejected', 'provider_refund_failed')),
+                    0
+                ) + CAST($4 AS NUMERIC) AS within_refund_bounds
+            FROM commerce_order o
+            WHERE o.tenant_id = CAST($1 AS TEXT)
+              AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+              AND o.id = CAST($3 AS TEXT)
+            LIMIT 1
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(organization_id)
+        .bind(order_id)
+        .bind(refund_amount)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to load order refund bounds", error))?;
+
+        Ok(row.map(|row| OrderRefundBounds {
+            owner_user_id: row.get("owner_user_id"),
+            payment_status: row.get("payment_status"),
+            payable_amount: row.get("payable_amount"),
+            refunded_amount: row.get("refunded_amount"),
+            within_refund_bounds: row.get("within_refund_bounds"),
+        }))
     }
 
     pub async fn retrieve_management_order(

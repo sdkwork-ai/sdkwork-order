@@ -1,5 +1,8 @@
 import {
+  Ban,
   ClipboardCheck,
+  Coins,
+  Layers,
   LayoutDashboard,
   ShoppingCart,
   Truck,
@@ -7,7 +10,6 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-
 /**
  * Trading center admin contribution metadata.
  *
@@ -65,6 +67,7 @@ export const TRADE_ADMIN_MENU: SdkworkOrderAdminTradeMenu = {
       items: [
         { path: "/admin/trade/orders", labelKey: "admin.menu.trade.orders", icon: ShoppingCart, iconColor: "text-lobster-400" },
         { path: "/admin/trade/after-sales", labelKey: "admin.menu.trade.afterSales", icon: ClipboardCheck, iconColor: "text-amber-500" },
+        { path: "/admin/trade/cancellations", labelKey: "admin.menu.trade.cancellations", icon: Ban, iconColor: "text-rose-400" },
       ],
     },
     {
@@ -78,6 +81,8 @@ export const TRADE_ADMIN_MENU: SdkworkOrderAdminTradeMenu = {
       items: [
         { path: "/admin/trade/refunds", labelKey: "admin.menu.trade.refunds", icon: Undo2, iconColor: "text-emerald-500" },
         { path: "/admin/trade/withdrawals", labelKey: "admin.menu.trade.withdrawals", icon: WalletCards, iconColor: "text-violet-500" },
+        { path: "/admin/trade/account-value-packages", labelKey: "admin.menu.trade.accountValuePackages", icon: Coins, iconColor: "text-amber-600" },
+        { path: "/admin/trade/token-bank-plans", labelKey: "admin.menu.trade.tokenBankPlans", icon: Layers, iconColor: "text-sky-600" },
       ],
     },
   ],
@@ -91,6 +96,9 @@ export const TRADE_ADMIN_SECTIONS = [
   "shipments",
   "refunds",
   "withdrawals",
+  "cancellations",
+  "account-value-packages",
+  "token-bank-plans",
 ] as const;
 
 export type SdkworkOrderAdminTradeSection = (typeof TRADE_ADMIN_SECTIONS)[number];
@@ -109,6 +117,9 @@ export const TRADE_ADMIN_ROUTE_RECORDS: readonly SdkworkOrderAdminTradeRouteReco
   { path: "trade/shipments", requiredPermission: "cloudrouter.admin.access" },
   { path: "trade/refunds", requiredPermission: "cloudrouter.admin.access" },
   { path: "trade/withdrawals", requiredPermission: "cloudrouter.admin.access" },
+  { path: "trade/cancellations", requiredPermission: "cloudrouter.admin.access" },
+  { path: "trade/account-value-packages", requiredPermission: "cloudrouter.admin.access" },
+  { path: "trade/token-bank-plans", requiredPermission: "cloudrouter.admin.access" },
 ];
 
 export interface SdkworkOrderAdminTradePermissionHint {
@@ -124,4 +135,7 @@ export const TRADE_ADMIN_PERMISSION_HINTS: readonly SdkworkOrderAdminTradePermis
   { pathPrefix: "/admin/trade/shipments", requiredPermission: "cloudrouter.admin.access" },
   { pathPrefix: "/admin/trade/refunds", requiredPermission: "cloudrouter.admin.access" },
   { pathPrefix: "/admin/trade/withdrawals", requiredPermission: "cloudrouter.admin.access" },
+  { pathPrefix: "/admin/trade/cancellations", requiredPermission: "cloudrouter.admin.access" },
+  { pathPrefix: "/admin/trade/account-value-packages", requiredPermission: "cloudrouter.admin.access" },
+  { pathPrefix: "/admin/trade/token-bank-plans", requiredPermission: "cloudrouter.admin.access" },
 ];

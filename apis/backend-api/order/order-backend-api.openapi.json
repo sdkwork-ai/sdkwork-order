@@ -55,6 +55,24 @@
             "description": "Free-text search across order identifiers and subject."
           },
           {
+            "name": "created_from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Include orders created at or after this timestamp (inclusive)."
+          },
+          {
+            "name": "created_to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Include orders created at or before this timestamp (inclusive)."
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -420,6 +438,73 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SdkWorkCommandResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
+      }
+    },
+    "/backend/v3/api/orders/{orderId}/refund_requests": {
+      "post": {
+        "operationId": "orders.admin.refundRequests.create",
+        "summary": "Create an order refund request from the admin surface",
+        "description": "Creates a refund request for a paid order (partial or full amount). The refund request then flows through the existing review pipeline; money moves only after approval. Idempotent: replaying the same Idempotency-Key returns the same refund request.",
+        "tags": [
+          "orderAdminOrders"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateRefundRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Refund request created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkItemResponse"
                 }
               }
             }
@@ -3505,6 +3590,29 @@
             "type": "string"
           },
           "closeType": {
+            "type": "string"
+          }
+        }
+      },
+      "AdminCreateRefundRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "amount"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Refund amount (partial or full). Must be positive and must not exceed the remaining refundable amount of the order."
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "Currency of the refund amount; defaults to the order currency."
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "reasonMessage": {
             "type": "string"
           }
         }

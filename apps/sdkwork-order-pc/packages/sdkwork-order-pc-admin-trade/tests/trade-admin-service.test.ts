@@ -75,12 +75,34 @@ function createClientStub() {
     list: vi.fn(async () => listPage([
       { orderId: "order-1", orderSn: "ORDER-1", status: "paid", statusName: "Paid", subject: "Token Bank 100", totalAmount: "99.00", quantity: "1", createdAt: "2026-07-18T00:00:00.000Z" },
     ])),
+    cancellations: {
+      list: vi.fn(async (params?: { status?: string; page?: string; pageSize?: string }) => {
+        if (params?.status === TRADE_PENDING_STATUS.cancellations) {
+          return listPage([], 4);
+        }
+        return listPage([
+          { id: "cancel-1", orderId: "order-1", status: "pending", reasonCode: "user-request", reasonMessage: "User changed mind", createdAt: "2026-07-18T00:00:00.000Z" },
+        ]);
+      }),
+    },
+  };
+  const accountValuePackages = {
+    list: vi.fn(async () => listPage([{ packageId: "pkg-c-1", packageCode: "PKG-C-1", displayName: "Points 100", targetAsset: "points", grantAmount: "100.00", bonusAmount: "10.00", priceAmount: "99.00", currencyCode: "CNY", status: "active" }])),
+    create: vi.fn(async () => ({ packageId: "pkg-c-2", packageCode: "PKG-C-2", displayName: "Points 200", targetAsset: "points", grantAmount: "200.00", priceAmount: "188.00", currencyCode: "CNY", status: "active" })),
+    update: vi.fn(async () => ({ packageId: "pkg-c-1", packageCode: "PKG-C-1", displayName: "Points 120", targetAsset: "points", grantAmount: "120.00", priceAmount: "99.00", currencyCode: "CNY", status: "active" })),
+    retire: vi.fn(async () => ({ accepted: true })),
+  };
+  const tokenBankPlans = {
+    list: vi.fn(async () => listPage([{ planCode: "TB-100", displayName: "Token Bank 100", planPeriod: "monthly", grantAmount: "1000.00", priceAmount: "99.00", currencyCode: "CNY", status: "active" }])),
+    create: vi.fn(async () => ({ planCode: "TB-200", displayName: "Token Bank 200", planPeriod: "quarterly", grantAmount: "2000.00", priceAmount: "188.00", currencyCode: "CNY", status: "active" })),
+    update: vi.fn(async () => ({ planCode: "TB-100", displayName: "Token Bank 120", planPeriod: "monthly", grantAmount: "1200.00", priceAmount: "99.00", currencyCode: "CNY", status: "active" })),
+    retire: vi.fn(async () => ({ accepted: true })),
   };
 
   return {
     afterSales: { management: afterSalesManagement, reviews: afterSalesReviews },
     shipments: { list: shipmentsList, retrieve: shipmentsRetrieve, packages: packagesApi },
-    backend: { refundRequests, withdrawalRequests },
+    backend: { refundRequests, withdrawalRequests, accountValuePackages, tokenBankPlans },
     orders: { admin: ordersAdmin },
   };
 }
@@ -160,6 +182,7 @@ describe("createTradeAdminService", () => {
     expect(summary.pendingRefunds).toBe(7);
     expect(summary.pendingWithdrawals).toBe(2);
     expect(summary.pendingShipments).toBe(5);
+    expect(summary.pendingCancellations).toBe(4);
     expect(summary.recentOrders).toHaveLength(1);
     expect(summary.recentOrders[0]?.orderSn).toBe("ORDER-1");
     expect(client.afterSales.management.list).toHaveBeenCalledWith({
@@ -167,6 +190,85 @@ describe("createTradeAdminService", () => {
       pageSize: "1",
       status: TRADE_PENDING_STATUS.afterSales,
     });
+    expect(client.orders.admin.cancellations.list).toHaveBeenCalledWith({
+      page: "1",
+      pageSize: "1",
+      status: TRADE_PENDING_STATUS.cancellations,
+    });
+  });
+
+  it("lists order cancellation records", async () => {
+    const client = createClientStub();
+    const service = createTradeAdminService(client as never);
+    const page = await service.listCancellations({ page: 2, pageSize: 10, status: "approved" });
+
+    expect(client.orders.admin.cancellations.list).toHaveBeenCalledWith({
+      page: "2",
+      pageSize: "10",
+      status: "approved",
+    });
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]?.id).toBe("cancel-1");
+    expect(page.totalItems).toBe(1);
+  });
+
+  it("manages account value packages", async () => {
+    const client = createClientStub();
+    const service = createTradeAdminService(client as never);
+
+    const listed = await service.listAccountValuePackages({ targetAsset: "points" });
+    expect(listed.items).toHaveLength(1);
+    expect(client.backend.accountValuePackages.list).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 20,
+      status: undefined,
+      targetAsset: "points",
+    });
+
+    const created = await service.createAccountValuePackage({
+      packageCode: "PKG-C-2", displayName: "Points 200", targetAsset: "points",
+      grantAmount: "200.00", priceAmount: "188.00", currencyCode: "CNY",
+    });
+    expect(created.packageCode).toBe("PKG-C-2");
+    expect(client.backend.accountValuePackages.create).toHaveBeenCalledWith(
+      expect.objectContaining({ packageCode: "PKG-C-2" }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+
+    await service.retireAccountValuePackage("pkg-c-1");
+    expect(client.backend.accountValuePackages.retire).toHaveBeenCalledWith(
+      "pkg-c-1",
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+  });
+
+  it("manages token bank plans", async () => {
+    const client = createClientStub();
+    const service = createTradeAdminService(client as never);
+
+    const listed = await service.listTokenBankPlans({ status: "active" });
+    expect(listed.items).toHaveLength(1);
+    expect(client.backend.tokenBankPlans.list).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 20,
+      status: "active",
+    });
+
+    const created = await service.createTokenBankPlan({
+      planCode: "TB-200", displayName: "Token Bank 200", planPeriod: "quarterly",
+      grantAmount: "2000.00", priceAmount: "188.00", currencyCode: "CNY",
+    });
+    expect(created.planCode).toBe("TB-200");
+    expect(client.backend.tokenBankPlans.create).toHaveBeenCalledWith(
+      expect.objectContaining({ planCode: "TB-200" }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+
+    await service.retireTokenBankPlan("TB-100");
+    expect(client.backend.tokenBankPlans.retire).toHaveBeenCalledWith(
+      "TB-100",
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
   });
 
   it("degrades pending counts to zero when a list request fails", async () => {

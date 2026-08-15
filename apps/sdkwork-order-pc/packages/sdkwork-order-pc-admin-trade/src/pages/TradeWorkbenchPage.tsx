@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
+  Ban,
   ClipboardCheck,
+  Coins,
+  Layers,
   RefreshCw,
   ShoppingCart,
   Truck,
@@ -22,6 +25,7 @@ import {
   type TradeWorkbenchSummary,
 } from "../trade-admin-service";
 import {
+  formatAmount,
   formatTimestamp,
   TradeStatusBadge,
 } from "../components/trade-shared";
@@ -35,6 +39,7 @@ const EMPTY_SUMMARY: TradeWorkbenchSummary = {
   pendingRefunds: 0,
   pendingShipments: 0,
   pendingWithdrawals: 0,
+  pendingCancellations: 0,
   recentOrders: [],
 };
 
@@ -44,29 +49,39 @@ const QUICK_ENTRIES = [
   { href: "/admin/trade/shipments", icon: Truck, key: "admin.trade.workbench.shipments" },
   { href: "/admin/trade/refunds", icon: Undo2, key: "admin.trade.workbench.refunds" },
   { href: "/admin/trade/withdrawals", icon: WalletCards, key: "admin.trade.workbench.withdrawals" },
+  { href: "/admin/trade/cancellations", icon: Ban, key: "admin.trade.workbench.cancellations" },
+  { href: "/admin/trade/account-value-packages", icon: Coins, key: "admin.menu.trade.accountValuePackages" },
+  { href: "/admin/trade/token-bank-plans", icon: Layers, key: "admin.menu.trade.tokenBankPlans" },
 ] as const;
 
 function PendingStatCard({
   count,
   icon,
   label,
+  href,
 }: {
   count: number;
   icon: React.ReactNode;
   label: string;
+  href: string;
 }) {
+  const Link = useTradeAdminLink();
   return (
-    <div className="flex items-start justify-between gap-3 rounded-xl border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] p-4">
+    <Link
+      aria-label={label}
+      href={href}
+      className="group flex items-start justify-between gap-3 rounded-xl border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] p-4 transition-colors hover:border-[var(--sdk-color-border-focus)]"
+    >
       <div className="min-w-0">
         <p className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{label}</p>
         <p className="mt-2 text-3xl font-bold tabular-nums text-[var(--sdk-color-text-primary)]">
           {count.toLocaleString()}
         </p>
       </div>
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--sdk-color-brand-primary-soft)] text-[var(--sdk-color-brand-primary)]">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--sdk-color-brand-primary-soft)] text-[var(--sdk-color-brand-primary)] transition-colors group-hover:bg-[var(--sdk-color-brand-primary)] group-hover:text-white">
         {icon}
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -83,7 +98,7 @@ export function SdkworkOrderTradeWorkbenchPage({
 }
 
 function TradeWorkbenchPageInner({ service: injectedService }: { service?: TradeAdminService }) {
-  const { t } = useTradeAdminI18n();
+  const { t, locale } = useTradeAdminI18n();
   const Link = useTradeAdminLink();
   const service = useMemo(
     () => injectedService ?? createTradeAdminService(getSdkworkOrderBackendSdkClient()),
@@ -110,7 +125,7 @@ function TradeWorkbenchPageInner({ service: injectedService }: { service?: Trade
   }, [refreshKey, service, t]);
 
   return (
-    <div aria-label={t("admin.trade.workbench.title", "Trading Center Workbench")} className="space-y-4">
+    <div aria-label={t("admin.trade.workbench.title", "Trading Center Workbench")} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-[var(--sdk-color-text-primary)]">
@@ -127,18 +142,19 @@ function TradeWorkbenchPageInner({ service: injectedService }: { service?: Trade
 
       {error ? <StatusNotice tone="danger">{error}</StatusNotice> : null}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <PendingStatCard count={summary.pendingAfterSales} icon={<ClipboardCheck aria-hidden="true" className="h-5 w-5" />} label={t("admin.trade.workbench.pendingAfterSales", "After-sales to review")} />
-        <PendingStatCard count={summary.pendingRefunds} icon={<Undo2 aria-hidden="true" className="h-5 w-5" />} label={t("admin.trade.workbench.pendingRefunds", "Refunds to review")} />
-        <PendingStatCard count={summary.pendingWithdrawals} icon={<WalletCards aria-hidden="true" className="h-5 w-5" />} label={t("admin.trade.workbench.pendingWithdrawals", "Withdrawals to review")} />
-        <PendingStatCard count={summary.pendingShipments} icon={<Truck aria-hidden="true" className="h-5 w-5" />} label={t("admin.trade.workbench.pendingShipments", "Shipments pending dispatch")} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <PendingStatCard count={summary.pendingAfterSales} icon={<ClipboardCheck aria-hidden="true" className="h-5 w-5" />} label={t("admin.trade.workbench.pendingAfterSales", "After-sales to review")} href="/admin/trade/after-sales?status=submitted" />
+        <PendingStatCard count={summary.pendingRefunds} icon={<Undo2 aria-hidden="true" className="h-5 w-5" />} label={t("admin.trade.workbench.pendingRefunds", "Refunds to review")} href="/admin/trade/refunds?status=pending" />
+        <PendingStatCard count={summary.pendingWithdrawals} icon={<WalletCards aria-hidden="true" className="h-5 w-5" />} label={t("admin.trade.workbench.pendingWithdrawals", "Withdrawals to review")} href="/admin/trade/withdrawals?status=pending" />
+        <PendingStatCard count={summary.pendingShipments} icon={<Truck aria-hidden="true" className="h-5 w-5" />} label={t("admin.trade.workbench.pendingShipments", "Shipments pending dispatch")} href="/admin/trade/shipments?status=created" />
+        <PendingStatCard count={summary.pendingCancellations} icon={<Ban aria-hidden="true" className="h-5 w-5" />} label={t("admin.trade.workbench.pendingCancellations", "Cancellations to review")} href="/admin/trade/cancellations?status=pending" />
       </div>
 
       <section className="rounded-xl border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] p-4">
         <h3 className="text-sm font-semibold text-[var(--sdk-color-text-primary)]">
           {t("admin.trade.workbench.quickEntries", "Quick entries")}
         </h3>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-8">
           {QUICK_ENTRIES.map((entry) => {
             const Icon = entry.icon;
             return (
@@ -175,21 +191,21 @@ function TradeWorkbenchPageInner({ service: injectedService }: { service?: Trade
           <ul className="divide-y divide-[var(--sdk-color-border-default)]">
             {summary.recentOrders.map((order) => (
               <li key={order.orderId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[var(--sdk-color-text-primary)]">
+                <Link href="/admin/trade/orders" className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-[var(--sdk-color-text-primary)] transition-colors hover:text-[var(--sdk-color-brand-primary)]">
                     {order.subject || order.orderSn || order.orderId}
                   </p>
                   <p className="mt-0.5 truncate font-mono text-xs text-[var(--sdk-color-text-muted)]">
                     {order.orderSn || order.orderId}
                   </p>
-                </div>
+                </Link>
                 <div className="flex shrink-0 items-center gap-4">
                   <TradeStatusBadge status={order.status} label={order.statusName || order.status} />
                   <span className="font-mono text-sm font-semibold tabular-nums text-[var(--sdk-color-text-primary)]">
-                    {order.totalAmount}
+                    {formatAmount(order.totalAmount, locale)}
                   </span>
                   <time className="whitespace-nowrap text-xs text-[var(--sdk-color-text-muted)]" dateTime={order.createdAt}>
-                    {formatTimestamp(order.createdAt)}
+                    {formatTimestamp(order.createdAt, locale)}
                   </time>
                 </div>
               </li>

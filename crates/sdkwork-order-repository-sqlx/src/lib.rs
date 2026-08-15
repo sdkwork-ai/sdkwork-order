@@ -29,5 +29,6 @@ mod test_postgres_pool;
 
 pub use order_settlement_context::OrderPaymentSettlementContext;
 pub use postgres_membership_order::PostgresCommerceMembershipOrderStore;
+pub use postgres_management::OrderRefundBounds;
 pub use postgres_order::PostgresCommerceOrderStore;
 pub use postgres_recharge::PostgresCommerceRechargeStore;

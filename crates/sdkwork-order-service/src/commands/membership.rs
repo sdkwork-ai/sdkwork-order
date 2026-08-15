@@ -81,12 +81,11 @@ impl CreateMembershipOrderCommand {
                 ));
             }
             let amount = amount.unwrap_or_default().trim();
-            let amount = major_decimal_to_minor_string(amount).ok_or_else(|| {
+            major_decimal_to_minor_string(amount).ok_or_else(|| {
                 CommerceServiceError::validation(
                     "membership quota recharge requires a positive amount (up to two decimal places)",
                 )
             })?;
-            let amount = Some(amount);
         } else if grant_quantity.is_some() || amount.is_some() {
             return Err(CommerceServiceError::validation(
                 "grantQuantity and amount are only valid for membership quota recharge",
