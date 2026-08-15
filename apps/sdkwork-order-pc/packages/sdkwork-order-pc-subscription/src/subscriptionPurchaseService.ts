@@ -4,8 +4,13 @@ import {
   type SdkworkMembershipCheckoutPayment,
   type SdkworkOrderAppService,
 } from "@sdkwork/order-service";
-import { createClient as createOrderAppClient, type SdkworkAppClient as SdkworkOrderAppClient, type SdkworkAppConfig } from "@sdkwork/order-app-sdk";
-import { createClient as createMembershipAppClient, type SdkworkAppClient as SdkworkMembershipAppClient } from "@sdkwork/membership-app-sdk";
+import {
+  createOrderAppSdkClient as createOrderAppClient,
+  createMembershipAppSdkClient as createMembershipAppClient,
+  type SdkworkOrderAppClient,
+  type SdkworkOrderAppSdkConfig as SdkworkAppConfig,
+  type SdkworkMembershipAppClient,
+} from "@sdkwork/order-pc-core/sdk";
 
 /**
  * PC subscription purchase port for the order domain: membership package

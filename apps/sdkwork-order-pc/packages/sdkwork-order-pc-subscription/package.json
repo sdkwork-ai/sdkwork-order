@@ -16,6 +16,7 @@
   "dependencies": {
     "@sdkwork/membership-app-sdk": "workspace:*",
     "@sdkwork/order-app-sdk": "workspace:*",
+    "@sdkwork/order-pc-core": "workspace:*",
     "@sdkwork/order-pc-recharge": "workspace:*",
     "@sdkwork/order-service": "workspace:*",
     "@sdkwork/ui-pc-react": "workspace:*",

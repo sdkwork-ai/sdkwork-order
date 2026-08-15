@@ -997,7 +997,14 @@ importers:
         specifier: 'catalog:'
         version: 6.0.3
 
-  apps/sdkwork-order-pc/packages/sdkwork-order-pc-core: {}
+  apps/sdkwork-order-pc/packages/sdkwork-order-pc-core:
+    dependencies:
+      '@sdkwork/membership-app-sdk':
+        specifier: workspace:*
+        version: link:../../../../../sdkwork-membership/sdks/sdkwork-membership-app-sdk/sdkwork-membership-app-sdk-typescript
+      '@sdkwork/order-app-sdk':
+        specifier: workspace:*
+        version: link:../../../../sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript
 
   apps/sdkwork-order-pc/packages/sdkwork-order-pc-order:
     dependencies:
@@ -1102,6 +1109,9 @@ importers:
       '@sdkwork/order-app-sdk':
         specifier: workspace:*
         version: link:../../../../sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript
+      '@sdkwork/order-pc-core':
+        specifier: workspace:*
+        version: link:../sdkwork-order-pc-core
       '@sdkwork/order-pc-recharge':
         specifier: workspace:*
         version: link:../sdkwork-order-pc-recharge

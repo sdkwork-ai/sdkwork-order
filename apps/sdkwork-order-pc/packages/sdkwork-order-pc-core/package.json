@@ -35,5 +35,8 @@
       "default": "./src/composition/index.ts"
     }
   },
-  "dependencies": {}
+  "dependencies": {
+    "@sdkwork/membership-app-sdk": "workspace:*",
+    "@sdkwork/order-app-sdk": "workspace:*"
+  }
 }
