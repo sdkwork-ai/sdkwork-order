@@ -6,22 +6,21 @@
 //! - Readiness probe reflects the real database health via `SELECT 1`.
 //! - Graceful shutdown drains in-flight requests on SIGINT / SIGTERM.
 
-use std::sync::Arc;
-use std::time::Duration;
-
-use sdkwork_api_order_assembly::assemble_api_router;
-use sdkwork_order_service_host::OrderServiceHost;
-use sdkwork_web_bootstrap::ComposedApiAssembly;
+use sdkwork_api_order_assembly::assemble_api_router_from_env;
+use sdkwork_iam_web_adapter::{
+    build_web_framework_builder, iam_web_request_context_resolver_from_env,
+};
+use sdkwork_web_bootstrap::{infra_public_path_prefixes, ComposedApiAssembly};
 use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let host = match OrderServiceHost::from_env().await {
-        Ok(host) => Arc::new(host),
+    let assembly = match assemble_api_router_from_env().await {
+        Ok(assembly) => assembly,
         Err(error) => {
-            tracing::error!(target = "order.bootstrap", error = %error, "order service host bootstrap failed");
+            tracing::error!(target = "order.bootstrap", error = %error, "order API assembly bootstrap failed");
             return Err(error.into());
         }
     };
@@ -33,25 +32,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let assembly = assemble_api_router(host.clone())
-        .await
-        .map_err(std::io::Error::other)?;
-    // Order expiration scheduler: scans due orders every tick, transitions
-    // them to `expired`, closes payment attempts, and releases physical
-    // inventory (embedded loop, disabled via
-    // SDKWORK_ORDER_EXPIRATION_SCHEDULER_ENABLED=0).
-    sdkwork_order_service_host::spawn_order_expiration_scheduler(host.clone());
-    // Payment compensation worker: claims payments/refunds stuck in flight,
-    // queries the PSP, and re-enters the notify processing framework with
-    // synthetic events (the webhook-failure safety net). Opt-in via
-    // SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED=1.
-    sdkwork_order_service_host::spawn_payment_compensation_worker(host.clone());
-    let manifest = assembly.route_manifest.clone();
-    let resolver = sdkwork_iam_web_adapter::IamWebRequestContextResolver::from_database_pool(Some(
-        host.database_pool().clone(),
-    ));
-    let framework =
-        sdkwork_iam_web_adapter::build_web_framework_builder(resolver, manifest, Vec::new());
+    let framework = build_web_framework_builder(
+        iam_web_request_context_resolver_from_env().await,
+        assembly.route_manifest.clone(),
+        infra_public_path_prefixes(),
+    );
     let app = ComposedApiAssembly::try_compose("SDKWork Order API", vec![assembly])
         .map_err(std::io::Error::other)?
         .into_hosted(framework)
@@ -72,10 +57,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err(error.into());
     }
 
-    // Drain DB connections after handlers finish.
-    tokio::time::timeout(Duration::from_secs(30), host.database_pool().close())
-        .await
-        .map_err(|_| std::io::Error::other("database pool close timed out after 30s"))?;
     tracing::info!(target = "order.runtime", "order api server stopped");
     Ok(())
 }

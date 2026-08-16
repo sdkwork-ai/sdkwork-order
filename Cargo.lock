@@ -1841,11 +1841,8 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "sdkwork-api-order-assembly",
- "sdkwork-database-sqlx",
  "sdkwork-iam-web-adapter",
- "sdkwork-order-service-host",
  "sdkwork-web-bootstrap",
- "sqlx",
  "tokio",
  "tower-http 0.5.2",
  "tracing",

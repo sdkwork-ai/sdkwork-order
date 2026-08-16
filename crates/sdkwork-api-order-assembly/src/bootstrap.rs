@@ -65,6 +65,7 @@ impl OrderAssemblyContract {
 }
 
 pub async fn assemble_api_router(host: Arc<OrderServiceHost>) -> Result<ApiAssembly, String> {
+    start_runtime_workers(&host);
     let router = Router::new()
         .merge(sdkwork_routes_order_app_api::gateway_mount(host.clone()).await)
         .merge(sdkwork_routes_order_backend_api::gateway_mount(host.clone()).await);
@@ -99,6 +100,7 @@ pub async fn assemble_backend_business_router(
 /// Builds the raw Order App API for a gateway-owned Web Framework layer.
 pub async fn assemble_app_api_contribution() -> Result<ApiAssemblyContribution, String> {
     let host = Arc::new(OrderServiceHost::from_env().await?);
+    start_runtime_workers(&host);
     assemble_app_api_contribution_with_host(host)
 }
 
@@ -106,7 +108,13 @@ pub async fn assemble_app_api_contribution_with_pool(
     pool: DatabasePool,
 ) -> Result<ApiAssemblyContribution, String> {
     let host = Arc::new(OrderServiceHost::from_database_pool(pool).await?);
+    start_runtime_workers(&host);
     assemble_app_api_contribution_with_host(host)
+}
+
+fn start_runtime_workers(host: &Arc<OrderServiceHost>) {
+    sdkwork_order_service_host::spawn_order_expiration_scheduler(host.clone());
+    sdkwork_order_service_host::spawn_payment_compensation_worker(host.clone());
 }
 
 fn assemble_app_api_contribution_with_host(

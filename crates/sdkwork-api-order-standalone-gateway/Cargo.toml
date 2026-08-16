@@ -18,6 +18,3 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 sdkwork-web-bootstrap.workspace = true
 sdkwork-iam-web-adapter.workspace = true
-sdkwork_order_service_host.workspace = true
-sdkwork-database-sqlx.workspace = true
-sqlx = { workspace = true }

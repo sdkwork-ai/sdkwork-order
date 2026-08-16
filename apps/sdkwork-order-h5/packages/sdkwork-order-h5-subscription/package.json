@@ -29,5 +29,6 @@
   "devDependencies": {
     "@types/qrcode": "catalog:",
     "@types/react": "catalog:"
-  }
+  },
+  "private": true
 }
