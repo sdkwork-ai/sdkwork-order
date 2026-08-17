@@ -25,21 +25,19 @@ export class OrderFulfillmentsFulfillmentsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/fulfillments`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/fulfillments`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Fulfillments retrieve. */
   async retrieve(fulfillmentId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>(appApiPath(`/fulfillments/${serializePathParameter(fulfillmentId, { name: 'fulfillmentId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/fulfillments/${serializePathParameter(fulfillmentId, { name: 'fulfillmentId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
 export class OrderFulfillmentsApi {
-  private client: HttpClient;
   public readonly fulfillments: OrderFulfillmentsFulfillmentsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.fulfillments = new OrderFulfillmentsFulfillmentsApi(client);
   }
 

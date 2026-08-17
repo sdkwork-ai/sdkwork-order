@@ -24,7 +24,7 @@ export class OrderAdminOrdersOrdersPaymentConfirmationsApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_confirmations`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_confirmations`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -47,7 +47,7 @@ export class OrderAdminOrdersOrdersAdminEventsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<{ items: OrderEvent[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<{ items: OrderEvent[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 }
 
@@ -71,7 +71,7 @@ export class OrderAdminOrdersOrdersAdminRefundRequestsApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/refund_requests`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/refund_requests`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -96,7 +96,7 @@ export class OrderAdminOrdersOrdersAdminCancellationsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<{ items: OrderCancellation[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/cancellations`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<{ items: OrderCancellation[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/cancellations`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 }
 
@@ -141,12 +141,12 @@ export class OrderAdminOrdersOrdersAdminApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<{ items: OrderSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<{ items: OrderSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Retrieve order detail for operator review */
   async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<OrderDetail> {
-    return this.client.request<OrderDetail>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<OrderDetail>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 
 /** Cancel an order from the admin surface */
@@ -157,7 +157,7 @@ export class OrderAdminOrdersOrdersAdminApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 
 /** Close an order from the admin surface */
@@ -168,17 +168,15 @@ export class OrderAdminOrdersOrdersAdminApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/close`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/close`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 }
 
 export class OrderAdminOrdersOrdersApi {
-  private client: HttpClient;
   public readonly admin: OrderAdminOrdersOrdersAdminApi;
   public readonly paymentConfirmations: OrderAdminOrdersOrdersPaymentConfirmationsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.admin = new OrderAdminOrdersOrdersAdminApi(client);
     this.paymentConfirmations = new OrderAdminOrdersOrdersPaymentConfirmationsApi(client);
   }
@@ -186,11 +184,9 @@ export class OrderAdminOrdersOrdersApi {
 }
 
 export class OrderAdminOrdersApi {
-  private client: HttpClient;
   public readonly orders: OrderAdminOrdersOrdersApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.orders = new OrderAdminOrdersOrdersApi(client);
   }
 

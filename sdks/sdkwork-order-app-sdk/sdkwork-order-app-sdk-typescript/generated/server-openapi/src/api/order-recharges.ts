@@ -25,7 +25,7 @@ export class OrderRechargesRechargesPlansApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/plans`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/plans`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 }
 
@@ -60,7 +60,7 @@ export class OrderRechargesRechargesOrdersApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/orders`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/orders`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Recharges orders create. */
@@ -71,12 +71,12 @@ export class OrderRechargesRechargesOrdersApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/orders`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/orders`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
 /** Recharges orders retrieve. */
   async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 
 /** Recharges orders cancel. */
@@ -87,7 +87,7 @@ export class OrderRechargesRechargesOrdersApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -101,7 +101,7 @@ export class OrderRechargesRechargesSettingsApi {
 
 /** Recharges settings retrieve. */
   async retrieve(requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/settings`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/settings`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -124,19 +124,17 @@ export class OrderRechargesRechargesPackagesApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/packages`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/packages`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 }
 
 export class OrderRechargesRechargesApi {
-  private client: HttpClient;
   public readonly packages: OrderRechargesRechargesPackagesApi;
   public readonly settings: OrderRechargesRechargesSettingsApi;
   public readonly orders: OrderRechargesRechargesOrdersApi;
   public readonly plans: OrderRechargesRechargesPlansApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.packages = new OrderRechargesRechargesPackagesApi(client);
     this.settings = new OrderRechargesRechargesSettingsApi(client);
     this.orders = new OrderRechargesRechargesOrdersApi(client);
@@ -146,11 +144,9 @@ export class OrderRechargesRechargesApi {
 }
 
 export class OrderRechargesApi {
-  private client: HttpClient;
   public readonly recharges: OrderRechargesRechargesApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.recharges = new OrderRechargesRechargesApi(client);
   }
 

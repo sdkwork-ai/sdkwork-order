@@ -24,7 +24,7 @@ export class OrderCheckoutCheckoutSessionsOrdersApi {
       },
       {}
     );
-    return this.client.request<CheckoutOrder>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/orders`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, headers: requestHeaders, sdkworkUnwrapKind: 'item' });
+    return this.client.request<CheckoutOrder>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/orders`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -48,7 +48,7 @@ export class OrderCheckoutCheckoutSessionsQuotesApi {
       },
       {}
     );
-    return this.client.request<CheckoutQuote>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/quotes`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, headers: requestHeaders, sdkworkUnwrapKind: 'item' });
+    return this.client.request<CheckoutQuote>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/quotes`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -76,32 +76,28 @@ export class OrderCheckoutCheckoutSessionsApi {
       },
       {}
     );
-    return this.client.request<CheckoutSession>(appApiPath(`/checkout/sessions`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<CheckoutSession>(appApiPath(`/checkout/sessions`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
 /** Checkout sessions retrieve. */
   async retrieve(checkoutSessionId: string, requestOptions?: ApiRequestOptions): Promise<CheckoutSession> {
-    return this.client.request<CheckoutSession>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<CheckoutSession>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
 export class OrderCheckoutCheckoutApi {
-  private client: HttpClient;
   public readonly sessions: OrderCheckoutCheckoutSessionsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.sessions = new OrderCheckoutCheckoutSessionsApi(client);
   }
 
 }
 
 export class OrderCheckoutApi {
-  private client: HttpClient;
   public readonly checkout: OrderCheckoutCheckoutApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.checkout = new OrderCheckoutCheckoutApi(client);
   }
 
@@ -111,13 +107,7 @@ export function createOrderCheckoutApi(client: HttpClient): OrderCheckoutApi {
   return new OrderCheckoutApi(client);
 }
 
-function appendQueryString(path: string, rawQueryString: string): string {
-  const query = rawQueryString.replace(/^\?+/, '');
-  if (!query) {
-    return path;
-  }
-  return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
-}
+
 
 interface PathParameterSpec {
   name: string;

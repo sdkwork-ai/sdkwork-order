@@ -36,12 +36,12 @@ export function createOrderBackendTransportClient(
   const config: SdkworkBackendConfig = {
     authMode: "dual-token",
     baseUrl: resolveOrderBackendApiOrigin(input.baseUrl),
-    authToken: input.authToken,
-    accessToken: input.accessToken,
-    tenantId: input.tenantId,
-    organizationId: input.organizationId,
+    ...(input.authToken === undefined ? {} : { authToken: input.authToken }),
+    ...(input.accessToken === undefined ? {} : { accessToken: input.accessToken }),
+    ...(input.tenantId === undefined ? {} : { tenantId: input.tenantId }),
+    ...(input.organizationId === undefined ? {} : { organizationId: input.organizationId }),
     platform: input.platform ?? "pc",
-    tokenManager: input.tokenManager,
+    ...(input.tokenManager === undefined ? {} : { tokenManager: input.tokenManager }),
   };
   return createClient(config);
 }

@@ -24,32 +24,28 @@ export class OrderWithdrawalsWithdrawalsRequestsApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(appApiPath(`/withdrawals/requests`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/withdrawals/requests`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
 /** Withdrawal requests retrieve. */
   async retrieve(withdrawalRequestId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>(appApiPath(`/withdrawals/requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/withdrawals/requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
 export class OrderWithdrawalsWithdrawalsApi {
-  private client: HttpClient;
   public readonly requests: OrderWithdrawalsWithdrawalsRequestsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.requests = new OrderWithdrawalsWithdrawalsRequestsApi(client);
   }
 
 }
 
 export class OrderWithdrawalsApi {
-  private client: HttpClient;
   public readonly withdrawals: OrderWithdrawalsWithdrawalsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.withdrawals = new OrderWithdrawalsWithdrawalsApi(client);
   }
 
@@ -59,13 +55,7 @@ export function createOrderWithdrawalsApi(client: HttpClient): OrderWithdrawalsA
   return new OrderWithdrawalsApi(client);
 }
 
-function appendQueryString(path: string, rawQueryString: string): string {
-  const query = rawQueryString.replace(/^\?+/, '');
-  if (!query) {
-    return path;
-  }
-  return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
-}
+
 
 interface PathParameterSpec {
   name: string;

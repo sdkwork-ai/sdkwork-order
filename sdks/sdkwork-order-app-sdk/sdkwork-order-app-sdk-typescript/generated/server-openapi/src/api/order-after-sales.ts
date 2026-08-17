@@ -23,7 +23,7 @@ export class OrderAfterSalesAfterSalesEventsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/events`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/events`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 }
 
@@ -52,7 +52,7 @@ export class OrderAfterSalesAfterSalesReturnShipmentsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** After Sales return Shipments create. */
@@ -63,7 +63,7 @@ export class OrderAfterSalesAfterSalesReturnShipmentsApi {
       },
       {}
     );
-    return this.client.request<AfterSalesReturnShipmentResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<AfterSalesReturnShipmentResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -98,7 +98,7 @@ export class OrderAfterSalesAfterSalesRequestsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** After Sales requests create. */
@@ -109,12 +109,12 @@ export class OrderAfterSalesAfterSalesRequestsApi {
       },
       {}
     );
-    return this.client.request<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
 /** After Sales requests retrieve. */
   async retrieve(afterSalesRequestId: string, requestOptions?: ApiRequestOptions): Promise<AfterSalesRequestResponse> {
-    return this.client.request<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 
 /** After Sales requests update. */
@@ -125,18 +125,16 @@ export class OrderAfterSalesAfterSalesRequestsApi {
       },
       {}
     );
-    return this.client.request<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'PATCH' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'PATCH' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
 export class OrderAfterSalesAfterSalesApi {
-  private client: HttpClient;
   public readonly requests: OrderAfterSalesAfterSalesRequestsApi;
   public readonly returnShipments: OrderAfterSalesAfterSalesReturnShipmentsApi;
   public readonly events: OrderAfterSalesAfterSalesEventsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.requests = new OrderAfterSalesAfterSalesRequestsApi(client);
     this.returnShipments = new OrderAfterSalesAfterSalesReturnShipmentsApi(client);
     this.events = new OrderAfterSalesAfterSalesEventsApi(client);
@@ -145,11 +143,9 @@ export class OrderAfterSalesAfterSalesApi {
 }
 
 export class OrderAfterSalesApi {
-  private client: HttpClient;
   public readonly afterSales: OrderAfterSalesAfterSalesApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.afterSales = new OrderAfterSalesAfterSalesApi(client);
   }
 

@@ -53,3 +53,4 @@ export type { AfterSalesRequestsCreateResponse201 } from './after-sales-requests
 export type { AfterSalesRequestsRetrieveResponse } from './after-sales-requests-retrieve-response';
 export type { AfterSalesRequestsUpdateResponse } from './after-sales-requests-update-response';
 export type { AfterSalesReturnShipmentsCreateResponse201 } from './after-sales-return-shipments-create-response201';
+export type { OrdersRefundsWebhooksReceiveRequest } from './orders-refunds-webhooks-receive-request';

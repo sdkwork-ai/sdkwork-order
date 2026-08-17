@@ -1,8 +1,31 @@
 import { appApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, OrdersPaymentsWebhooksReceiveRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
+import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, OrdersPaymentsWebhooksReceiveRequest, OrdersRefundsWebhooksReceiveRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
+
+export class OrderOrdersOrdersRefundsWebhooksApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Receive PSP refund webhook */
+  async receive(providerCode: string, body: OrdersRefundsWebhooksReceiveRequest, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/refunds/webhooks/${serializePathParameter(providerCode, { name: 'providerCode', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', skipAuth: true, sdkworkUnwrapKind: 'command' });
+  }
+}
+
+export class OrderOrdersOrdersRefundsApi {
+  public readonly webhooks: OrderOrdersOrdersRefundsWebhooksApi;
+
+  constructor(client: HttpClient) {
+    this.webhooks = new OrderOrdersOrdersRefundsWebhooksApi(client);
+  }
+
+}
 
 export interface OrderOrdersOrdersReceiptsConfirmParams {
   idempotencyKey: string;
@@ -24,7 +47,7 @@ export class OrderOrdersOrdersReceiptsApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/receipt_confirmations`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/receipt_confirmations`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -53,7 +76,7 @@ export class OrderOrdersOrdersRefundRequestsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/refund_requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/refund_requests`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Order refund requests create. */
@@ -64,12 +87,12 @@ export class OrderOrdersOrdersRefundRequestsApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
 /** Order refund requests retrieve. */
   async retrieve(refundRequestId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -93,7 +116,7 @@ export class OrderOrdersOrdersCouponRedemptionsApi {
       },
       {}
     );
-    return this.client.request<CouponRedemptionResult>(appApiPath(`/orders/coupon_redemptions`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<CouponRedemptionResult>(appApiPath(`/orders/coupon_redemptions`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -107,7 +130,7 @@ export class OrderOrdersOrdersStatusApi {
 
 /** Orders status retrieve. */
   async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/status`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/status`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -121,7 +144,7 @@ export class OrderOrdersOrdersStatisticsApi {
 
 /** Orders statistics retrieve. */
   async retrieve(requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/statistics`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/statistics`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -135,7 +158,7 @@ export class OrderOrdersOrdersPaymentSuccessApi {
 
 /** Orders payment Success retrieve. */
   async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<OrderPaymentSuccess> {
-    return this.client.request<OrderPaymentSuccess>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_success`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<OrderPaymentSuccess>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_success`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -159,7 +182,7 @@ export class OrderOrdersOrdersCancellationsApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancellations`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancellations`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -182,7 +205,7 @@ export class OrderOrdersOrdersEventsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 }
 
@@ -196,7 +219,7 @@ export class OrderOrdersOrdersPaymentsWebhooksApi {
 
 /** Receive PSP payment webhook */
   async receive(providerCode: string, body: OrdersPaymentsWebhooksReceiveRequest, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
-    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/payments/webhooks/${serializePathParameter(providerCode, { name: 'providerCode', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, contentType: 'application/json', skipAuth: true, sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/payments/webhooks/${serializePathParameter(providerCode, { name: 'providerCode', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', skipAuth: true, sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -222,7 +245,7 @@ export class OrderOrdersOrdersPaymentsApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -243,6 +266,7 @@ export class OrderOrdersOrdersApi {
   public readonly couponRedemptions: OrderOrdersOrdersCouponRedemptionsApi;
   public readonly refundRequests: OrderOrdersOrdersRefundRequestsApi;
   public readonly receipts: OrderOrdersOrdersReceiptsApi;
+  public readonly refunds: OrderOrdersOrdersRefundsApi;
 
   constructor(client: HttpClient) {
     this.client = client;
@@ -255,6 +279,7 @@ export class OrderOrdersOrdersApi {
     this.couponRedemptions = new OrderOrdersOrdersCouponRedemptionsApi(client);
     this.refundRequests = new OrderOrdersOrdersRefundRequestsApi(client);
     this.receipts = new OrderOrdersOrdersReceiptsApi(client);
+    this.refunds = new OrderOrdersOrdersRefundsApi(client);
   }
 
 
@@ -265,21 +290,19 @@ export class OrderOrdersOrdersApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Orders retrieve. */
   async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
 export class OrderOrdersApi {
-  private client: HttpClient;
   public readonly orders: OrderOrdersOrdersApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.orders = new OrderOrdersOrdersApi(client);
   }
 

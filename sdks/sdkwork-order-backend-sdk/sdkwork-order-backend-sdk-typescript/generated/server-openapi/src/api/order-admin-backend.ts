@@ -37,7 +37,7 @@ export class OrderAdminBackendBackendWithdrawalRequestsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/withdrawal_requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/withdrawal_requests`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Withdrawal requests approve. */
@@ -48,7 +48,7 @@ export class OrderAdminBackendBackendWithdrawalRequestsApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/approve`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/approve`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 
 /** Withdrawal requests reject. */
@@ -59,7 +59,7 @@ export class OrderAdminBackendBackendWithdrawalRequestsApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/reject`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/reject`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 
 /** Withdrawal requests retry. */
@@ -70,7 +70,7 @@ export class OrderAdminBackendBackendWithdrawalRequestsApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/retry`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/retry`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -107,7 +107,7 @@ export class OrderAdminBackendBackendRefundRequestsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/refund_requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/refund_requests`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Refund requests approve. */
@@ -118,7 +118,7 @@ export class OrderAdminBackendBackendRefundRequestsApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/approve`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/approve`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 
 /** Refund requests reject. */
@@ -129,7 +129,7 @@ export class OrderAdminBackendBackendRefundRequestsApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/reject`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/reject`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 
 /** Refund requests retry. */
@@ -140,7 +140,7 @@ export class OrderAdminBackendBackendRefundRequestsApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/retry`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/retry`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -177,7 +177,7 @@ export class OrderAdminBackendBackendTokenBankPlansApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/token_bank_plans`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/token_bank_plans`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Token Bank plans create. */
@@ -188,7 +188,7 @@ export class OrderAdminBackendBackendTokenBankPlansApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(backendApiPath(`/token_bank_plans`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/token_bank_plans`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
 /** Token Bank plans update. */
@@ -199,7 +199,7 @@ export class OrderAdminBackendBackendTokenBankPlansApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'PATCH' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'PATCH' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
 /** Token Bank plans retire. */
@@ -210,7 +210,7 @@ export class OrderAdminBackendBackendTokenBankPlansApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}/retire`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, headers: requestHeaders, sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}/retire`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -249,7 +249,7 @@ export class OrderAdminBackendBackendAccountValuePackagesApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/account_value_packages`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/account_value_packages`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Account value packages create. */
@@ -260,7 +260,7 @@ export class OrderAdminBackendBackendAccountValuePackagesApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(backendApiPath(`/account_value_packages`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/account_value_packages`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
 /** Account value packages update. */
@@ -271,7 +271,7 @@ export class OrderAdminBackendBackendAccountValuePackagesApi {
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'PATCH' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'PATCH' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
 /** Account value packages retire. */
@@ -282,19 +282,17 @@ export class OrderAdminBackendBackendAccountValuePackagesApi {
       },
       {}
     );
-    return this.client.request<SdkWorkCommandData>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}/retire`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, headers: requestHeaders, sdkworkUnwrapKind: 'command' });
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}/retire`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 }
 
 export class OrderAdminBackendBackendApi {
-  private client: HttpClient;
   public readonly accountValuePackages: OrderAdminBackendBackendAccountValuePackagesApi;
   public readonly tokenBankPlans: OrderAdminBackendBackendTokenBankPlansApi;
   public readonly refundRequests: OrderAdminBackendBackendRefundRequestsApi;
   public readonly withdrawalRequests: OrderAdminBackendBackendWithdrawalRequestsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.accountValuePackages = new OrderAdminBackendBackendAccountValuePackagesApi(client);
     this.tokenBankPlans = new OrderAdminBackendBackendTokenBankPlansApi(client);
     this.refundRequests = new OrderAdminBackendBackendRefundRequestsApi(client);
@@ -304,11 +302,9 @@ export class OrderAdminBackendBackendApi {
 }
 
 export class OrderAdminBackendApi {
-  private client: HttpClient;
   public readonly backend: OrderAdminBackendBackendApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.backend = new OrderAdminBackendBackendApi(client);
   }
 

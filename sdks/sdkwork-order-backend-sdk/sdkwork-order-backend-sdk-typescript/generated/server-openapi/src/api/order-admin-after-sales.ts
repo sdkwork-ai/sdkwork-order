@@ -24,7 +24,7 @@ export class OrderAdminAfterSalesAfterSalesReviewsApi {
       },
       {}
     );
-    return this.client.request<AfterSalesRequestSummary>(backendApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/reviews`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<AfterSalesRequestSummary>(backendApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/reviews`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -53,22 +53,20 @@ export class OrderAdminAfterSalesAfterSalesManagementApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<{ items: AfterSalesRequestSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/after_sales/requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<{ items: AfterSalesRequestSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/after_sales/requests`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Retrieve after-sales request for operator review */
   async retrieve(afterSalesRequestId: string, requestOptions?: ApiRequestOptions): Promise<AfterSalesRequestSummary> {
-    return this.client.request<AfterSalesRequestSummary>(backendApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+    return this.client.request<AfterSalesRequestSummary>(backendApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
 export class OrderAdminAfterSalesAfterSalesApi {
-  private client: HttpClient;
   public readonly management: OrderAdminAfterSalesAfterSalesManagementApi;
   public readonly reviews: OrderAdminAfterSalesAfterSalesReviewsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.management = new OrderAdminAfterSalesAfterSalesManagementApi(client);
     this.reviews = new OrderAdminAfterSalesAfterSalesReviewsApi(client);
   }
@@ -76,11 +74,9 @@ export class OrderAdminAfterSalesAfterSalesApi {
 }
 
 export class OrderAdminAfterSalesApi {
-  private client: HttpClient;
   public readonly afterSales: OrderAdminAfterSalesAfterSalesApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.afterSales = new OrderAdminAfterSalesAfterSalesApi(client);
   }
 

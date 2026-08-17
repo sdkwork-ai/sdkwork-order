@@ -286,10 +286,13 @@ export function getSdkworkOrderService(): SdkworkOrderAppService {
 
 export function getSdkworkOrderSessionTokens(): SdkworkOrderSessionTokens {
   const tokens = sdkworkOrderSessionTokenProvider();
+  const accessToken = normalizeSessionToken(tokens.accessToken);
+  const authToken = normalizeSessionToken(tokens.authToken);
+  const refreshToken = normalizeSessionToken(tokens.refreshToken);
   return {
-    accessToken: normalizeSessionToken(tokens.accessToken),
-    authToken: normalizeSessionToken(tokens.authToken),
-    refreshToken: normalizeSessionToken(tokens.refreshToken),
+    ...(accessToken === undefined ? {} : { accessToken }),
+    ...(authToken === undefined ? {} : { authToken }),
+    ...(refreshToken === undefined ? {} : { refreshToken }),
   };
 }
 
@@ -465,10 +468,10 @@ export function createSdkworkMembershipCheckoutService(
     createCheckout(input) {
       requireSdkworkOrderSession();
       const isRecharge = input.action === "recharge";
+      const grantQuantity = input.grantQuantity ?? 0;
+      const amount = input.amountCny?.trim() ?? "";
       // 订阅期额度充值：数量与金额必填，不依赖目录套餐
       if (isRecharge) {
-        const grantQuantity = input.grantQuantity ?? 0;
-        const amount = input.amountCny?.trim() ?? "";
         if (grantQuantity <= 0 || !amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
           throw new Error("Membership quota recharge requires a positive grantQuantity and amount.");
         }
@@ -491,7 +494,7 @@ export function createSdkworkMembershipCheckoutService(
         paymentMethod,
         paymentProduct,
         ...(isRecharge
-          ? { grantQuantity: String(input.grantQuantity), amount: input.amountCny?.trim() }
+          ? { grantQuantity: String(grantQuantity), amount }
           : {}),
       };
       const checkout = (async () => {
@@ -575,7 +578,7 @@ export function unwrapSdkworkOrderListPage<T>(
   }
   return {
     items: Array.isArray(data?.items) ? data.items : [],
-    pageInfo: data?.pageInfo,
+    ...(data?.pageInfo === undefined ? {} : { pageInfo: data.pageInfo }),
   };
 }
 
@@ -694,14 +697,18 @@ function normalizePointsRechargePayment(value: unknown): SdkworkPointsRechargePa
   const providerQrCode = toSdkworkOrderOptionalString(
     record.qrCode ?? record.qrCodePayload ?? record.providerQrCode,
   );
+  const expiresAt = toSdkworkOrderOptionalString(record.expiresAt);
+  const orderId = toSdkworkOrderOptionalString(record.orderId ?? record.id);
+  const orderNo = toSdkworkOrderOptionalString(record.orderNo ?? record.outTradeNo);
+  const qrCode = paymentProduct === "mobile_cashier_h5" ? cashierUrl : providerQrCode ?? cashierUrl;
   return {
     amountCny: toNullableSdkworkOrderNumber(record.amountCny ?? record.amount),
-    cashierUrl,
-    expiresAt: toSdkworkOrderOptionalString(record.expiresAt),
-    orderId: toSdkworkOrderOptionalString(record.orderId ?? record.id),
-    orderNo: toSdkworkOrderOptionalString(record.orderNo ?? record.outTradeNo),
+    ...(cashierUrl === undefined ? {} : { cashierUrl }),
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+    ...(orderId === undefined ? {} : { orderId }),
+    ...(orderNo === undefined ? {} : { orderNo }),
     points: toSdkworkOrderNumber(record.points ?? record.grantAmount),
-    qrCode: paymentProduct === "mobile_cashier_h5" ? cashierUrl : providerQrCode ?? cashierUrl,
+    ...(qrCode === undefined ? {} : { qrCode }),
     status,
   };
 }
@@ -717,9 +724,10 @@ function normalizeCouponRechargeResult(value: unknown): SdkworkCouponRedemptionR
   const status = normalizePointsRechargeStatus(
     record.status ?? record.fulfillmentStatus ?? record.orderStatus,
   );
+  const orderNo = toSdkworkOrderOptionalString(record.orderNo ?? record.outTradeNo);
   const common = {
     orderId,
-    orderNo: toSdkworkOrderOptionalString(record.orderNo ?? record.outTradeNo),
+    ...(orderNo === undefined ? {} : { orderNo }),
     replayed: record.replayed === true,
     status: status === "completed" ? "completed" as const : "pending" as const,
   };
@@ -813,19 +821,25 @@ function normalizeMembershipCheckoutPayment(
       ?? record.qrCodePayload
       ?? record.codeUrl,
   );
+  const action = toSdkworkOrderOptionalString(record.action) as SdkworkMembershipCheckoutAction | undefined;
+  const expiresAt = toSdkworkOrderOptionalString(record.expiresAt);
+  const orderId = toSdkworkOrderOptionalString(record.orderId ?? record.id);
+  const packageName = toSdkworkOrderOptionalString(record.packageName);
+  const qrCode = paymentProduct === "mobile_cashier_h5" ? cashierUrl : providerQrCode ?? cashierUrl;
+  const targetLevelName = toSdkworkOrderOptionalString(record.targetLevelName ?? record.targetPlanName);
   return {
-    action: toSdkworkOrderOptionalString(record.action) as SdkworkMembershipCheckoutAction | undefined,
+    ...(action === undefined ? {} : { action }),
     amountCny: toNullableSdkworkOrderNumber(record.amountCny ?? record.amount),
-    cashierUrl,
+    ...(cashierUrl === undefined ? {} : { cashierUrl }),
     durationDays: toNullableSdkworkOrderNumber(record.durationDays),
-    expiresAt: toSdkworkOrderOptionalString(record.expiresAt),
-    orderId: toSdkworkOrderOptionalString(record.orderId ?? record.id),
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+    ...(orderId === undefined ? {} : { orderId }),
     packageId: toNullableSdkworkOrderNumber(record.packageId) ?? fallbackPackageId,
-    packageName: toSdkworkOrderOptionalString(record.packageName),
-    qrCode: paymentProduct === "mobile_cashier_h5" ? cashierUrl : providerQrCode ?? cashierUrl,
+    ...(packageName === undefined ? {} : { packageName }),
+    ...(qrCode === undefined ? {} : { qrCode }),
     reused: record.reused === true,
     status: normalizePointsRechargeStatus(record.status ?? record.paymentStatus ?? record.orderStatus),
-    targetLevelName: toSdkworkOrderOptionalString(record.targetLevelName ?? record.targetPlanName),
+    ...(targetLevelName === undefined ? {} : { targetLevelName }),
   };
 }
 
@@ -850,12 +864,14 @@ function normalizePhysicalQuantity(value: number): number {
 function normalizePhysicalShippingAddress(
   address: SdkworkPhysicalShippingAddress,
 ): SdkworkPhysicalShippingAddress {
+  const district = toSdkworkOrderOptionalString(address.district);
+  const postalCode = toSdkworkOrderOptionalString(address.postalCode);
   return {
     city: requirePhysicalText("shipping city", address.city),
     countryCode: requirePhysicalText("shipping country code", address.countryCode).toUpperCase(),
     detailAddress: requirePhysicalText("shipping detail address", address.detailAddress),
-    district: toSdkworkOrderOptionalString(address.district),
-    postalCode: toSdkworkOrderOptionalString(address.postalCode),
+    ...(district === undefined ? {} : { district }),
+    ...(postalCode === undefined ? {} : { postalCode }),
     province: requirePhysicalText("shipping province", address.province),
     receiverName: requirePhysicalText("shipping receiver name", address.receiverName),
     receiverPhone: requirePhysicalText("shipping receiver phone", address.receiverPhone),
@@ -909,8 +925,8 @@ export function bootstrapSdkworkOrderAppService(
       return input.tokenManager.getTokens();
     }
     return {
-      accessToken: input.accessToken,
-      authToken: input.authToken,
+      ...(input.accessToken === undefined ? {} : { accessToken: input.accessToken }),
+      ...(input.authToken === undefined ? {} : { authToken: input.authToken }),
     };
   });
   return service;

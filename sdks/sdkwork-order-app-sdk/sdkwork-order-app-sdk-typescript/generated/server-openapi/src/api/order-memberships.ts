@@ -24,27 +24,23 @@ export class OrderMembershipsMembershipsOrdersApi {
       },
       {}
     );
-    return this.client.request<MembershipOrderCreateResult>(appApiPath(`/memberships/orders`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
+    return this.client.request<MembershipOrderCreateResult>(appApiPath(`/memberships/orders`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
 export class OrderMembershipsMembershipsApi {
-  private client: HttpClient;
   public readonly orders: OrderMembershipsMembershipsOrdersApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.orders = new OrderMembershipsMembershipsOrdersApi(client);
   }
 
 }
 
 export class OrderMembershipsApi {
-  private client: HttpClient;
   public readonly memberships: OrderMembershipsMembershipsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
     this.memberships = new OrderMembershipsMembershipsApi(client);
   }
 
@@ -54,13 +50,7 @@ export function createOrderMembershipsApi(client: HttpClient): OrderMembershipsA
   return new OrderMembershipsApi(client);
 }
 
-function appendQueryString(path: string, rawQueryString: string): string {
-  const query = rawQueryString.replace(/^\?+/, '');
-  if (!query) {
-    return path;
-  }
-  return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
-}
+
 
 
 
