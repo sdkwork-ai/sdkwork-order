@@ -52,8 +52,6 @@ const offsetPaginationParameters = [
 
 const writeCommandParameters = [
   { $ref: "#/components/parameters/WriteCommandIdempotencyKey" },
-  { $ref: "#/components/parameters/WriteCommandRequestHash" },
-  { $ref: "#/components/parameters/WriteCommandIdempotencyFingerprint" },
 ];
 
 function problemResponse(description) {
@@ -147,6 +145,18 @@ function appOperation(input) {
   });
 }
 
+function appPublicOperation(input) {
+  return {
+    ...operation({
+      surface: "app-api",
+      security: [],
+      ...input,
+    }),
+    "x-sdkwork-auth-mode": "anonymous",
+    "x-sdkwork-route-auth": "public",
+  };
+}
+
 function backendOperation(input) {
   return operation({
     surface: "backend-api",
@@ -157,7 +167,7 @@ function backendOperation(input) {
 
 const appPaths = {
   "/app/v3/api/recharges/packages": {
-    get: appOperation({
+    get: appPublicOperation({
       tags: ["recharges"],
       summary: "Recharges packages list.",
       operationId: "recharges.packages.list",
@@ -167,7 +177,7 @@ const appPaths = {
     }),
   },
   "/app/v3/api/recharges/plans": {
-    get: appOperation({
+    get: appPublicOperation({
       tags: ["recharges"],
       summary: "Token Bank plans list.",
       operationId: "recharges.plans.list",
@@ -180,7 +190,7 @@ const appPaths = {
     }),
   },
   "/app/v3/api/recharges/settings": {
-    get: appOperation({
+    get: appPublicOperation({
       tags: ["recharges"],
       summary: "Recharges settings retrieve.",
       operationId: "recharges.settings.retrieve",
@@ -466,16 +476,28 @@ function requestActionPath(parameterName, operationId, summary, resource) {
   };
 }
 
+function mergePathItems(existing = {}, overlay) {
+  const next = { ...existing };
+  for (const [path, methods] of Object.entries(overlay)) {
+    next[path] = { ...(existing[path] ?? {}), ...methods };
+  }
+  return next;
+}
+
 function patchAppSpec(spec) {
   const next = structuredClone(spec);
-  next.paths = { ...next.paths, ...appPaths };
+  next.paths = mergePathItems(next.paths, appPaths);
   next.components ??= {};
   next.components.schemas ??= {};
-  next.components.schemas.RechargeOrderCreateCommand = rechargeOrderCreateCommandSchema();
-  next.components.schemas.RefundRequestCreateCommand = refundRequestCreateCommandSchema();
-  next.components.schemas.WithdrawalRequestCreateCommand = withdrawalRequestCreateCommandSchema();
-  next.components.schemas.AccountValueRequestResponse = accountValueRequestResponseSchema();
-  next.components.schemas.TokenBankPlanResponse = tokenBankPlanResponseSchema();
+  if (!next.components.schemas.RechargeOrderCreateCommand?.properties?.paymentProduct) {
+    next.components.schemas.RechargeOrderCreateCommand = rechargeOrderCreateCommandSchema();
+  }
+  next.components.schemas.RefundRequestCreateCommand ??= refundRequestCreateCommandSchema();
+  next.components.schemas.WithdrawalRequestCreateCommand ??=
+    withdrawalRequestCreateCommandSchema();
+  next.components.schemas.AccountValueRequestResponse ??=
+    accountValueRequestResponseSchema();
+  next.components.schemas.TokenBankPlanResponse ??= tokenBankPlanResponseSchema();
   return next;
 }
 

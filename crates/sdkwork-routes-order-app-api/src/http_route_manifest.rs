@@ -191,20 +191,20 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "shipments",
         "shipments.trackingEvents.list",
     ),
-    // === Recharges ===
-    HttpRoute::dual_token(
+    // === Recharges (catalog is anonymous; orders remain dual-token) ===
+    HttpRoute::public(
         HttpMethod::Get,
         "/app/v3/api/recharges/packages",
         "recharges",
         "recharges.packages.list",
     ),
-    HttpRoute::dual_token(
+    HttpRoute::public(
         HttpMethod::Get,
         "/app/v3/api/recharges/plans",
         "recharges",
         "recharges.plans.list",
     ),
-    HttpRoute::dual_token(
+    HttpRoute::public(
         HttpMethod::Get,
         "/app/v3/api/recharges/settings",
         "recharges",
@@ -301,11 +301,17 @@ mod tests {
         for route in manifest.routes() {
             if route.path.contains("/payments/webhooks/")
                 || route.path.contains("/refunds/webhooks/")
+                || matches!(
+                    route.operation_id,
+                    "recharges.packages.list"
+                        | "recharges.plans.list"
+                        | "recharges.settings.retrieve"
+                )
             {
                 assert_eq!(
                     route.auth,
                     RouteAuth::Public,
-                    "provider webhook routes must be public"
+                    "catalog and provider webhook routes must be public"
                 );
                 continue;
             }

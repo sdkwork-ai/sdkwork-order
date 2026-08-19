@@ -25,6 +25,10 @@ pub fn order_contract_fallback_config() -> sdkwork_web_bootstrap::ContractFallba
     OrderAssemblyContract::contract_fallback_config()
 }
 
+pub fn app_api_route_manifest() -> sdkwork_web_core::HttpRouteManifest {
+    OrderAssemblyContract::app_route_manifest()
+}
+
 pub fn assembly_route_count() -> usize {
     generated::ROUTE_CRATE_COUNT
 }
