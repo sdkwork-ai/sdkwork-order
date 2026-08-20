@@ -30,12 +30,12 @@ export function createOrderAppTransportClient(
 ): OrderAppTransportClient {
   const config: SdkworkAppConfig = {
     baseUrl: resolveOrderAppApiOrigin(input.baseUrl),
-    ...(input.authToken === undefined ? {} : { authToken: input.authToken }),
-    ...(input.accessToken === undefined ? {} : { accessToken: input.accessToken }),
-    ...(input.tenantId === undefined ? {} : { tenantId: input.tenantId }),
-    ...(input.organizationId === undefined ? {} : { organizationId: input.organizationId }),
-    ...(input.platform === undefined ? {} : { platform: input.platform }),
-    ...(input.tokenManager === undefined ? {} : { tokenManager: input.tokenManager }),
+    authToken: input.authToken,
+    accessToken: input.accessToken,
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    platform: input.platform,
+    tokenManager: input.tokenManager,
   };
   return createClient(config);
 }

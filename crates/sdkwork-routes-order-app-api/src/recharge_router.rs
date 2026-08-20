@@ -46,10 +46,6 @@ use crate::owner_order_cancel::{cancel_owner_order_with_payments, compensate_fai
 use crate::owner_order_payment_enrich::enriched_postgres_owner_order_payments;
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
-fn public_catalog_tenant_id() -> String {
-    sdkwork_order_repository_sqlx::recharge_platform_catalog::platform_catalog_tenant_id()
-}
-
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
@@ -698,18 +694,22 @@ pub fn build_app_recharge_checkout_router_with_integrations(
 
 async fn list_token_bank_plans(
     State(state): State<AppRechargeCheckoutState>,
+    runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
     Query(params): Query<RechargePackageListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let tenant_id = public_catalog_tenant_id();
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
+        Ok(subject) => subject,
+        Err(message) => return unauthorized(ctx, message),
+    };
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
         Err(response) => return *response,
     };
     let query = match AccountValueCatalogListQuery::new(
-        &tenant_id,
-        Some(PLATFORM_ORGANIZATION_SCOPE_SENTINEL),
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
         Some(AccountValueAssetCode::TokenBank),
         Some("active"),
         Some(page_params.page),
@@ -965,14 +965,18 @@ async fn retrieve_withdrawal_request(
 
 async fn fetch_recharge_packages(
     State(state): State<AppRechargeCheckoutState>,
+    runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
     Query(params): Query<RechargePackageListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let tenant_id = public_catalog_tenant_id();
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
+        Ok(subject) => subject,
+        Err(message) => return unauthorized(ctx, message),
+    };
     let query = match RechargePackageListQuery::new(
-        &tenant_id,
-        Some(PLATFORM_ORGANIZATION_SCOPE_SENTINEL),
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
         params.page,
         params.page_size,
     ) {
@@ -996,12 +1000,16 @@ async fn fetch_recharge_packages(
 
 async fn fetch_recharge_settings(
     State(state): State<AppRechargeCheckoutState>,
+    runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let tenant_id = public_catalog_tenant_id();
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
+        Ok(subject) => subject,
+        Err(message) => return unauthorized(ctx, message),
+    };
     let query =
-        match RechargeSettingsQuery::new(&tenant_id, Some(PLATFORM_ORGANIZATION_SCOPE_SENTINEL)) {
+        match RechargeSettingsQuery::new(&subject.tenant_id, subject.organization_id.as_deref()) {
             Ok(query) => query,
             Err(error) => return map_service_error(ctx, error),
         };

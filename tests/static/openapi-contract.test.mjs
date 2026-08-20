@@ -32,28 +32,6 @@ test("order openapi authorities declare v3 list and command envelopes", () => {
     "anonymous",
     "public PSP webhooks must suppress generated SDK credentials",
   );
-  for (const catalogPath of [
-    "/app/v3/api/recharges/packages",
-    "/app/v3/api/recharges/plans",
-    "/app/v3/api/recharges/settings",
-  ]) {
-    const operation = appSpec.paths[catalogPath]?.get;
-    assert.deepEqual(
-      operation?.security,
-      [],
-      `${catalogPath} must be a public catalog operation`,
-    );
-    assert.equal(
-      operation?.["x-sdkwork-auth-mode"],
-      "anonymous",
-      `${catalogPath} must suppress generated SDK credentials`,
-    );
-    assert.equal(
-      operation?.["x-sdkwork-route-auth"],
-      "public",
-      `${catalogPath} must declare public route auth`,
-    );
-  }
 
   assert.ok(backendSpec.components?.schemas?.SdkWorkCommandResponse);
   assert.ok(backendSpec.paths["/backend/v3/api/orders"]?.get);

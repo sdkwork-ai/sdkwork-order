@@ -3135,7 +3135,12 @@
             }
           }
         },
-        "security": [],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
         "parameters": [
           {
             "name": "page",
@@ -3164,9 +3169,7 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "recharges.packages",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-auth-mode": "anonymous",
-        "x-sdkwork-route-auth": "public"
+        "x-sdkwork-api-surface": "app-api"
       }
     },
     "/app/v3/api/recharges/settings": {
@@ -3248,16 +3251,19 @@
             }
           }
         },
-        "security": [],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
         "parameters": [],
         "x-sdkwork-owner": "sdkwork-order",
         "x-sdkwork-api-authority": "sdkwork-order-app-api",
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "recharges.settings",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-auth-mode": "anonymous",
-        "x-sdkwork-route-auth": "public"
+        "x-sdkwork-api-surface": "app-api"
       }
     },
     "/app/v3/api/recharges/orders": {
@@ -3996,7 +4002,12 @@
             }
           }
         },
-        "security": [],
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
         "parameters": [
           {
             "name": "status",
@@ -4033,9 +4044,7 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "recharges.plans",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-auth-mode": "anonymous",
-        "x-sdkwork-route-auth": "public"
+        "x-sdkwork-api-surface": "app-api"
       }
     },
     "/app/v3/api/orders/refund_requests": {
