@@ -1,0 +1,5 @@
+specVersion = 1
+kind = "sdkwork.webserver.server"
+id = "order"
+enabled = false
+description = "sdkwork-order webserver placeholder (align-application-deploy-layout)"
