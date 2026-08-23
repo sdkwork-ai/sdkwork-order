@@ -16,6 +16,7 @@ import {
   Search,
   Undo2,
 } from "lucide-react";
+import { uuid } from "@sdkwork/utils/id";
 import {
   AdminOrdersIntlProvider,
   useAdminOrdersI18n,
@@ -382,7 +383,7 @@ function AdminOrdersPageInner({
     setRefundAmount(target.paidAmount ?? "");
     setRefundReason("");
     setRefundDetail("");
-    setRefundIdempotencyKey(crypto.randomUUID());
+    setRefundIdempotencyKey(uuid());
   };
 
   async function submitRefund() {
@@ -805,13 +806,13 @@ function AdminOrdersPageInner({
               <>
                 <Button disabled={Boolean(busyId)} size="sm" title={t("admin.orders.action.cancel", "Cancel")} type="button" variant="outline" onClick={() => {
                       setMutationTarget({ action: "cancel", orderId: order.orderId, orderLabel: order.orderSn || order.orderId });
-                      setMutationIdempotencyKey(crypto.randomUUID());
+                      setMutationIdempotencyKey(uuid());
                     }}>
                   <Ban aria-hidden="true" className="mr-1.5 h-4 w-4" />{t("admin.orders.action.cancel", "Cancel")}
                 </Button>
                 <Button disabled={Boolean(busyId)} size="sm" title={t("admin.orders.action.close", "Close")} type="button" variant="outline" onClick={() => {
                       setMutationTarget({ action: "close", orderId: order.orderId, orderLabel: order.orderSn || order.orderId });
-                      setMutationIdempotencyKey(crypto.randomUUID());
+                      setMutationIdempotencyKey(uuid());
                     }}>
                   <Archive aria-hidden="true" className="mr-1.5 h-4 w-4" />{t("admin.orders.action.close", "Close")}
                 </Button>
@@ -967,7 +968,7 @@ function AdminOrdersPageInner({
                 onClick={() => {
                   setPaymentRequestNo("");
                   setPaymentTarget({ orderId: detail.orderId, orderLabel: detail.orderSn });
-                  setPaymentIdempotencyKey(crypto.randomUUID());
+                  setPaymentIdempotencyKey(uuid());
                 }}
               >
                 <BadgeCheck aria-hidden="true" className="mr-1.5 h-4 w-4" />

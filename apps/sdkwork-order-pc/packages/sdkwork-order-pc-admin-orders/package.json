@@ -32,6 +32,7 @@
     "@sdkwork/order-pc-admin-core": "workspace:*",
     "@sdkwork/order-pc-core": "workspace:*",
     "@sdkwork/order-service": "workspace:*",
+    "@sdkwork/utils": "workspace:*",
     "lucide-react": "catalog:"
   },
   "devDependencies": {

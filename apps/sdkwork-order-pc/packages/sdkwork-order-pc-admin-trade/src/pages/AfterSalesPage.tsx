@@ -1,6 +1,7 @@
 import { useTradeAdminLink } from "../navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Eye, RefreshCw, RotateCcw, Search, ShieldCheck , Download} from "lucide-react";
+import { uuid } from "@sdkwork/utils/id";
 import {
   TradeAdminIntlProvider,
   useTradeAdminI18n,
@@ -401,7 +402,7 @@ function AfterSalesPageInner({
             {canManage ? (
               <Button aria-label={`${t("admin.trade.afterSales.review", "Review")} — ${request.afterSalesNo}`} disabled={busy} size="sm" title={t("admin.trade.afterSales.review", "Review")} type="button" variant="outline" onClick={() => {
                     setReviewTarget({ request, action: "approve" });
-                    setReviewIdempotencyKey(crypto.randomUUID());
+                    setReviewIdempotencyKey(uuid());
                   }}>
                 <ShieldCheck aria-hidden="true" className="mr-1.5 h-4 w-4" />{t("admin.trade.afterSales.review", "Review")}
               </Button>
