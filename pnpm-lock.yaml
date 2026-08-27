@@ -478,6 +478,9 @@ importers:
       '@sdkwork/sdk-common':
         specifier: workspace:*
         version: link:../../../../sdkwork-sdk-commons/sdkwork-sdk-common-typescript
+      '@sdkwork/utils':
+        specifier: ^0.11.0
+        version: 0.11.0
 
   ../sdkwork-membership/sdks/sdkwork-membership-app-sdk/sdkwork-membership-app-sdk-typescript:
     dependencies:
@@ -485,8 +488,8 @@ importers:
         specifier: workspace:*
         version: link:../../../../sdkwork-sdk-commons/sdkwork-sdk-common-typescript
       '@sdkwork/utils':
-        specifier: workspace:*
-        version: link:../../../../sdkwork-utils/packages/sdkwork-utils-typescript
+        specifier: ^0.11.0
+        version: 0.11.0
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -1154,8 +1157,8 @@ importers:
         specifier: workspace:*
         version: link:../../../../sdkwork-sdk-commons/sdkwork-sdk-common-typescript
       '@sdkwork/utils':
-        specifier: workspace:*
-        version: link:../../../../sdkwork-utils/packages/sdkwork-utils-typescript
+        specifier: ^0.11.0
+        version: 0.11.0
 
   sdks/sdkwork-order-backend-sdk/sdkwork-order-backend-sdk-typescript:
     dependencies:
@@ -1163,8 +1166,8 @@ importers:
         specifier: workspace:*
         version: link:../../../../sdkwork-sdk-commons/sdkwork-sdk-common-typescript
       '@sdkwork/utils':
-        specifier: workspace:*
-        version: link:../../../../sdkwork-utils/packages/sdkwork-utils-typescript
+        specifier: ^0.11.0
+        version: 0.11.0
 
 packages:
 
