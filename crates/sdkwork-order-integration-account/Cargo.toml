@@ -17,7 +17,6 @@ serde_json = { workspace = true }
 sdkwork_contract_service.workspace = true
 sdkwork_order_service.workspace = true
 sdkwork_account_service.workspace = true
-sdkwork_account_repository_sqlx.workspace = true
 sdkwork-database-config.workspace = true
 sdkwork-database-sqlx.workspace = true
 sdkwork-utils-rust.workspace = true
