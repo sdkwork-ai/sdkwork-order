@@ -2085,10 +2085,17 @@ fn compute_grant_amount(
         .checked_mul(currency_rate_scaled)
         .and_then(|value| value.checked_mul(base_points_scaled))
         .ok_or_else(|| CommerceServiceError::storage("recharge credited points overflow"))?;
-    let denominator = 100_i128 * 1_000_000_i128 * 1_000_000_i128;
+    // Awarded points are carried as micro-points on the order (1 point = 1e6
+    // micro). amount(*1e2) * (rate*base)(*1e12) carries 1e14 scale; dividing by
+    // 1e8 yields amount*rate*base*1e6 micro so a credited balance stays exact to
+    // the micro scale and matches the billing-side token_points_for_charge.
+    let denominator = 100_i128 * 1_000_000_i128;
     let rounded = round_divide_i128(numerator, denominator);
+    let bonus_micro = bonus_points
+        .checked_mul(1_000_000)
+        .ok_or_else(|| CommerceServiceError::storage("recharge bonus points overflow"))?;
     let credited_points = rounded
-        .checked_add(i128::from(bonus_points))
+        .checked_add(i128::from(bonus_micro))
         .ok_or_else(|| CommerceServiceError::storage("recharge credited points overflow"))?;
     i64::try_from(credited_points)
         .map_err(|_| CommerceServiceError::storage("recharge credited points overflow"))
@@ -2650,11 +2657,11 @@ mod tests {
 
         assert_eq!(
             compute_grant_amount("12.00", "CNY", 30, &settings).unwrap(),
-            150
+            150_000_000
         );
         assert_eq!(
             compute_grant_amount("20.00", "USD", 50, &settings).unwrap(),
-            1550
+            1_550_000_000
         );
     }
 

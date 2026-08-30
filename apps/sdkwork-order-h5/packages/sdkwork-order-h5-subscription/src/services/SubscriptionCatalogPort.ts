@@ -1,5 +1,7 @@
-import { createClient, type SdkworkAppClient as SdkworkMembershipAppClient } from "@sdkwork/membership-app-sdk";
-import { createClient as createOrderAppClient, type SdkworkAppClient as SdkworkOrderAppClient } from "@sdkwork/order-app-sdk";
+import type { SdkworkAppClient as SdkworkMembershipAppClient } from "@sdkwork/membership-app-sdk";
+import type { SdkworkAppClient as SdkworkOrderAppClient } from "@sdkwork/order-app-sdk";
+import { createDefaultSubscriptionRuntimeClients } from "../runtime/catalogClients";
+import { sdkworkTokenBankPointsMicroToDecimal } from "@sdkwork/order-service";
 
 /**
  * Subscription catalog port: the order-domain H5 surface consumes catalog
@@ -107,8 +109,13 @@ export interface CreateSubscriptionCatalogPortOptions {
 export function createDefaultSubscriptionCatalogPort(
   options: CreateSubscriptionCatalogPortOptions = {},
 ): SubscriptionCatalogPort {
-  const membershipClient = options.membershipAppSdkClient ?? createClient({ baseUrl: "/" });
-  const orderClient = options.orderAppSdkClient ?? createOrderAppClient({ baseUrl: "/" });
+  const defaultClients =
+    options.membershipAppSdkClient && options.orderAppSdkClient
+      ? null
+      : createDefaultSubscriptionRuntimeClients();
+  const membershipClient =
+    options.membershipAppSdkClient ?? defaultClients!.membershipAppSdkClient;
+  const orderClient = options.orderAppSdkClient ?? defaultClients!.orderAppSdkClient;
 
   return {
     async listMembershipPackages(): Promise<MembershipPackage[]> {
@@ -138,9 +145,9 @@ export function createDefaultSubscriptionCatalogPort(
           planCode: id,
           // 展示名由 UI 按当前语言拼装（`subscription.points_display`），
           // 这里只保留到账点数，避免把语言硬编码进目录数据。
-          displayName: String(points),
+          displayName: sdkworkTokenBankPointsMicroToDecimal(points),
           planPeriod: "once",
-          grantAmount: String(points),
+          grantAmount: sdkworkTokenBankPointsMicroToDecimal(points),
           bonusAmount: String(bonus),
           priceAmount: toNumberString(record.priceAmount ?? record.price),
           currencyCode: readString(record.currencyCode) ?? "CNY",

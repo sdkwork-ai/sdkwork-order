@@ -4599,7 +4599,7 @@
           "orderOrders"
         ],
         "summary": "Orders receipt confirmations create.",
-        "operationId": "orders.receipts.confirm",
+        "operationId": "orders.receipts.create",
         "parameters": [
           {
             "name": "orderId",
@@ -5149,10 +5149,11 @@
             "minLength": 1
           },
           "quantity": {
-            "type": "integer",
+            "type": "string",
             "format": "int64",
             "minimum": 1,
-            "default": 1
+            "default": 1,
+            "x-sdkwork-int64-string": true
           }
         }
       },
@@ -5852,9 +5853,10 @@
             ]
           },
           "durationDays": {
-            "type": "integer",
+            "type": "string",
             "format": "int64",
-            "minimum": 1
+            "minimum": 1,
+            "x-sdkwork-int64-string": true
           },
           "dailyQuota": {
             "type": "string",
@@ -6077,9 +6079,10 @@
             "type": "string"
           },
           "grantQuantity": {
-            "type": "integer",
+            "type": "string",
             "format": "int64",
-            "description": "Quota units to add to the membership entitlement account (required for action=recharge)."
+            "description": "Quota units to add to the membership entitlement account (required for action=recharge).",
+            "x-sdkwork-int64-string": true
           },
           "amount": {
             "type": "string",
@@ -6169,8 +6172,9 @@
             "type": "string"
           },
           "durationDays": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "int64",
+            "x-sdkwork-int64-string": true
           },
           "expiresAt": {
             "type": "string",
@@ -6220,9 +6224,10 @@
             "type": "string"
           },
           "grantQuantity": {
-            "type": "integer",
+            "type": "string",
             "format": "int64",
-            "description": "Quota units granted by a membership quota recharge order (present when action=recharge)."
+            "description": "Quota units granted by a membership quota recharge order (present when action=recharge).",
+            "x-sdkwork-int64-string": true
           }
         }
       },

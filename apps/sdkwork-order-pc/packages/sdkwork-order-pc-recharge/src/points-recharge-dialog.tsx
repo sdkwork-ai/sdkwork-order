@@ -14,6 +14,7 @@ import {
   StatusNotice,
 } from "@sdkwork/ui-pc-react";
 import {
+  sdkworkTokenBankPointsMicroToDecimal,
   createSdkworkPointsRechargeService,
   type SdkworkPointsRechargePackage,
   type SdkworkPointsRechargePayment,
@@ -382,7 +383,7 @@ function SdkworkPointsRechargeExperience({
                       onClick={() => selectPackage(item.id)}
                       type="button"
                     >
-                      <span className="sdkwork-points-recharge-dialog__points"><Sparkles aria-hidden="true" />{item.points.toLocaleString()} <small>{copy.pointsUnit}</small></span>
+                      <span className="sdkwork-points-recharge-dialog__points"><Sparkles aria-hidden="true" />{sdkworkTokenBankPointsMicroToDecimal(item.points)} <small>{copy.pointsUnit}</small></span>
                       <span className="sdkwork-points-recharge-dialog__price">{item.currencyCode} {item.priceAmount.toFixed(2)}</span>
                     </button>
                   );

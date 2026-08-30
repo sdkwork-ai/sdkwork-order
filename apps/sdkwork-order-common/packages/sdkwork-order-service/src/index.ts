@@ -1,10 +1,23 @@
 import type { SdkworkAppClient } from "@sdkwork/order-app-sdk";
+import { microToDecimalString } from "@sdkwork/utils";
 import { formatMoney } from "@sdkwork/utils/money";
 import {
   createOrderAppTransportClient,
   type BootstrapSdkworkOrderAppServiceInput,
 } from "./transport.ts";
 import { createSdkworkIdempotencyParams } from "./idempotency.ts";
+/**
+ * Format a Token Bank micro-point integer as a points decimal string for
+ * display. Points are carried as micro-units (1 point = 1e6 micro) through the
+ * account ledger and recharge granting; any value surfaced to the UI must be
+ * divided by 1e6 so fractional points (up to 6 places) render exactly. This
+ * delegates to the shared `@sdkwork/utils` implementation so the order surface
+ * and the Cloud Router console/admin surfaces render the identical value.
+ */
+export function sdkworkTokenBankPointsMicroToDecimal(value: number): string {
+  return microToDecimalString(BigInt(Math.round(value)));
+}
+
 
 type PublicSdkPort<T> = {
   readonly [TKey in keyof T]: T[TKey] extends (...args: infer TArgs) => infer TResult

@@ -76,21 +76,23 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
-              "default": 1
+              "default": 1,
+              "x-sdkwork-int64-string": true
             }
           },
           {
             "name": "page_size",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
               "maximum": 200,
-              "default": 20
+              "default": 20,
+              "x-sdkwork-int64-string": true
             }
           }
         ],
@@ -178,21 +180,23 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
-              "default": 1
+              "default": 1,
+              "x-sdkwork-int64-string": true
             }
           },
           {
             "name": "page_size",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
               "maximum": 200,
-              "default": 20
+              "default": 20,
+              "x-sdkwork-int64-string": true
             }
           }
         ],
@@ -553,21 +557,23 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
-              "default": 1
+              "default": 1,
+              "x-sdkwork-int64-string": true
             }
           },
           {
             "name": "page_size",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
               "maximum": 200,
-              "default": 20
+              "default": 20,
+              "x-sdkwork-int64-string": true
             }
           }
         ],
@@ -742,21 +748,23 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
-              "default": 1
+              "default": 1,
+              "x-sdkwork-int64-string": true
             }
           },
           {
             "name": "page_size",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
               "maximum": 200,
-              "default": 20
+              "default": 20,
+              "x-sdkwork-int64-string": true
             }
           }
         ],
@@ -943,21 +951,23 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
-              "default": 1
+              "default": 1,
+              "x-sdkwork-int64-string": true
             }
           },
           {
             "name": "page_size",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
               "maximum": 200,
-              "default": 20
+              "default": 20,
+              "x-sdkwork-int64-string": true
             }
           }
         ],
@@ -1066,21 +1076,23 @@
             "name": "page",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
-              "default": 1
+              "default": 1,
+              "x-sdkwork-int64-string": true
             }
           },
           {
             "name": "page_size",
             "in": "query",
             "schema": {
-              "type": "integer",
+              "type": "string",
               "format": "int64",
               "minimum": 1,
               "maximum": 200,
-              "default": 20
+              "default": 20,
+              "x-sdkwork-int64-string": true
             }
           }
         ],
@@ -3413,8 +3425,9 @@
             "type": "string"
           },
           "quantity": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "int64",
+            "x-sdkwork-int64-string": true
           },
           "createdAt": {
             "type": "string"
@@ -3464,8 +3477,9 @@
             "type": "string"
           },
           "quantity": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "int64",
+            "x-sdkwork-int64-string": true
           },
           "unitPrice": {
             "type": "string"

@@ -32,8 +32,8 @@
       "inheritanceMode": "module-catalog-with-overrides",
       "moduleCatalogRefs": [
         {
-          "moduleId": "commerce",
-          "manifestRef": "../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json",
+          "moduleId": "account",
+          "manifestRef": "../../../../../sdkwork-account/specs/iam.module.manifest.json",
           "inheritPermissions": true,
           "inheritRoles": true
         },
@@ -60,7 +60,7 @@
         "allowFrontendHintsWithoutServerDuplication": true
       },
       "applicationModule": {
-        "manifestRef": "../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json"
+        "manifestRef": "../../../../../sdkwork-account/specs/iam.module.manifest.json"
       }
     },
     "dependencyApiExports": [],
