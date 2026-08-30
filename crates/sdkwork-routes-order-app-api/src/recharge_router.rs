@@ -44,7 +44,7 @@ use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
 use crate::owner_order_cancel::{cancel_owner_order_with_payments, compensate_failed_recharge_pay};
 use crate::owner_order_payment_enrich::enriched_postgres_owner_order_payments;
-use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
+use crate::subject::{app_runtime_subject_from_contexts, app_runtime_subject_from_contexts_or_default, AppRuntimeSubject};
 
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;
@@ -699,10 +699,7 @@ async fn list_token_bank_plans(
     Query(params): Query<RechargePackageListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
-        Ok(subject) => subject,
-        Err(message) => return unauthorized(ctx, message),
-    };
+    let subject = app_runtime_subject_from_contexts_or_default(runtime_context, ctx);
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
         Err(response) => return *response,
@@ -736,10 +733,7 @@ async fn list_refund_requests(
     Query(params): Query<AccountValueRequestListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
-        Ok(subject) => subject,
-        Err(message) => return unauthorized(ctx, message),
-    };
+    let subject = app_runtime_subject_from_contexts_or_default(runtime_context, ctx);
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
         Err(response) => return *response,
@@ -970,10 +964,7 @@ async fn fetch_recharge_packages(
     Query(params): Query<RechargePackageListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
-        Ok(subject) => subject,
-        Err(message) => return unauthorized(ctx, message),
-    };
+    let subject = app_runtime_subject_from_contexts_or_default(runtime_context, ctx);
     let query = match RechargePackageListQuery::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -1004,10 +995,7 @@ async fn fetch_recharge_settings(
     request_context: Option<Extension<WebRequestContext>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
-        Ok(subject) => subject,
-        Err(message) => return unauthorized(ctx, message),
-    };
+    let subject = app_runtime_subject_from_contexts_or_default(runtime_context, ctx);
     let query =
         match RechargeSettingsQuery::new(&subject.tenant_id, subject.organization_id.as_deref()) {
             Ok(query) => query,

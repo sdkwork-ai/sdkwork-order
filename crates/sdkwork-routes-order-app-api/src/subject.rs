@@ -28,6 +28,23 @@ pub(crate) fn app_runtime_subject_from_contexts(
     app_runtime_subject_from_web_context(request_context)
 }
 
+/// Resolves an app runtime subject for `RouteAuth::Public` catalog/config
+/// routes that must stay accessible without an authenticated principal. When
+/// no authenticated context is present, falls back to the platform default
+/// tenant and an anonymous user so the handler can still scope its query.
+pub(crate) fn app_runtime_subject_from_contexts_or_default(
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<&WebRequestContext>,
+) -> AppRuntimeSubject {
+    app_runtime_subject_from_contexts(runtime_context, request_context).unwrap_or_else(|_| {
+        AppRuntimeSubject {
+            tenant_id: "100001".to_owned(),
+            organization_id: None,
+            user_id: "anonymous".to_owned(),
+        }
+    })
+}
+
 pub(crate) fn app_runtime_subject_from_iam(
     context: &IamAppContext,
 ) -> Result<AppRuntimeSubject, String> {

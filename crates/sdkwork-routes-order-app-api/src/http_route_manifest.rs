@@ -192,19 +192,19 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "shipments.trackingEvents.list",
     ),
     // === Recharges ===
-    HttpRoute::dual_token(
+    HttpRoute::public(
         HttpMethod::Get,
         "/app/v3/api/recharges/packages",
         "recharges",
         "recharges.packages.list",
     ),
-    HttpRoute::dual_token(
+    HttpRoute::public(
         HttpMethod::Get,
         "/app/v3/api/recharges/plans",
         "recharges",
         "recharges.plans.list",
     ),
-    HttpRoute::dual_token(
+    HttpRoute::public(
         HttpMethod::Get,
         "/app/v3/api/recharges/settings",
         "recharges",
@@ -301,6 +301,9 @@ mod tests {
         for route in manifest.routes() {
             if route.path.contains("/payments/webhooks/")
                 || route.path.contains("/refunds/webhooks/")
+                || route.path.contains("/recharges/packages")
+                || route.path.contains("/recharges/plans")
+                || route.path.contains("/recharges/settings")
             {
                 assert_eq!(
                     route.auth,
