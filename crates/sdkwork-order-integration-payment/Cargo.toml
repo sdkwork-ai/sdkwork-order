@@ -11,6 +11,7 @@ path = "src/lib.rs"
 
 [dependencies]
 sdkwork_contract_service.workspace = true
+sdkwork_order_repository_sqlx.workspace = true
 sdkwork_order_service.workspace = true
 sdkwork_payment_providers.workspace = true
 sdkwork_payment_repository_sqlx.workspace = true
