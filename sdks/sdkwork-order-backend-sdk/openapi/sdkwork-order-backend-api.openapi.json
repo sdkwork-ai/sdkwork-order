@@ -1268,7 +1268,7 @@
     "/backend/v3/api/account_value_packages": {
       "get": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Account value packages list.",
         "operationId": "backend.accountValuePackages.list",
@@ -1394,11 +1394,12 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.accountValuePackages",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       },
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Account value packages create.",
         "operationId": "backend.accountValuePackages.create",
@@ -1501,13 +1502,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.accountValuePackages",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/account_value_packages/{packageId}": {
       "patch": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Account value packages update.",
         "operationId": "backend.accountValuePackages.update",
@@ -1618,13 +1620,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.accountValuePackages",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/account_value_packages/{packageId}/retire": {
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Account value packages retire.",
         "operationId": "backend.accountValuePackages.retire",
@@ -1719,29 +1722,20 @@
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
           }
         ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommerceOperationCommand"
-              }
-            }
-          }
-        },
         "x-sdkwork-idempotent": true,
         "x-sdkwork-owner": "sdkwork-order",
         "x-sdkwork-api-authority": "sdkwork-order-backend-api",
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.accountValuePackages",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/token_bank_plans": {
       "get": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Token Bank plans list.",
         "operationId": "backend.tokenBankPlans.list",
@@ -1859,11 +1853,12 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.tokenBankPlans",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       },
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Token Bank plans create.",
         "operationId": "backend.tokenBankPlans.create",
@@ -1966,13 +1961,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.tokenBankPlans",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/token_bank_plans/{planCode}": {
       "patch": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Token Bank plans update.",
         "operationId": "backend.tokenBankPlans.update",
@@ -2083,13 +2079,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.tokenBankPlans",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/token_bank_plans/{planCode}/retire": {
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Token Bank plans retire.",
         "operationId": "backend.tokenBankPlans.retire",
@@ -2184,29 +2181,20 @@
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
           }
         ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommerceOperationCommand"
-              }
-            }
-          }
-        },
         "x-sdkwork-idempotent": true,
         "x-sdkwork-owner": "sdkwork-order",
         "x-sdkwork-api-authority": "sdkwork-order-backend-api",
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.tokenBankPlans",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/refund_requests": {
       "get": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Refund requests list.",
         "operationId": "backend.refundRequests.list",
@@ -2324,13 +2312,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.refundRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/refund_requests/{refundRequestId}/approve": {
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Refund requests approve.",
         "operationId": "backend.refundRequests.approve",
@@ -2441,13 +2430,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.refundRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/refund_requests/{refundRequestId}/reject": {
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Refund requests reject.",
         "operationId": "backend.refundRequests.reject",
@@ -2558,13 +2548,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.refundRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/refund_requests/{refundRequestId}/retry": {
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Refund requests retry.",
         "operationId": "backend.refundRequests.retry",
@@ -2675,13 +2666,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.refundRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/withdrawal_requests": {
       "get": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Withdrawal requests list.",
         "operationId": "backend.withdrawalRequests.list",
@@ -2799,13 +2791,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.withdrawalRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/approve": {
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Withdrawal requests approve.",
         "operationId": "backend.withdrawalRequests.approve",
@@ -2916,13 +2909,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.withdrawalRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/reject": {
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Withdrawal requests reject.",
         "operationId": "backend.withdrawalRequests.reject",
@@ -3033,13 +3027,14 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.withdrawalRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/retry": {
       "post": {
         "tags": [
-          "backend"
+          "orderAdminBackend"
         ],
         "summary": "Withdrawal requests retry.",
         "operationId": "backend.withdrawalRequests.retry",
@@ -3150,7 +3145,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.withdrawalRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     }
   },

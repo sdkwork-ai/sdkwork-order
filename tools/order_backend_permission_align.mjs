@@ -4,6 +4,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
+
+/**
+ * Operations whose enforced permission is narrower than the coarse
+ * read/manage rule enforced by the backend router permission constants
+ * (see `crates/sdkwork-routes-order-backend-api`). These are pinned by
+ * operationId and must stay aligned with the Rust permission constants and
+ * the product specs; the blanket rule below must never overwrite them.
+ */
+const PERMISSION_OVERRIDES = new Map([
+  ["orders.paymentConfirmations.create", "commerce.orders.fulfill"],
+]);
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePath = path.join(root, "apis/backend-api/order/order-backend-api.openapi.json");
 const authorityPath = path.join(root, "sdks/sdkwork-order-backend-sdk/openapi/sdkwork-order-backend-api.openapi.json");
@@ -15,9 +27,9 @@ for (const pathItem of Object.values(openapi.paths ?? {})) {
     if (!HTTP_METHODS.has(method)) continue;
     operation["x-sdkwork-owner"] = "sdkwork-order";
     operation["x-sdkwork-api-authority"] = "sdkwork-order-backend-api";
-    operation["x-sdkwork-permission"] = method === "get"
-      ? "commerce.orders.read"
-      : "commerce.orders.manage";
+    operation["x-sdkwork-permission"] =
+      PERMISSION_OVERRIDES.get(operation.operationId) ??
+      (method === "get" ? "commerce.orders.read" : "commerce.orders.manage");
   }
 }
 
