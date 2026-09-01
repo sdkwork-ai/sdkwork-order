@@ -1,1 +1,0 @@
-{"version":3,"file":"create-shipment-package-request.d.ts","sourceRoot":"","sources":["create-shipment-package-request.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,4BAA4B;IAC3C,WAAW,EAAE,MAAM,CAAC;IACpB,SAAS,CAAC,EAAE,MAAM,CAAC;IACnB,UAAU,CAAC,EAAE,MAAM,CAAC;IACpB,MAAM,CAAC,EAAE,MAAM,CAAC;CACjB"}

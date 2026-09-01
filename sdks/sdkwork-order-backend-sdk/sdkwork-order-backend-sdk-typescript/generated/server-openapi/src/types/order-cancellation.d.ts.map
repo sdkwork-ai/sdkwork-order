@@ -1,1 +1,0 @@
-{"version":3,"file":"order-cancellation.d.ts","sourceRoot":"","sources":["order-cancellation.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,iBAAiB;IAChC,EAAE,EAAE,MAAM,CAAC;IACX,OAAO,EAAE,MAAM,CAAC;IAChB,MAAM,EAAE,MAAM,CAAC;IACf,UAAU,EAAE,MAAM,CAAC;IACnB,aAAa,CAAC,EAAE,MAAM,CAAC;IACvB,SAAS,EAAE,MAAM,CAAC;CACnB"}

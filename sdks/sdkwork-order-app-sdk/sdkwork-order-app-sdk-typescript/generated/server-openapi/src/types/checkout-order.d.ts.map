@@ -1,1 +1,0 @@
-{"version":3,"file":"checkout-order.d.ts","sourceRoot":"","sources":["checkout-order.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,aAAa;IAC5B,OAAO,EAAE,MAAM,CAAC;IAChB,OAAO,EAAE,MAAM,CAAC;IAChB,OAAO,EAAE,MAAM,CAAC;IAChB,MAAM,EAAE,MAAM,CAAC;IACf,WAAW,EAAE,MAAM,CAAC;IACpB,8DAA8D;IAC9D,SAAS,CAAC,EAAE,MAAM,CAAC;CACpB"}

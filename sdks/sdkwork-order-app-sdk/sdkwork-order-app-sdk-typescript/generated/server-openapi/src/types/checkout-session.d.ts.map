@@ -1,1 +1,0 @@
-{"version":3,"file":"checkout-session.d.ts","sourceRoot":"","sources":["checkout-session.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,eAAe;IAC9B,iBAAiB,EAAE,MAAM,CAAC;IAC1B,MAAM,EAAE,MAAM,CAAC;IACf,YAAY,EAAE,MAAM,CAAC;IACrB,cAAc,EAAE,MAAM,CAAC;IACvB,cAAc,EAAE,MAAM,CAAC;IACvB,aAAa,EAAE,MAAM,CAAC;IACtB,OAAO,CAAC,EAAE,MAAM,CAAC;CAClB"}
