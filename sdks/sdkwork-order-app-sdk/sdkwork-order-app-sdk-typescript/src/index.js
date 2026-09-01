@@ -23,9 +23,9 @@ export class SdkworkAppClient extends GeneratedSdkworkAppClient {
         this.memberships = this.orderMemberships.memberships;
         this.orders = this.orderOrders.orders;
         this.payments = this.orderPayments.payments;
-        this.recharges = this.orderRecharges.recharges;
+        this.recharges = this.recharges;
         this.shipments = this.orderShipments.shipments;
-        this.withdrawals = this.orderWithdrawals.withdrawals;
+        this.withdrawals = this.withdrawals;
         this.http
             .addRequestInterceptor(applySdkworkIdempotencyRequestFingerprint);
     }

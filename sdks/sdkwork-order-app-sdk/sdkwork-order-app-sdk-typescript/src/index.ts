@@ -25,9 +25,9 @@ export class SdkworkAppClient extends GeneratedSdkworkAppClient {
   public readonly memberships: GeneratedSdkworkAppClient["orderMemberships"]["memberships"];
   public readonly orders: GeneratedSdkworkAppClient["orderOrders"]["orders"];
   public readonly payments: GeneratedSdkworkAppClient["orderPayments"]["payments"];
-  public readonly recharges: GeneratedSdkworkAppClient["orderRecharges"]["recharges"];
+  public readonly recharges: GeneratedSdkworkAppClient["recharges"];
   public readonly shipments: GeneratedSdkworkAppClient["orderShipments"]["shipments"];
-  public readonly withdrawals: GeneratedSdkworkAppClient["orderWithdrawals"]["withdrawals"];
+  public readonly withdrawals: GeneratedSdkworkAppClient["withdrawals"];
 
   constructor(config: SdkworkAppConfig) {
     super(config);
@@ -37,9 +37,9 @@ export class SdkworkAppClient extends GeneratedSdkworkAppClient {
     this.memberships = this.orderMemberships.memberships;
     this.orders = this.orderOrders.orders;
     this.payments = this.orderPayments.payments;
-    this.recharges = this.orderRecharges.recharges;
+    this.recharges = this.recharges;
     this.shipments = this.orderShipments.shipments;
-    this.withdrawals = this.orderWithdrawals.withdrawals;
+    this.withdrawals = this.withdrawals;
     (this.http as unknown as RequestInterceptorRegistrar)
       .addRequestInterceptor(applySdkworkIdempotencyRequestFingerprint);
   }

@@ -9,9 +9,9 @@ export interface RechargeOrderCreateCommand {
   planCode?: string;
   planPeriod?: 'monthly' | 'quarterly' | 'yearly' | 'continuous_monthly' | 'continuous_yearly';
   couponCode?: string;
-  source?: string;
-  paymentMethod?: string;
   /** QR payment product. H5 returns the order-bound cashierUrl; native products create a provider payment intent. */
   paymentProduct?: 'mobile_cashier_h5' | 'wechat_native' | 'alipay_native';
+  source?: string;
+  paymentMethod?: string;
   paymentPassword?: string;
 }

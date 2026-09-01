@@ -52,8 +52,6 @@ const offsetPaginationParameters = [
 
 const writeCommandParameters = [
   { $ref: "#/components/parameters/WriteCommandIdempotencyKey" },
-  { $ref: "#/components/parameters/WriteCommandRequestHash" },
-  { $ref: "#/components/parameters/WriteCommandIdempotencyFingerprint" },
 ];
 
 function problemResponse(description) {
@@ -123,18 +121,20 @@ function operation({
   parameters = [],
   body,
   idempotent = false,
+  anonymous = false,
 }) {
   return {
     tags,
     summary,
     operationId,
     responses: responses(responseSchema, successStatus),
-    security,
+    security: anonymous ? [] : security,
     parameters: idempotent
       ? [...parameters, ...writeCommandParameters]
       : parameters,
     ...(body ? { requestBody: body } : {}),
     ...(idempotent ? { "x-sdkwork-idempotent": true } : {}),
+    ...(anonymous ? { "x-sdkwork-auth-mode": "anonymous" } : {}),
     ...extension(surface, resource),
   };
 }
@@ -160,6 +160,7 @@ const appPaths = {
     get: appOperation({
       tags: ["recharges"],
       summary: "Recharges packages list.",
+      anonymous: true,
       operationId: "recharges.packages.list",
       resource: "recharges.packages",
       responseSchema: "#/components/schemas/SdkWorkListResponse",
@@ -170,6 +171,7 @@ const appPaths = {
     get: appOperation({
       tags: ["recharges"],
       summary: "Token Bank plans list.",
+      anonymous: true,
       operationId: "recharges.plans.list",
       resource: "recharges.plans",
       responseSchema: "#/components/schemas/SdkWorkListResponse",
@@ -183,6 +185,7 @@ const appPaths = {
     get: appOperation({
       tags: ["recharges"],
       summary: "Recharges settings retrieve.",
+      anonymous: true,
       operationId: "recharges.settings.retrieve",
       resource: "recharges.settings",
       responseSchema: "#/components/schemas/SdkWorkResourceResponse",
@@ -564,6 +567,16 @@ function rechargeOrderCreateCommandSchema() {
         ],
       },
       couponCode: { type: "string" },
+      paymentProduct: {
+        type: "string",
+        enum: [
+          "mobile_cashier_h5",
+          "wechat_native",
+          "alipay_native",
+        ],
+        default: "mobile_cashier_h5",
+        description: "QR payment product. H5 returns the order-bound cashierUrl; native products create a provider payment intent.",
+      },
       source: { type: "string" },
       paymentMethod: { type: "string" },
       paymentPassword: { type: "string" },

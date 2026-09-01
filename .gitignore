@@ -78,3 +78,21 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+
+# --- Compiled / generated TypeScript build output (only .ts source is tracked) ---
+*.js.map
+*.d.ts.map
+*.ts.map
+*.tsbuildinfo
+**/generated/**/*.js
+**/generated/**/*.d.ts
+**/generated/**/*.map
+**-typescript/src/*.js
+**-typescript/src/*.d.ts
+**-typescript/src/*.map
+apps/**/packages/*/src/*.js
+apps/**/packages/*/src/*.d.ts
+apps/**/packages/*/src/*.map
+apps/**/packages/*/src/**/*.js
+apps/**/packages/*/src/**/*.d.ts
+apps/**/packages/*/src/**/*.map
