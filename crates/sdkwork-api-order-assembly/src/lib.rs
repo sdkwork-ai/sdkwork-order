@@ -1,15 +1,12 @@
 //! Gateway assembly for sdkwork-order.
 //! Application bootstrap lives in `bootstrap.rs`; route inventory is in `assembly-manifest.json`.
+use sdkwork_web_bootstrap::WebModule;
 // SDKWORK-ASSEMBLY-LIB-CUSTOM
 
 mod bootstrap;
 mod generated;
 
-pub use bootstrap::{
-    assemble_api_router, assemble_api_router_with_pool, assemble_app_api_contribution,
-    assemble_app_api_contribution_with_pool, assemble_backend_business_router, ApiAssembly,
-    ApiAssemblyContribution, BusinessRouterAssembly, OrderAssemblyContract,
-};
+pub use bootstrap::{assemble_api_router, ApiAssembly, ApiAssemblyContribution, assemble_api_router_with_pool, assemble_app_api_contribution, assemble_app_api_contribution_with_pool, assemble_backend_business_router, BusinessRouterAssembly, OrderAssemblyContract, web_module_with_pool};
 
 pub async fn assemble_api_router_from_env() -> Result<ApiAssembly, String> {
     let host = std::sync::Arc::new(sdkwork_order_service_host::OrderServiceHost::from_env().await?);
@@ -32,4 +29,11 @@ pub fn app_api_route_manifest() -> sdkwork_web_core::HttpRouteManifest {
 
 pub fn assembly_route_count() -> usize {
     generated::ROUTE_CRATE_COUNT
+}
+
+/// Canonical Web Module definition for this application
+/// (API_ASSEMBLY_SPEC §4.1.1): the complete HTTP surface — every route,
+/// manifest, and OpenAPI document of this owner — as one installable module.
+pub async fn web_module() -> Result<WebModule, String> {
+    Ok(WebModule::from_contribution(assemble_api_router_from_env().await?))
 }

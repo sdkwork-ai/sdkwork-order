@@ -11,7 +11,7 @@ use sdkwork_database_spi::{DefaultDatabaseModule, SpiError};
 use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_order_service_host::OrderServiceHost;
 pub use sdkwork_web_bootstrap::ApiAssemblyContribution;
-use sdkwork_web_bootstrap::{ContractFallbackConfig, ReadinessCheck, ReadinessFuture};
+use sdkwork_web_bootstrap::{ContractFallbackConfig, ReadinessCheck, ReadinessFuture, WebModule};
 use sdkwork_web_core::HttpRouteManifest;
 
 pub type ApiAssembly = ApiAssemblyContribution;
@@ -132,4 +132,10 @@ fn assemble_app_api_contribution_with_host(
             pool: host.database_pool().clone(),
         }),
     )
+}
+
+/// Same as [`web_module`] but composed on a process-shared database pool
+/// (platform gateways, API_ASSEMBLY_SPEC §4.1.1).
+pub async fn web_module_with_pool(pool: DatabasePool) -> Result<WebModule, String> {
+    Ok(WebModule::from_contribution(assemble_api_router_with_pool(pool).await?))
 }
