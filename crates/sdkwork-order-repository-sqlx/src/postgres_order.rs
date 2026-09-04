@@ -255,17 +255,31 @@ SELECT
     CAST(
         COALESCE(
             SUM(
+                -- Only realized spend counts toward the owner's total
+                -- consumption: orders whose payment succeeded (paid/fulfilled/
+                -- shipped/delivered) or that reached a terminal completed
+                -- state (completed/finished). Pending, expired, cancelled,
+                -- and refund-path orders are excluded so the console
+                -- "Bills & Reports" total does not inflate with amounts
+                -- that were never settled.
                 -- Stored amounts are canonical integer cents, but legacy
                 -- writers have emitted major-unit decimals (e.g. "0.01");
                 -- normalize those to cents before summing, mirroring
                 -- `normalize_stored_money`. Truly invalid values fall through
                 -- to the plain bigint cast so they still fail loudly.
                 CASE
-                    WHEN payable ~ '^[0-9]+$' THEN CAST(payable AS BIGINT)
-                    WHEN payable ~ '^[0-9]+\.[0-9]{1,2}$'
-                        THEN CAST(split_part(payable, '.', 1) AS BIGINT) * 100
-                           + CAST(rpad(split_part(payable, '.', 2), 2, '0') AS BIGINT)
-                    ELSE CAST(payable AS BIGINT)
+                    WHEN LOWER(o.status) IN (
+                        'paid', 'fulfilled', 'shipped', 'delivered',
+                        'completed', 'finished'
+                    ) THEN
+                        CASE
+                            WHEN payable ~ '^[0-9]+$' THEN CAST(payable AS BIGINT)
+                            WHEN payable ~ '^[0-9]+\.[0-9]{1,2}$'
+                                THEN CAST(split_part(payable, '.', 1) AS BIGINT) * 100
+                                   + CAST(rpad(split_part(payable, '.', 2), 2, '0') AS BIGINT)
+                            ELSE CAST(payable AS BIGINT)
+                        END
+                    ELSE 0
                 END
             ),
             0
