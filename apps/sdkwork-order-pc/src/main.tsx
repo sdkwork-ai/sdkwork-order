@@ -10,6 +10,7 @@ import "@sdkwork/ui-pc-react/styles.css";
 import "./app.css";
 
 import { OrderAppShell } from "@sdkwork/order-pc-shell";
+import { resolveInitialThemeMode } from "./bootstrap/theme";
 
 function readEnv(name: string): string | undefined {
   const value = (import.meta.env[name] as string | undefined)?.trim();
@@ -41,17 +42,7 @@ if (accessToken) {
   });
 }
 
-const initialTheme = (() => {
-  if (typeof window === "undefined") {
-    return "light" as const;
-  }
-  const stored = window.localStorage.getItem("sdkwork-order-theme");
-  if (stored === "dark" || stored === "light") {
-    return stored;
-  }
-  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
-  return prefersDark ? "dark" : "light";
-})();
+const initialTheme = resolveInitialThemeMode();
 
 const initialLocale = (() => {
   if (typeof document === "undefined") {
