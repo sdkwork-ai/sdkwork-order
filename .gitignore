@@ -96,3 +96,6 @@ apps/**/packages/*/src/*.map
 apps/**/packages/*/src/**/*.js
 apps/**/packages/*/src/**/*.d.ts
 apps/**/packages/*/src/**/*.map
+
+# Build artifacts
+/bin/

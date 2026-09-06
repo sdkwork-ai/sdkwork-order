@@ -1677,8 +1677,7 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "afterSales.requests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-permission": "commerce.afterSales.read"
+        "x-sdkwork-api-surface": "app-api"
       },
       "post": {
         "tags": [
@@ -1798,7 +1797,6 @@
         "x-sdkwork-resource": "afterSales.requests",
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-permission": "commerce.afterSales.write",
         "x-sdkwork-audit-event": "commerce.afterSales.request.created",
         "x-sdkwork-idempotent": true,
         "requestBody": {
@@ -1936,8 +1934,7 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "afterSales.requests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-permission": "commerce.afterSales.read"
+        "x-sdkwork-api-surface": "app-api"
       },
       "patch": {
         "tags": [
@@ -2065,7 +2062,6 @@
         "x-sdkwork-resource": "afterSales.requests",
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-permission": "commerce.afterSales.write",
         "x-sdkwork-audit-event": "commerce.afterSales.request.updated",
         "requestBody": {
           "required": true,
@@ -2209,8 +2205,7 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "afterSales.returnShipments",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-permission": "commerce.afterSales.read"
+        "x-sdkwork-api-surface": "app-api"
       },
       "post": {
         "tags": [
@@ -2338,7 +2333,6 @@
         "x-sdkwork-resource": "afterSales.returnShipments",
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-permission": "commerce.afterSales.write",
         "x-sdkwork-audit-event": "commerce.afterSales.returnShipment.created",
         "x-sdkwork-idempotent": true,
         "requestBody": {
@@ -2474,8 +2468,7 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "afterSales.events",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-permission": "commerce.afterSales.read"
+        "x-sdkwork-api-surface": "app-api"
       }
     },
     "/app/v3/api/fulfillments": {
