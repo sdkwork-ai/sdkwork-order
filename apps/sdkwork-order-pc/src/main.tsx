@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { resolveBaseUrl } from "@sdkwork/sdk-common";
+
 import {
   bootstrapSdkworkOrderAppService,
   bootstrapSdkworkOrderBackendSdk,
@@ -20,7 +22,7 @@ function readEnv(name: string): string | undefined {
 const orderApiBaseUrl =
   readEnv("VITE_SDKWORK_ORDER_API_ORIGIN")
   ?? readEnv("VITE_ORDER_API_ORIGIN")
-  ?? "http://127.0.0.1:18093";
+  ?? resolveBaseUrl().url;
 
 const accessToken =
   readEnv("VITE_SDKWORK_ACCESS_TOKEN")

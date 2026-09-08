@@ -27,6 +27,7 @@
     "@sdkwork/order-pc-order": "workspace:*",
     "@sdkwork/order-pc-shell": "workspace:*",
     "@sdkwork/order-service": "workspace:*",
+    "@sdkwork/sdk-common": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
