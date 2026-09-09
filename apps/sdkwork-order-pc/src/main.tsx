@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { resolveBaseUrl } from "@sdkwork/sdk-common";
+import {resolveBaseUrlWithAlignProtocol} from "@sdkwork/sdk-common";
 
 import {
   bootstrapSdkworkOrderAppService,
@@ -22,7 +22,7 @@ function readEnv(name: string): string | undefined {
 const orderApiBaseUrl =
   readEnv("VITE_SDKWORK_ORDER_API_ORIGIN")
   ?? readEnv("VITE_ORDER_API_ORIGIN")
-  ?? resolveBaseUrl().url;
+  ?? resolveBaseUrlWithAlignProtocol().url;
 
 const accessToken =
   readEnv("VITE_SDKWORK_ACCESS_TOKEN")
