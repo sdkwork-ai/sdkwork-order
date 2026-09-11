@@ -35,6 +35,6 @@ Integrators and PC packages send `Idempotency-Key` on every operation marked `x-
 | TS service facade | `apps/sdkwork-order-common/packages/sdkwork-order-service/` |
 | OpenAPI authorities | `apis/app-api/order/`, `apis/backend-api/order/` |
 
-After OpenAPI edits: `pnpm sync:openapi` then `pnpm sdk:generate` / `pnpm sdk:generate:backend`.
+After OpenAPI edits: `pnpm api:materialize` then `pnpm sdk:generate` / `pnpm sdk:generate:backend`.
 
 Authority: [AGENTS.md](../../AGENTS.md), `sdkwork-specs/README.md`.

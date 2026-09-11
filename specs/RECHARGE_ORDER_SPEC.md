@@ -118,7 +118,7 @@ Recharge **app-api** responses use `SdkWorkApiResponse` (`code: 0`, `data.item` 
 
 All order **app-api** routers (`orders`, `recharges`, `checkout`, `fulfillments`, `shipments`, `after_sales`) and order **backend** admin routes use the same v3 envelope via `sdkwork-utils-rust` (`SdkWorkApiResponse`, `SdkWorkProblemDetail`).
 
-OpenAPI authority and generated `@sdkwork/order-app-sdk` use `SdkWorkApiResponse`; `pnpm sync:openapi` and `pnpm sdk:generate` materialize the owner-only SDK family.
+OpenAPI authority and generated `@sdkwork/order-app-sdk` use `SdkWorkApiResponse`; `pnpm api:materialize` and `pnpm sdk:generate` materialize the owner-only SDK family.
 
 Track phases in [commerce-recharge.spec.json](./commerce-recharge.spec.json).
 

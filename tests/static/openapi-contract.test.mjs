@@ -138,7 +138,7 @@ test("sdk openapi inputs stay aligned with api authorities", () => {
     assert.equal(
       sdkCopy,
       authority,
-      `${sdkPath} must match ${authorityPath}; run pnpm sync:openapi`,
+      `${sdkPath} must match ${authorityPath}; run pnpm api:materialize`,
     );
   }
 });
