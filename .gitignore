@@ -98,4 +98,3 @@ apps/**/packages/*/src/**/*.d.ts
 apps/**/packages/*/src/**/*.map
 
 # Build artifacts
-/bin/
