@@ -1,4 +1,5 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-order-service"
 version.workspace = true
 edition.workspace = true
@@ -6,6 +7,9 @@ license.workspace = true
 publish.workspace = true
 description = "SDKWork commerce order lifecycle domain rules for local/private Rust deployments."
 
+
+[lints]
+workspace = true
 [lib]
 path = "src/lib.rs"
 

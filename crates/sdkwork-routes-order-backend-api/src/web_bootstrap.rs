@@ -41,12 +41,11 @@ fn order_web_security_policy_from_env() -> (WebEnvironment, SecurityPolicy) {
         ],
         &["SDKWORK_CORS_ALLOWED_ORIGINS"],
     );
-    for header in [
-        "sdkwork-request-no",
-        "traceparent",
-        "tracestate",
-        "x-sdkwork-locale",
-    ] {
+    // Public/standard request headers only. Locale negotiation travels through
+    // the standard `Accept-Language` header, which the shared framework default
+    // allow-list already carries; no SDKWork custom locale header exists
+    // (`I18N_SPEC.md` §4).
+    for header in ["sdkwork-request-no", "traceparent", "tracestate"] {
         if !policy
             .cors
             .allowed_headers
