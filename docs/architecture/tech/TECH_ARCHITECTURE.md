@@ -254,7 +254,7 @@ Structured tracing uses targets `order.bootstrap`, `order.runtime`, `order.readi
 ## 11. Verification
 
 ```powershell
-cd E:\sdkwork-space\sdkwork-order
+cd <workspace-root>/sdkwork-order
 cargo test --workspace
 pnpm install
 pnpm verify
