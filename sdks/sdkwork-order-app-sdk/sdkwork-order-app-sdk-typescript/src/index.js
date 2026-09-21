@@ -12,9 +12,7 @@ export class SdkworkAppClient extends GeneratedSdkworkAppClient {
     memberships;
     orders;
     payments;
-    recharges;
     shipments;
-    withdrawals;
     constructor(config) {
         super(config);
         this.afterSales = this.orderAfterSales.afterSales;
@@ -23,9 +21,7 @@ export class SdkworkAppClient extends GeneratedSdkworkAppClient {
         this.memberships = this.orderMemberships.memberships;
         this.orders = this.orderOrders.orders;
         this.payments = this.orderPayments.payments;
-        this.recharges = this.recharges;
         this.shipments = this.orderShipments.shipments;
-        this.withdrawals = this.withdrawals;
         this.http
             .addRequestInterceptor(applySdkworkIdempotencyRequestFingerprint);
     }

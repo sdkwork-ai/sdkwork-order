@@ -181,6 +181,11 @@ struct OrderSummaryResponse {
     payment_provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     product_image: Option<()>,
+    /// Token Bank quota credited for recharge orders (`sku_snapshot_json.points`
+    /// or `callback_payload.points`). Amounts in CNY and this quota are distinct
+    /// concepts and are rendered as separate columns.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    points: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -899,6 +904,7 @@ fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {
         remark: None,
         payment_provider: None,
         product_image: None,
+        points: value.points,
     }
 }
 

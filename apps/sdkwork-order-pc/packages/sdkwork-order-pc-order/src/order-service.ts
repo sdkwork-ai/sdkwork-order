@@ -41,6 +41,12 @@ export interface SdkworkOrderSummary {
   paymentMethod?: string;
   paymentProvider?: string;
   productImage?: SdkworkMediaResource;
+  /**
+   * Token Bank quota credited for this order, when the order carries one.
+   * `null` for non-recharge orders and for recharge orders whose quota is
+   * still unknown. Distinct from every `*Cny` amount field.
+   */
+  quota: number | null;
   quantity: number;
   remark?: string;
   status: SdkworkOrderStatus;
@@ -180,6 +186,8 @@ interface RemoteOrder {
   paymentMethod?: string;
   paymentProvider?: string;
   productImage?: unknown;
+  /** Token Bank quota credited for recharge orders, serialized as int64 string. */
+  points?: number | string;
   quantity?: number | string;
   remark?: string;
   status?: string;
@@ -352,6 +360,7 @@ function mapOrderSummary(
     paymentMethod: toSdkworkOrderOptionalString(order.paymentMethod),
     paymentProvider: toSdkworkOrderOptionalString(order.paymentProvider),
     productImage: readSdkworkMediaResource(order.productImage),
+    quota: toNullableSdkworkOrderNumber(order.points),
     quantity: toSdkworkOrderNumber(order.quantity, 1),
     remark: toSdkworkOrderOptionalString(order.remark),
     status,

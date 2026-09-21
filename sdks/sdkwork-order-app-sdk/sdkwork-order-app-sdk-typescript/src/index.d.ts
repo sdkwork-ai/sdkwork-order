@@ -13,9 +13,7 @@ export declare class SdkworkAppClient extends GeneratedSdkworkAppClient {
     readonly memberships: GeneratedSdkworkAppClient["orderMemberships"]["memberships"];
     readonly orders: GeneratedSdkworkAppClient["orderOrders"]["orders"];
     readonly payments: GeneratedSdkworkAppClient["orderPayments"]["payments"];
-    readonly recharges: GeneratedSdkworkAppClient["recharges"];
     readonly shipments: GeneratedSdkworkAppClient["orderShipments"]["shipments"];
-    readonly withdrawals: GeneratedSdkworkAppClient["withdrawals"];
     constructor(config: SdkworkAppConfig);
 }
 export declare function createClient(config: SdkworkAppConfig): SdkworkAppClient;
