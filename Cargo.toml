@@ -88,6 +88,7 @@ sdkwork_commerce_partner_service = { path = "../sdkwork-partner/crates/sdkwork-c
 sdkwork_commerce_partner_repository_sqlx = { path = "../sdkwork-partner/crates/sdkwork-commerce-partner-repository-sqlx", package = "sdkwork-commerce-partner-repository-sqlx" }
 sdkwork_merchandise_service = { path = "../sdkwork-merchandise/crates/sdkwork-merchandise-service", package = "sdkwork-merchandise-service" }
 sdkwork_merchandise_repository_sqlx = { path = "../sdkwork-merchandise/crates/sdkwork-merchandise-repository-sqlx", package = "sdkwork-merchandise-repository-sqlx" }
+sdkwork_commerce_money = { path = "../sdkwork-merchandise/crates/sdkwork-commerce-money", package = "sdkwork-commerce-money" }
 sdkwork_shop_service = { path = "../sdkwork-shop/crates/sdkwork-shop-service", package = "sdkwork-shop-service" }
 sdkwork_shop_repository_sqlx = { path = "../sdkwork-shop/crates/sdkwork-shop-repository-sqlx", package = "sdkwork-shop-repository-sqlx" }
 sdkwork_commerce_promotion_service = { path = "../sdkwork-promotion/crates/sdkwork-commerce-promotion-service", package = "sdkwork-commerce-promotion-service" }

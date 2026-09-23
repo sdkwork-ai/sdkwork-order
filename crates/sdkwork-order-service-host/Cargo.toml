@@ -15,6 +15,9 @@ path = "src/lib.rs"
 [dependencies]
 sdkwork-database-sqlx.workspace = true
 sdkwork-database-spi.workspace = true
+sdkwork-database-id.workspace = true
+sdkwork-web-bootstrap.workspace = true
+sdkwork-web-core.workspace = true
 sdkwork_order_database_host.workspace = true
 sdkwork_order_integration_account.workspace = true
 sdkwork_order_integration_membership.workspace = true

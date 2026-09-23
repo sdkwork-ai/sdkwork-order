@@ -22,6 +22,7 @@ sdkwork-database-id.workspace = true
 sdkwork-database-history.workspace = true
 sdkwork_merchandise_service.workspace = true
 sdkwork_merchandise_repository_sqlx.workspace = true
+sdkwork_commerce_money.workspace = true
 sdkwork_shop_service.workspace = true
 sdkwork_shop_repository_sqlx.workspace = true
 serde_json.workspace = true

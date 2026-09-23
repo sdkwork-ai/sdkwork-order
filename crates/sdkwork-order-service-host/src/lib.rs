@@ -22,11 +22,16 @@ use sdkwork_order_service::{
 };
 use std::sync::Arc;
 
+use sdkwork_database_id::IdGenerator;
+
 pub mod compensation;
 pub mod expiration;
+pub mod identity;
+pub mod runtime_env;
 
 pub use compensation::spawn_payment_compensation_worker;
 pub use expiration::spawn_order_expiration_scheduler;
+pub use identity::{shared_identity, OrderIdentity};
 
 pub struct OrderServiceHost {
     database: OrderDatabaseHost,
@@ -75,7 +80,13 @@ impl OrderServiceHost {
         let payment_refund_executor_port =
             payment_refund_executor_port_from_database_pool(database.pool());
         let payment_payout_executor_port = Arc::new(NoopPaymentPayoutExecutorPort);
-        let physical_ports = physical_commerce_ports_from_env(database.pool()).await?;
+        // One identity for the whole process. The physical-commerce checkout adapter writes through
+        // the merchandise catalog tables, so the ids it mints for them must come from this process's
+        // node id rather than from a second, divergent generator.
+        let identity: Arc<dyn IdGenerator> =
+            Arc::new(OrderIdentity::from_pool(database.pool()).await?);
+        let physical_ports =
+            physical_commerce_ports_from_env(database.pool(), Arc::clone(&identity)).await?;
         let partner_relation_port = order_partner_relation_port_from_database_pool(database.pool());
         Ok(Self {
             database,
