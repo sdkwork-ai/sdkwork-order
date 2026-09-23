@@ -43,24 +43,14 @@ SELECT
     COALESCE(NULLIF(p.currency_code, ''), 'CNY') AS currency_code,
     CAST(p.duration_days AS BIGINT) AS duration_days,
     p.sku_id,
-    COALESCE(NULLIF(s.name, ''), NULLIF(s.title, ''), NULLIF(pr.title, ''), p.name) AS product_name
+    -- `membership_package` owns this display name. The retired projection used to
+    -- resolve it through `commerce_product_sku` / `commerce_product_spu`; merchandise
+    -- owns those tables and nothing in this repo writes them any more, so there is no
+    -- cross-owner row left to join.
+    p.name AS product_name
 FROM membership_package p
 JOIN membership_package_group g
     ON g.id = p.package_group_id
-LEFT JOIN commerce_product_sku s
-    ON s.id = p.sku_id
-   AND COALESCE(
-        NULLIF(to_jsonb(s) ->> 'sales_status', ''),
-        NULLIF(to_jsonb(s) ->> 'status', ''),
-        'active'
-   ) = 'active'
-LEFT JOIN commerce_product_spu pr
-    ON pr.id = s.spu_id
-   AND COALESCE(
-        NULLIF(to_jsonb(pr) ->> 'sales_status', ''),
-        NULLIF(to_jsonb(pr) ->> 'status', ''),
-        'active'
-   ) = 'active'
 WHERE (
         (p.tenant_id = CAST($1 AS TEXT) AND p.organization_id = CAST($2 AS TEXT))
         OR (p.tenant_id = CAST($1 AS TEXT) AND p.organization_id = '0')
@@ -91,24 +81,11 @@ SELECT
     COALESCE(NULLIF(p.currency_code, ''), 'CNY') AS currency_code,
     CAST(p.duration_days AS BIGINT) AS duration_days,
     p.sku_id,
-    COALESCE(NULLIF(s.name, ''), NULLIF(s.title, ''), NULLIF(pr.title, ''), p.name) AS product_name
+    -- See the scoped query above: `product_name` is membership-owned.
+    p.name AS product_name
 FROM membership_package p
 JOIN membership_package_group g
     ON g.id = p.package_group_id
-LEFT JOIN commerce_product_sku s
-    ON s.id = p.sku_id
-   AND COALESCE(
-        NULLIF(to_jsonb(s) ->> 'sales_status', ''),
-        NULLIF(to_jsonb(s) ->> 'status', ''),
-        'active'
-   ) = 'active'
-LEFT JOIN commerce_product_spu pr
-    ON pr.id = s.spu_id
-   AND COALESCE(
-        NULLIF(to_jsonb(pr) ->> 'sales_status', ''),
-        NULLIF(to_jsonb(pr) ->> 'status', ''),
-        'active'
-   ) = 'active'
 WHERE p.tenant_id = '__PLATFORM_TENANT__'
   AND (p.organization_id = '0' OR p.organization_id = '0')
   AND (g.tenant_id = '__PLATFORM_TENANT__' OR g.tenant_id IS NULL)
@@ -747,10 +724,23 @@ mod tests {
     }
 
     #[test]
-    fn postgres_membership_sql_supports_legacy_and_current_commerce_rows() {
-        assert!(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID.contains("to_jsonb(s)"));
-        assert!(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID.contains("sales_status"));
-        assert!(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID.contains("status"));
+    fn postgres_membership_package_query_stays_within_the_membership_owner() {
+        // The SKU projection into the merchandise-owned `commerce_product_sku` /
+        // `commerce_product_spu` tables was retired on 2026-09-23. `membership_package`
+        // owns the display name, so neither package query may reach across owners: no
+        // left join, and none of the version-agnostic `to_jsonb(s) ->> '...'` reflection
+        // that used to paper over the two catalog column shapes.
+        for sql in [
+            LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID,
+            LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC,
+        ] {
+            assert!(!sql.contains("LEFT JOIN"));
+            assert!(!sql.contains("to_jsonb("));
+            assert!(sql.contains("p.name AS product_name"));
+            // Membership-owned lifecycle filter, unrelated to catalog sales status.
+            assert!(sql.contains("p.status = 'active'"));
+            assert!(sql.contains("g.status = 'active'"));
+        }
 
         let source = include_str!("postgres_membership_order.rs");
         assert!(source.contains("jsonb_populate_record(NULL::commerce_order,"));
