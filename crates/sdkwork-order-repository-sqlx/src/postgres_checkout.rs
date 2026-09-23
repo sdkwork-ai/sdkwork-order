@@ -412,29 +412,44 @@ async fn resolve_checkout_lines(
             .collect();
     }
     let mut resolved = Vec::with_capacity(command.lines.len());
+    let tenant_id = parse_catalog_id("tenant_id", &command.tenant_id)?;
+    let organization_id = command
+        .organization_id
+        .as_deref()
+        .map(|value| parse_catalog_id("organization_id", value))
+        .transpose()?;
     for line in &command.lines {
+        let sku_id = parse_catalog_id("sku_id", &line.sku_id)?;
         let row = sqlx::query(
             r#"
-            SELECT id, spu_id, COALESCE(NULLIF(title, ''), name, id) AS title,
-                   CAST(price_amount AS TEXT) AS price_amount, currency_code,
-                   fulfillment_type, spec_json
+            SELECT CAST(id AS TEXT) AS id,
+                   CAST(spu_id AS TEXT) AS spu_id,
+                   COALESCE(NULLIF(title, ''), NULLIF(name, ''), CAST(id AS TEXT)) AS title,
+                   CAST(sale_price_minor AS TEXT) AS price_amount,
+                   currency_code, fulfillment_type
             FROM commerce_product_sku
-            WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
-              AND id = CAST($4 AS TEXT)
-              AND LOWER(COALESCE(status, '')) = 'active'
+            WHERE tenant_id = $1
+              AND organization_id = COALESCE($2::BIGINT, 0)
+              AND id = $3
+              AND status = 'active'
             LIMIT 1
             "#,
         )
-        .bind(&command.tenant_id)
-        .bind(command.organization_id.as_deref())
-        .bind(command.organization_id.as_deref())
-        .bind(&line.sku_id)
+        .bind(tenant_id)
+        // `COALESCE(..., 0)` restates what the pre-v2 query said in three clauses: a caller that
+        // named no organization reads the platform scope. `organization_id` is `NOT NULL` in the
+        // catalog now, so the `IS NULL` branch of that disjunction has no rows left to match.
+        .bind(organization_id)
+        .bind(sku_id)
         .fetch_optional(&mut **tx)
         .await
         .map_err(|error| store_error("failed to load checkout sku", error))?
         .ok_or_else(|| CommerceServiceError::not_found("checkout sku was not found"))?;
 
+        // `price_amount` is the SKU's price in the currency's smallest unit, which is the unit the
+        // rest of this module counts in (`multiply_money_amount`, `sum_money_amounts`). The catalog
+        // stores the same integer in `sale_price_minor`, so this is an alias and not a conversion:
+        // placing a decimal point here would feed a major-unit string into minor-unit arithmetic.
         let unit_price = string_cell(&row, "price_amount");
         let line_total = multiply_money_amount(&unit_price, line.quantity)?;
         let title = string_cell(&row, "title");
@@ -458,6 +473,20 @@ async fn resolve_checkout_lines(
         });
     }
     Ok(resolved)
+}
+
+/// Parses an id that crosses the boundary as a decimal string into the number the catalog binds.
+///
+/// `sdkwork-merchandise` keys its rows on `BIGINT` while API_SPEC section 13.6 keeps ids as
+/// strings on the wire, so every id this store reads out of a command has to be converted before
+/// it can be compared to a column. A value that is not a decimal id cannot name a row, and
+/// reporting it as a malformed request is more actionable than letting PostgreSQL fail the
+/// comparison, which would surface as a storage error with no hint about which field was wrong.
+fn parse_catalog_id(field: &str, value: &str) -> Result<i64, CommerceServiceError> {
+    value
+        .trim()
+        .parse::<i64>()
+        .map_err(|_| CommerceServiceError::validation(format!("{field} must be a decimal id")))
 }
 
 async fn insert_checkout_session(

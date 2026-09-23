@@ -23,10 +23,12 @@ pub fn materialize_platform_catalog_sql(template: &str) -> String {
 }
 
 fn is_valid_platform_catalog_tenant_id(value: &str) -> bool {
-    !value.is_empty()
-        && value
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+    // Digits only, because this id is materialized into comparisons against the merchandise
+    // catalog, whose `tenant_id` is `BIGINT`. An alphanumeric value used to be usable when the
+    // catalog keyed tenants by text; today it would produce `bigint = 'acme-01'` and fail inside
+    // PostgreSQL. Rejecting it here means a misconfigured environment falls back to the default
+    // instead of failing the query it was meant to serve.
+    !value.is_empty() && value.chars().all(|ch| ch.is_ascii_digit())
 }
 
 #[cfg(test)]
@@ -49,6 +51,18 @@ mod tests {
             platform_catalog_tenant_id(),
             DEFAULT_PLATFORM_CATALOG_TENANT_ID
         );
+    }
+
+    #[test]
+    fn platform_catalog_tenant_must_be_a_decimal_id() {
+        // The predicate is exercised directly rather than through the environment: the catalog
+        // keys tenants on `BIGINT`, so only a decimal id can select a row, while an alphanumeric
+        // value would materialize as `bigint = 'acme-01'` and fail inside PostgreSQL. Testing the
+        // predicate keeps this assertion off the process environment that the tests above mutate.
+        assert!(is_valid_platform_catalog_tenant_id("200002"));
+        assert!(!is_valid_platform_catalog_tenant_id("acme-01"));
+        assert!(!is_valid_platform_catalog_tenant_id("100001-1"));
+        assert!(!is_valid_platform_catalog_tenant_id(""));
     }
 
     struct EnvGuard {

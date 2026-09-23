@@ -279,20 +279,20 @@ FROM commerce_product_sku s
 JOIN commerce_product_spu pr ON pr.id = s.spu_id
 WHERE (
         (
-            s.tenant_id = CAST($1 AS TEXT)
-            AND (s.organization_id = CAST($2 AS TEXT) OR s.organization_id = '0')
-            AND pr.tenant_id = CAST($1 AS TEXT)
-            AND (pr.organization_id = CAST($2 AS TEXT) OR pr.organization_id = '0')
+            s.tenant_id = CAST($1 AS BIGINT)
+            AND (s.organization_id = CAST($2 AS BIGINT) OR s.organization_id = 0)
+            AND pr.tenant_id = CAST($1 AS BIGINT)
+            AND (pr.organization_id = CAST($2 AS BIGINT) OR pr.organization_id = 0)
         )
       )
   AND COALESCE(NULLIF(s.currency_code, ''), 'CNY') = $3
   AND s.sales_status = 'active'
   AND pr.sales_status = 'active'
 ORDER BY
-    CASE WHEN CAST(s.price_amount AS TEXT) IN ($4, $5, $6) THEN 0 ELSE 1 END,
+    CASE WHEN CAST(s.sale_price_minor AS TEXT) IN ($4, $5, $6) THEN 0 ELSE 1 END,
     CASE
-        WHEN s.tenant_id = CAST($1 AS TEXT) AND s.organization_id = CAST($2 AS TEXT) THEN 0
-        WHEN s.tenant_id = CAST($1 AS TEXT) AND s.organization_id = '0' THEN 1
+        WHEN s.tenant_id = CAST($1 AS BIGINT) AND s.organization_id = CAST($2 AS BIGINT) THEN 0
+        WHEN s.tenant_id = CAST($1 AS BIGINT) AND s.organization_id = 0 THEN 1
         ELSE 2
     END ASC,
     pr.id ASC,
@@ -307,14 +307,14 @@ SELECT
 FROM commerce_product_sku s
 JOIN commerce_product_spu pr ON pr.id = s.spu_id
 WHERE s.tenant_id = '__PLATFORM_TENANT__'
-  AND (s.organization_id = '0' OR s.organization_id = '0')
+  AND (s.organization_id = 0 OR s.organization_id = 0)
   AND pr.tenant_id = '__PLATFORM_TENANT__'
-  AND (pr.organization_id = '0' OR pr.organization_id = '0')
+  AND (pr.organization_id = 0 OR pr.organization_id = 0)
   AND COALESCE(NULLIF(s.currency_code, ''), 'CNY') = $1
   AND s.sales_status = 'active'
   AND pr.sales_status = 'active'
 ORDER BY
-    CASE WHEN CAST(s.price_amount AS TEXT) IN ($2, $3, $4) THEN 0 ELSE 1 END,
+    CASE WHEN CAST(s.sale_price_minor AS TEXT) IN ($2, $3, $4) THEN 0 ELSE 1 END,
     pr.id ASC,
     s.id ASC
 LIMIT 1
