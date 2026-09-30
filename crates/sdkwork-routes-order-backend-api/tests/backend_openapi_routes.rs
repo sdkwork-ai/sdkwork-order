@@ -1,7 +1,7 @@
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::Router;
-use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
+use sdkwork_contract_service::CommerceMoney;
 use sdkwork_database_config::{DatabaseConfig, DatabaseEngine};
 use sdkwork_database_sqlx::{DatabasePool, PoolContext};
 use sdkwork_iam_context_service::{AuthLevel, DeploymentMode, Environment, IamAppContext};
@@ -10,8 +10,8 @@ use sdkwork_order_service::{
     AccountPointsCreditFuture, AccountPointsCreditPort, AccountValueFuture,
     AccountValueLedgerCommand, AccountValueLedgerOperation, AccountValueLedgerOutcome,
     AccountValueLedgerPort, NoopAccountValueLedgerPort, NoopMembershipPurchaseFulfillmentPort,
-    PaymentExecutorOutcome, PaymentPayoutExecutionRequest, PaymentPayoutExecutorPort,
-    PaymentRefundExecutionRequest, PaymentRefundExecutorPort, PointsRechargeCreditOutcome,
+    PaymentExecutorOutcome, PaymentRefundExecutionRequest, PaymentRefundExecutorPort,
+    PointsRechargeCreditOutcome,
     PointsRechargeCreditRequest, UnavailablePhysicalInventoryReservationPort,
 };
 use sdkwork_order_service_host::OrderServiceHost;
@@ -156,21 +156,6 @@ impl PaymentRefundExecutorPort for RecordingRefundExecutorPort {
                 provider_reference_id: Some("payment-refund-1".to_owned()),
                 status: "succeeded".to_owned(),
             })
-        })
-    }
-}
-
-struct FailingPayoutExecutorPort;
-
-impl PaymentPayoutExecutorPort for FailingPayoutExecutorPort {
-    fn execute_provider_payout<'a>(
-        &'a self,
-        _request: PaymentPayoutExecutionRequest,
-    ) -> AccountValueFuture<'a, PaymentExecutorOutcome> {
-        Box::pin(async move {
-            Err(CommerceServiceError::unsupported_capability(
-                "provider payout executor is not configured",
-            ))
         })
     }
 }

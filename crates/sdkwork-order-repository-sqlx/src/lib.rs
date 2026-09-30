@@ -29,7 +29,6 @@ pub use test_postgres_pool::order_points_recharge_e2e_postgres_pool_from_env;
 mod test_postgres_pool;
 
 pub use order_settlement_context::OrderPaymentSettlementContext;
-pub use postgres_management::OrderRefundBounds;
 pub use postgres_membership_order::PostgresCommerceMembershipOrderStore;
 pub use postgres_order::PostgresCommerceOrderStore;
 pub use postgres_recharge::PostgresCommerceRechargeStore;

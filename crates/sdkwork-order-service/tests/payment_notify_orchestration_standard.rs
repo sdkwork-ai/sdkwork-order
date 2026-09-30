@@ -8,7 +8,7 @@ use sdkwork_order_service::{
     process_payment_notify, AccountPointsCreditFuture, AccountPointsCreditPort,
     AccountValueFulfillmentContext, AccountValueFulfillmentFuture, AccountValueFulfillmentStore,
     AccountValueLedgerCommand, AccountValueLedgerOutcome, AccountValueLedgerPort,
-    ConfirmOwnerOrderPaymentOutcome, CouponRedemptionPort, CouponSubscriptionFulfillmentOutcome,
+    ConfirmOwnerOrderPaymentOutcome, CouponSubscriptionFulfillmentOutcome,
     CouponSubscriptionFulfillmentRequest, FulfillAccountValueOrderCommand,
     FulfillAccountValueOrderOutcome, FulfillPointsRechargeOrderCommand,
     FulfillPointsRechargeOrderOutcome, MarkPointsRechargePaymentSucceededCommand,

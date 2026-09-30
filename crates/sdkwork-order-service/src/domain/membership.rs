@@ -47,7 +47,7 @@ impl CreateMembershipOrderOutcome {
         crate::validation::require_non_empty("expires_at", expires_at)?;
         crate::validation::require_non_empty("status", status)?;
         crate::validation::require_non_empty("cashier_url", cashier_url)?;
-        if duration_days <= 0 && action.trim().to_ascii_lowercase() != "recharge" {
+        if duration_days <= 0 && !action.trim().eq_ignore_ascii_case("recharge") {
             return Err(CommerceServiceError::validation(
                 "membership package duration must be greater than zero",
             ));

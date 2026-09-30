@@ -83,7 +83,7 @@ pub async fn insert_order_event_postgres(
     .bind(&input.tenant_id)
     // commerce_order_event.organization_id is NOT NULL with the platform
     // sentinel default (DATABASE_SPEC DB090); org-less orders store '0'.
-    .bind(&normalize_organization_scope(
+    .bind(normalize_organization_scope(
         input.organization_id.as_deref(),
     ))
     .bind(&event_no)

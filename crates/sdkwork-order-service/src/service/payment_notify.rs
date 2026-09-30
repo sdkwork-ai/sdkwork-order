@@ -187,6 +187,9 @@ pub fn default_payment_notify_handler_registry() -> Arc<dyn PaymentNotifyHandler
 /// Dispatches the fulfillment of a confirmed successful payment to the
 /// handler registered for the subject's business type. Unregistered business
 /// types fall back to the deterministic unknown-subject fulfillment.
+// The dispatch signature mirrors the settlement port bundle plus the notify
+// envelope; every argument is a distinct dependency of the handler registry.
+#[allow(clippy::too_many_arguments)]
 pub async fn dispatch_payment_notify_handler<'ports, 'data>(
     registry: &dyn PaymentNotifyHandlerRegistry,
     ports: &'ports OwnerOrderSettlementPorts<'ports>,
@@ -442,7 +445,7 @@ impl PaymentNotifyHandler for MembershipNotifyHandler {
     where
         'data: 'ports,
     {
-        let snapshot = ctx.membership_purchase.map(|snapshot| snapshot.clone());
+        let snapshot = ctx.membership_purchase.cloned();
         Box::pin(async move {
             let Some(snapshot) = snapshot else {
                 tracing::warn!(

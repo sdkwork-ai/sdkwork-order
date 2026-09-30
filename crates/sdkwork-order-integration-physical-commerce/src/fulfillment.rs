@@ -34,9 +34,7 @@ impl PhysicalFulfillmentAdapter {
         .await?;
 
         // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-        let DatabasePool::Postgres(pool, _) = &self.order_pool else {
-            panic!("physical goods fulfillment requires a PostgreSQL order pool");
-        };
+        let DatabasePool::Postgres(pool, _) = &self.order_pool;
         let order_replayed = fulfill_postgres(pool, &request).await?;
 
         Ok(PhysicalGoodsFulfillmentOutcome {

@@ -6,6 +6,7 @@ import {
 import {
   createSdkworkIdempotencyParams,
   createSdkworkOrderAppService,
+  unwrapSdkworkOrderResource,
   type SdkworkOrderAppService,
 } from "@sdkwork/order-service";
 
@@ -89,12 +90,19 @@ export function createWithdrawalRequestService(
 }
 
 function normalizeWithdrawalRequest(response: unknown): WithdrawalRequestResult {
-  const data = (response as { data?: Record<string, unknown> })?.data ?? response;
-  const record = (data ?? {}) as Record<string, unknown>;
+  // `unwrapSdkworkOrderResource` (shared with the composed order service)
+  // unwraps the SdkWork envelope (`data.item`) and tolerates already-unwrapped
+  // payloads, so the H5 surface never reads a bare `{ item }` wrapper as the
+  // record (which silently produced an empty withdrawal id).
+  const record = unwrapSdkworkOrderResource<Record<string, unknown>>(
+    response,
+    "Withdrawal request response is invalid.",
+  );
+  const source = (record ?? {}) as Record<string, unknown>;
   return {
-    withdrawalRequestId: String(record.withdrawalRequestId ?? record.id ?? ""),
-    requestNo: record.requestNo != null ? String(record.requestNo) : undefined,
-    status: String(record.status ?? "requested"),
-    ...record,
+    withdrawalRequestId: String(source.withdrawalRequestId ?? source.id ?? ""),
+    requestNo: source.requestNo != null ? String(source.requestNo) : undefined,
+    status: String(source.status ?? "requested"),
+    ...source,
   };
 }

@@ -57,9 +57,7 @@ impl StoreOwnerOrderPaymentReconciliationAdapter {
 
     pub fn from_database_pool(pool: &DatabasePool) -> Self {
         // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-        let DatabasePool::Postgres(pool, _) = pool else {
-            panic!("payment reconciliation adapter requires a PostgreSQL database pool");
-        };
+        let DatabasePool::Postgres(pool, _) = pool;
         Self::postgres(pool.clone())
     }
 }

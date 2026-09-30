@@ -55,9 +55,7 @@ async fn build_store_adapter() -> Result<Arc<dyn AccountPointsCreditPort>, Strin
         .map_err(|error| format!("create account database pool failed: {error}"))?;
 
     // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-    let DatabasePool::Postgres(pool, _) = pool else {
-        return Err("account points credit adapter requires a PostgreSQL pool".to_owned());
-    };
+    let DatabasePool::Postgres(pool, _) = pool;
     Ok(Arc::new(StoreAccountPointsCreditAdapter::postgres(pool)))
 }
 
@@ -70,8 +68,6 @@ async fn build_store_account_value_adapter() -> Result<Arc<dyn AccountValueLedge
         .map_err(|error| format!("create account database pool failed: {error}"))?;
 
     // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-    let DatabasePool::Postgres(pool, _) = pool else {
-        return Err("account value ledger adapter requires a PostgreSQL pool".to_owned());
-    };
+    let DatabasePool::Postgres(pool, _) = pool;
     Ok(Arc::new(StoreAccountPointsCreditAdapter::postgres(pool)))
 }

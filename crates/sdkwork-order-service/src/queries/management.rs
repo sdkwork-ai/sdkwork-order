@@ -193,6 +193,9 @@ impl OrderManagementListQuery {
         )
     }
 
+    // The argument list mirrors the documented management list facets
+    // (tenant/org scope, filters, SdkWorkListQuery paging) one to one.
+    #[allow(clippy::too_many_arguments)]
     pub fn with_created_range(
         tenant_id: &str,
         organization_id: Option<&str>,

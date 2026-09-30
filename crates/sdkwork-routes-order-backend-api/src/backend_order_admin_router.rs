@@ -8,7 +8,7 @@ use axum::{Json, Router};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{
-    OrderRefundBounds, PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
+    PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
 };
 use sdkwork_order_service::{
     AccountValueAssetCode, CancelManagementOrderCommand, CloseManagementOrderCommand,
@@ -255,21 +255,6 @@ impl BackendManagementOrderStore {
         }
     }
 
-    async fn load_order_refund_bounds(
-        &self,
-        tenant_id: &str,
-        organization_id: Option<&str>,
-        order_id: &str,
-        refund_amount: &str,
-    ) -> Result<Option<OrderRefundBounds>, CommerceServiceError> {
-        match self {
-            Self::Postgres(store) => {
-                store
-                    .load_order_refund_bounds(tenant_id, organization_id, order_id, refund_amount)
-                    .await
-            }
-        }
-    }
 
     async fn list_management_order_events(
         &self,

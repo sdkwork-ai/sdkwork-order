@@ -138,10 +138,6 @@ pub async fn expire_due_order(
     Ok(true)
 }
 
-fn current_command_timestamp() -> String {
-    crate::store_clock::now_canonical()
-}
-
 fn optional_string_cell(row: &sqlx::postgres::PgRow, column: &str) -> Option<String> {
     row.try_get::<Option<String>, _>(column).ok().flatten()
 }
@@ -152,11 +148,11 @@ fn string_cell(row: &sqlx::postgres::PgRow, column: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::current_command_timestamp;
+    use sdkwork_order_service::canonical_now_timestamp;
 
     #[test]
     fn expiration_timestamp_is_canonical_rfc3339() {
-        let value = current_command_timestamp();
+        let value = canonical_now_timestamp();
         // Canonical store format (DATABASE_SPEC §8.1.1): RFC 3339 UTC with
         // fixed millisecond precision, lexicographically ordered.
         assert!(chrono::DateTime::parse_from_rfc3339(&value).is_ok());

@@ -124,9 +124,7 @@ async fn run_compensation_pass(
     host: &OrderServiceHost,
     config: &PaymentCompensationPassConfig,
 ) -> Result<(), String> {
-    let DatabasePool::Postgres(pool, _) = host.database_pool() else {
-        return Err("payment compensation worker requires a PostgreSQL pool".to_owned());
-    };
+    let DatabasePool::Postgres(pool, _) = host.database_pool();
     let credentials = ProviderCredentialBundle::from_env();
     let payments = PostgresCommerceOwnerOrderPaymentStore::new(pool.clone());
     let orders = PostgresCommerceOrderStore::new(pool.clone());

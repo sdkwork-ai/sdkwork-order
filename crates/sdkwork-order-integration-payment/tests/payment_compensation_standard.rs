@@ -22,7 +22,7 @@ use sdkwork_order_service::{
 };
 use sdkwork_payment_providers::ProviderCredentialBundle;
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 
 struct NoopAccountPointsCreditPort;
 

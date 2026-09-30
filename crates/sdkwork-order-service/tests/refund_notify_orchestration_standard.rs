@@ -2,7 +2,7 @@
 //! block: verify → ingest → refund status dispatch (refunded / refund_failed
 //! / accepted), with terminal-safe idempotency on the order side.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{

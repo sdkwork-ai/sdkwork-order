@@ -192,6 +192,8 @@ export default defineConfig({
       "apps/sdkwork-order-pc/packages/**/*.test.ts",
       "apps/sdkwork-order-pc/packages/**/*.test.tsx",
       "apps/sdkwork-order-common/packages/**/*.test.ts",
+      "apps/sdkwork-order-h5/packages/**/*.test.ts",
+      "apps/sdkwork-order-h5/packages/**/*.test.tsx",
     ],
   },
 });

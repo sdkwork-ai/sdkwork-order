@@ -115,6 +115,10 @@ fn payload_fingerprint(payload: &serde_json::Value) -> String {
 /// Kept for direct callers; HTTP surfaces should use
 /// [`verify_and_normalize_event`] + [`process_payment_notify_verified`] so
 /// they can route refund events to the refund pipeline first.
+// The orchestration entry point takes one port per payment-notify phase
+// (verify, ingest, order context, settle); grouping them would only hide
+// the dependency edges the notify contract spells out.
+#[allow(clippy::too_many_arguments)]
 pub async fn process_payment_notify(
     verify_port: &dyn PaymentNotifyVerifyPort,
     ingest_port: &dyn PaymentNotifyIngestPort,

@@ -18,9 +18,7 @@ pub struct StoreOrderPartnerRelationAdapter {
 impl StoreOrderPartnerRelationAdapter {
     pub fn new(pool: DatabasePool) -> Self {
         // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-        let DatabasePool::Postgres(pool, _) = pool else {
-            panic!("order partner relation adapter requires a postgres pool")
-        };
+        let DatabasePool::Postgres(pool, _) = pool;
         Self {
             resolver: PostgresPartnerRelationResolver::new(pool),
         }

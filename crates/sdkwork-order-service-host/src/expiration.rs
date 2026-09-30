@@ -82,9 +82,7 @@ pub fn spawn_order_expiration_scheduler(
 }
 
 async fn run_expiration_pass(host: &OrderServiceHost, batch_size: i64) -> Result<(), String> {
-    let DatabasePool::Postgres(pool, _) = host.database_pool() else {
-        return Err("order expiration scheduler requires a PostgreSQL pool".to_owned());
-    };
+    let DatabasePool::Postgres(pool, _) = host.database_pool();
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),

@@ -36,11 +36,10 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
     ));
-    let DatabasePool::Postgres(pool, _) = host.database_pool() else {
-        panic!("order app router requires a PostgreSQL database pool");
-    };
+    let DatabasePool::Postgres(pool, _) = host.database_pool();
     let pool = pool.clone();
-    let router = Router::new()
+    
+    Router::new()
         .merge(app_order_router_with_postgres_pool_and_inventory(
             pool.clone(),
             registry.clone(),
@@ -78,8 +77,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
                 physical_goods,
             ),
         )
-        .merge(app_refund_webhook_router_with_postgres_pool(pool));
-    router
+        .merge(app_refund_webhook_router_with_postgres_pool(pool))
 }
 
 fn build_recharge_router_postgres(

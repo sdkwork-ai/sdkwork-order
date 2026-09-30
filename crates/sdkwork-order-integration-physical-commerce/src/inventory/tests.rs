@@ -17,11 +17,12 @@ fn postgres_url() -> Option<String> {
 }
 
 /// 共享 PostgreSQL 实例下，串行化 DROP/CREATE schema 的初始化阶段。
-static SCHEMA_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// 异步感知锁：schema 初始化跨多个 await，std 互斥锁会把执行器线程堵死。
+static SCHEMA_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 async fn fixture() -> Option<(sqlx::PgPool, PhysicalInventoryAdapter)> {
     let url = postgres_url()?;
-    let _guard = SCHEMA_LOCK.lock().expect("schema lock");
+    let _guard = SCHEMA_LOCK.lock().await;
     let pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&url)

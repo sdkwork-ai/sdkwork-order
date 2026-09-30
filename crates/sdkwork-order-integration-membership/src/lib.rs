@@ -22,9 +22,7 @@ pub struct StoreMembershipFulfillmentAdapter {
 impl StoreMembershipFulfillmentAdapter {
     pub fn from_database_pool(pool: &DatabasePool) -> Result<Self, String> {
         // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-        let DatabasePool::Postgres(pool, _) = pool else {
-            return Err("order membership fulfillment server requires PostgreSQL".to_owned());
-        };
+        let DatabasePool::Postgres(pool, _) = pool;
         Ok(Self {
             store: PostgresCommerceMembershipStore::new(pool.clone()),
         })
@@ -138,8 +136,10 @@ impl MembershipPurchaseFulfillmentPort for StoreMembershipFulfillmentAdapter {
 pub fn membership_purchase_fulfillment_port_from_database_pool(
     pool: &DatabasePool,
 ) -> Result<Arc<dyn MembershipPurchaseFulfillmentPort>, String> {
-    StoreMembershipFulfillmentAdapter::from_database_pool(pool)
-        .map(|adapter| Arc::new(adapter) as Arc<dyn MembershipPurchaseFulfillmentPort>)
+    StoreMembershipFulfillmentAdapter::from_database_pool(pool).map(|adapter| {
+        let port: Arc<dyn MembershipPurchaseFulfillmentPort> = Arc::new(adapter);
+        port
+    })
 }
 
 fn membership_subject(
