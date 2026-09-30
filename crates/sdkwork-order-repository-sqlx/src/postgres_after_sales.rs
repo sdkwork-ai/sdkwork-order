@@ -448,7 +448,7 @@ impl PostgresCommerceOrderStore {
 
         let now = current_timestamp_string();
 
-        sqlx::query(
+        let updated_rows = sqlx::query(
             r#"
             UPDATE commerce_after_sales_request
             SET status = $1,
@@ -481,14 +481,12 @@ impl PostgresCommerceOrderStore {
         .execute(&mut *tx)
         .await
         .map_err(|error| store_error("failed to review after sales request", error))?
-        .rows_affected()
-        .eq(1)
-        .then_some(())
-        .ok_or_else(|| {
-            CommerceServiceError::conflict(
+        .rows_affected();
+        if updated_rows != 1 {
+            return Err(CommerceServiceError::conflict(
                 "after sales request changed concurrently; review was not applied",
-            )
-        })?;
+            ));
+        }
 
         insert_after_sales_event(
             &mut tx,

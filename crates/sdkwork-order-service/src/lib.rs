@@ -7,6 +7,7 @@ pub mod queries;
 pub mod service;
 pub mod validation;
 
+pub use clock::*;
 pub use commands::*;
 pub use config::*;
 pub use domain::*;
