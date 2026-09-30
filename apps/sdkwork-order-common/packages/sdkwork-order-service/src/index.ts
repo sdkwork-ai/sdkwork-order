@@ -32,12 +32,14 @@ export type SdkworkOrderCheckoutService = PublicSdkPort<SdkworkAppClient["checko
 export type SdkworkOrderRechargesService = PublicSdkPort<SdkworkAppClient["recharges"]>;
 export type SdkworkOrderMembershipsService = PublicSdkPort<SdkworkAppClient["memberships"]>;
 export type SdkworkOrderWithdrawalsService = PublicSdkPort<SdkworkAppClient["withdrawals"]>;
+export type SdkworkOrderShipmentsService = PublicSdkPort<SdkworkAppClient["shipments"]>;
 
 export type SdkworkOrderAppService = {
   checkout: SdkworkOrderCheckoutService;
   memberships: SdkworkOrderMembershipsService;
   orders: SdkworkOrderOrdersService;
   recharges: SdkworkOrderRechargesService;
+  shipments: SdkworkOrderShipmentsService;
   withdrawals: SdkworkOrderWithdrawalsService;
 };
 
@@ -323,6 +325,7 @@ export function createSdkworkOrderAppService(input: CreateSdkworkOrderAppService
     memberships: input.appClient.memberships,
     orders: input.appClient.orders,
     recharges: input.appClient.recharges,
+    shipments: input.appClient.shipments,
     withdrawals: input.appClient.withdrawals,
   };
 }

@@ -16,8 +16,14 @@ export const APP_ORDER_METHOD_TREE = {
     events: { list: true },
     cancellations: { create: true },
     paymentSuccess: { retrieve: true },
+    receipts: { create: true },
     statistics: { retrieve: true },
     status: { retrieve: true },
+  },
+  shipments: {
+    retrieve: true,
+    packages: { list: true },
+    trackingEvents: { list: true },
   },
   recharges: {
     packages: { list: true },
