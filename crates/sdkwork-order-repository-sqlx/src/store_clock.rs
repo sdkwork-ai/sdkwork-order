@@ -1,13 +1,16 @@
 //! Canonical store clock for every order-domain timestamp column.
 //!
-//! DATABASE_SPEC §8.1.1: TEXT-stored logical instants are only compliant when
-//! they use a single normalized UTC format whose lexical ordering matches
-//! chronological ordering. Every order-domain write goes through this module
-//! so the format has exactly one definition: canonical RFC 3339 UTC with
-//! fixed millisecond precision (for example `2026-10-01T12:34:56.789Z`),
-//! implemented on `sdkwork-utils` datetime. Predicates against these columns
-//! therefore compare lexicographically consistently and cast explicitly
-//! (`col::timestamptz`) when comparing against real instants.
+//! Every order-domain write goes through this module so the format has
+//! exactly one definition: canonical RFC 3339 UTC with fixed millisecond
+//! precision (for example `2026-10-01T12:34:56.789Z`), implemented on
+//! `sdkwork-utils` datetime. All order-owned instant columns are native
+//! TIMESTAMPTZ (migrations 0015/0017; DATABASE_SPEC §8.1): writes bind
+//! canonical text through `CAST(... AS TIMESTAMPTZ)` and reads project back
+//! through `TO_CHAR(col AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+//! so consumers always read the identical wire value. The
+//! `commerce_inventory_reservation` table is excluded — it is owned by the
+//! sdkwork-inventory module baseline and the order queries that touch it use
+//! explicit casts.
 
 /// Current instant in the canonical store format.
 pub(crate) fn now_canonical() -> String {

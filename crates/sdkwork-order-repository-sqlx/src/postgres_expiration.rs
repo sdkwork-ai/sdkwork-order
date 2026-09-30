@@ -1,10 +1,10 @@
 //! Order expiration sweep used by the in-process expiration scheduler.
 //!
 //! Orders whose payment window (`expired_at`) has elapsed transition to
-//! `expired` with a system lifecycle event. `expired_at` is stored in the
-//! canonical RFC 3339 UTC store format (see `crate::store_clock`), so the
-//! due predicate casts the column explicitly. Every transition is
-//! idempotent: a row already moved to a terminal state yields `Ok(false)`.
+//! `expired` with a system lifecycle event. `expired_at` is native TIMESTAMPTZ
+//! (migration 0015) and the due/range predicates compare the column directly
+//! against the 0013 partial index. Every transition is idempotent: a row
+//! already moved to a terminal state yields `Ok(false)`.
 
 use sdkwork_contract_service::CommerceServiceError;
 use sqlx::{PgPool, Row};

@@ -15,7 +15,7 @@ schema is provisioned from **baseline plus migrations** (`database.manifest.json
    `commerce_order_cancellation` are created by
    `migrations/postgres/0004_order_lifecycle_tables.up.sql`, not by the
    baseline — a fresh deployment runs both, in order.
-2. **Migrations** — `database/migrations/postgres/0004`–`0013` are applied
+2. **Migrations** — `database/migrations/postgres/0004`–`0017` are applied
    after the baseline on every fresh deployment. New schema changes land here
    as `00NN_<name>.up.sql` files with the `sdkwork:migration` header
    (`reversible: false` / forward-fix policy; there are no down migrations).
