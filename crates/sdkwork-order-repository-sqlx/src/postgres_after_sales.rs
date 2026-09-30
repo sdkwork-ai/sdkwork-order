@@ -228,7 +228,7 @@ impl PostgresCommerceOrderStore {
                 description = COALESCE($3, description),
                 requested_amount = COALESCE($4, requested_amount),
                 currency_code = COALESCE($5, currency_code),
-                updated_at = $6
+                updated_at = CAST($6 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($7 AS TEXT)
               AND ((organization_id = CAST($8 AS TEXT)) OR (organization_id IS NULL AND $9 IS NULL) OR (organization_id = '0' AND $9 IS NULL))
               AND owner_user_id = CAST($10 AS TEXT)
@@ -460,7 +460,7 @@ impl PostgresCommerceOrderStore {
                 return_status = COALESCE($5, return_status),
                 exchange_status = COALESCE($6, exchange_status),
                 description = COALESCE($7, description),
-                updated_at = $8
+                updated_at = CAST($8 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($9 AS TEXT)
               AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $11 IS NULL) OR (organization_id = '0' AND $11 IS NULL))
               AND id = CAST($12 AS TEXT)
@@ -702,7 +702,7 @@ impl PostgresCommerceOrderStore {
         sqlx::query(
             r#"
             UPDATE commerce_after_sales_request
-            SET return_status = 'submitted', updated_at = $1
+            SET return_status = 'submitted', updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND id = CAST($3 AS TEXT)
            "#,

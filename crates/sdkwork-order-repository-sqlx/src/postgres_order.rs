@@ -897,7 +897,7 @@ impl PostgresCommerceOrderStore {
         sqlx::query(
             r#"
             UPDATE commerce_checkout_session
-            SET status = 'submitted', submitted_at = $1, updated_at = CAST($2 AS TIMESTAMPTZ)
+            SET status = 'submitted', submitted_at = CAST($1 AS TIMESTAMPTZ), updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE id = $3
               AND tenant_id = CAST($4 AS TEXT)
               AND owner_user_id = CAST($5 AS TEXT)

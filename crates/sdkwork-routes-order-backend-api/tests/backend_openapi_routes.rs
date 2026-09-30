@@ -2,8 +2,6 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use sdkwork_contract_service::CommerceMoney;
-use sdkwork_database_config::{DatabaseConfig, DatabaseEngine};
-use sdkwork_database_sqlx::{DatabasePool, PoolContext};
 use sdkwork_iam_context_service::{AuthLevel, DeploymentMode, Environment, IamAppContext};
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_postgres_pool_from_env;
 use sdkwork_order_service::{
@@ -15,7 +13,6 @@ use sdkwork_order_service::{
     PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
     UnavailablePhysicalInventoryReservationPort,
 };
-use sdkwork_order_service_host::OrderServiceHost;
 use sdkwork_routes_order_backend_api::{
     backend_commerce_admin_router_with_postgres_pool_and_ports,
     backend_order_admin_router_with_postgres_pool, openapi_contract::mount_backend_openapi,
@@ -255,7 +252,8 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
         VALUES
             ('refund-request-1', '100001', 'org-1', 'refund-request-1', 'order-1', '200001',
              'token_bank', '32000', 'TOKEN_BANK', 'requested', '9900', 'CNY',
-             'buyer_request', NULL, NULL, NULL, NULL, 'refund-request-idem', '1', '1')
+             'buyer_request', NULL, NULL, NULL, NULL, 'refund-request-idem',
+             '2026-01-01T00:00:00.000Z'::timestamptz, '2026-01-01T00:00:00.000Z'::timestamptz)
         "#,
     )
     .execute(&pool)
@@ -264,17 +262,7 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
 
     let ledger = Arc::new(RecordingAccountValueLedgerPort::default());
     let refunds = Arc::new(RecordingRefundExecutorPort::default());
-    let config = DatabaseConfig {
-        engine: DatabaseEngine::Postgres,
-        url: "postgres://ignored".to_owned(),
-        ..Default::default()
-    };
-    let database_pool = DatabasePool::Postgres(pool.clone(), PoolContext { config });
-    let host = Arc::new(
-        OrderServiceHost::from_database_pool(database_pool)
-            .await
-            .expect("test order service host"),
-    );
+
     let app = build_test_backend_router_with_ledger(
         pool.clone(),
         ledger.clone(),
@@ -300,7 +288,16 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "approve body: {}",
+        String::from_utf8_lossy(
+            &axum::body::to_bytes(response.into_body(), 1_048_576)
+                .await
+                .unwrap_or_default()
+        )
+    );
     assert_eq!(
         ledger.operations(),
         vec![

@@ -144,8 +144,8 @@ SELECT
     status,
     provider_reference_id,
     account_effect_reference_id,
-    created_at,
-    updated_at
+    TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at,
+    TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_at
 FROM commerce_order_refund_request
 WHERE tenant_id = CAST($1 AS TEXT)
   AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
@@ -167,8 +167,8 @@ SELECT
     status,
     provider_reference_id,
     account_effect_reference_id,
-    created_at,
-    updated_at
+    TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at,
+    TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_at
 FROM commerce_order_withdrawal_request
 WHERE tenant_id = CAST($1 AS TEXT)
   AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
@@ -191,8 +191,8 @@ SELECT
     status,
     provider_reference_id,
     account_effect_reference_id,
-    created_at,
-    updated_at,
+    TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at,
+    TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_at,
     COUNT(*) OVER() AS total_count
 FROM commerce_order_refund_request
 WHERE tenant_id = CAST($1 AS TEXT)
@@ -216,8 +216,8 @@ SELECT
     status,
     provider_reference_id,
     account_effect_reference_id,
-    created_at,
-    updated_at,
+    TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at,
+    TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_at,
     COUNT(*) OVER() AS total_count
 FROM commerce_order_withdrawal_request
 WHERE tenant_id = CAST($1 AS TEXT)
@@ -242,8 +242,8 @@ SELECT
     status,
     provider_reference_id,
     account_effect_reference_id,
-    created_at,
-    updated_at
+    TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at,
+    TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_at
 FROM commerce_order_refund_request
 WHERE tenant_id = CAST($1 AS TEXT)
   AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
@@ -265,8 +265,8 @@ SELECT
     status,
     provider_reference_id,
     account_effect_reference_id,
-    created_at,
-    updated_at
+    TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at,
+    TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_at
 FROM commerce_order_withdrawal_request
 WHERE tenant_id = CAST($1 AS TEXT)
   AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
@@ -343,7 +343,7 @@ impl PostgresCommerceRechargeStore {
                 valid_to = $10,
                 request_no = $11,
                 idempotency_key = $12,
-                updated_at = $13,
+                updated_at = CAST($13 AS TIMESTAMPTZ),
                 retired_at = CASE WHEN $14 = 'retired' THEN COALESCE(retired_at, $15) ELSE NULL END
             WHERE tenant_id = CAST($16 AS TEXT)
               AND ((organization_id = CAST($17 AS TEXT)) OR (organization_id IS NULL AND $17 IS NULL) OR (organization_id = '0' AND $17 IS NULL))
@@ -449,7 +449,7 @@ impl PostgresCommerceRechargeStore {
                 request_no = $1,
                 idempotency_key = $2,
                 retired_at = COALESCE(retired_at, $3),
-                updated_at = $4
+                updated_at = CAST($4 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($5 AS TEXT)
               AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL) OR (organization_id = '0' AND $6 IS NULL))
               AND id = CAST($7 AS TEXT)
@@ -535,7 +535,7 @@ impl PostgresCommerceRechargeStore {
                 sort_weight = $9,
                 request_no = $10,
                 idempotency_key = $11,
-                updated_at = $12,
+                updated_at = CAST($12 AS TIMESTAMPTZ),
                 retired_at = CASE WHEN $13 = 'retired' THEN COALESCE(retired_at, $14) ELSE NULL END
             WHERE tenant_id = CAST($15 AS TEXT)
               AND ((organization_id = CAST($16 AS TEXT)) OR (organization_id IS NULL AND $16 IS NULL) OR (organization_id = '0' AND $16 IS NULL))
@@ -636,7 +636,7 @@ impl PostgresCommerceRechargeStore {
                 request_no = $1,
                 idempotency_key = $2,
                 retired_at = COALESCE(retired_at, $3),
-                updated_at = $4
+                updated_at = CAST($4 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($5 AS TEXT)
               AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL) OR (organization_id = '0' AND $6 IS NULL))
               AND plan_code = CAST($7 AS TEXT)
@@ -724,7 +724,7 @@ impl PostgresCommerceRechargeStore {
             SELECT
                 $1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, CAST($6 AS TEXT), $7,
                 CAST($8 AS NUMERIC), $9, CAST($10 AS NUMERIC), $11, 'requested', $12, $13,
-                NULL, NULL, NULL, $14, $15, $16
+                NULL, NULL, NULL, CAST($14 AS TIMESTAMPTZ), CAST($15 AS TIMESTAMPTZ), CAST($16 AS TIMESTAMPTZ)
             FROM commerce_order o
             WHERE o.tenant_id = CAST($2 AS TEXT)
               AND ((o.organization_id = CAST($3 AS TEXT))
@@ -948,8 +948,10 @@ impl PostgresCommerceRechargeStore {
                  payout_account_ref, reason_code, review_comment, provider_reference_id,
                  account_effect_reference_id, idempotency_key, created_at, updated_at)
             VALUES
-                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, CAST($5 AS TEXT), $6, $7, $8,
-                 $9, $10, 'requested', $11, $12, $13, NULL, NULL, NULL, $14, $15, $16)
+                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, CAST($5 AS TEXT), $6,
+                 CAST($7 AS NUMERIC), $8, CAST($9 AS NUMERIC), $10, 'requested', $11, $12, $13,
+                 NULL, NULL, NULL, $14,
+                 CAST($15 AS TIMESTAMPTZ), CAST($16 AS TIMESTAMPTZ))
             ON CONFLICT DO NOTHING
             "#,
         )
@@ -1345,7 +1347,7 @@ impl PostgresCommerceRechargeStore {
                 account_effect_reference_id = COALESCE($5, account_effect_reference_id),
                 request_no = $6,
                 idempotency_key = $7,
-                updated_at = $8
+                updated_at = CAST($8 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($9 AS TEXT)
               AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $10 IS NULL) OR (organization_id = '0' AND $10 IS NULL))
               AND id = CAST($11 AS TEXT)
@@ -1445,7 +1447,7 @@ impl PostgresCommerceRechargeStore {
                 account_effect_reference_id = COALESCE($5, account_effect_reference_id),
                 request_no = $6,
                 idempotency_key = $7,
-                updated_at = $8
+                updated_at = CAST($8 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($9 AS TEXT)
               AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $10 IS NULL) OR (organization_id = '0' AND $10 IS NULL))
               AND id = CAST($11 AS TEXT)

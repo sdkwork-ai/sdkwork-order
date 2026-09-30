@@ -747,7 +747,7 @@ async fn update_checkout_session_status(
     sqlx::query(
         r#"
         UPDATE commerce_checkout_session
-        SET status = $1, updated_at = $2
+        SET status = $1, updated_at = CAST($2 AS TIMESTAMPTZ)
         WHERE id = CAST($3 AS TEXT)
           AND tenant_id = CAST($4 AS TEXT)
           AND owner_user_id = CAST($5 AS TEXT)
@@ -796,7 +796,7 @@ async fn refresh_checkout_idempotency_lock(
     sqlx::query(
         r#"
         UPDATE commerce_idempotency_key
-        SET status = 'locked', locked_until = $1, expires_at = $2, updated_at = $3
+        SET status = 'locked', locked_until = $1, expires_at = CAST($2 AS TIMESTAMPTZ), updated_at = CAST($3 AS TIMESTAMPTZ)
         WHERE tenant_id = $4 AND scope = $5 AND idempotency_key = $6
        "#,
     )
@@ -869,7 +869,7 @@ async fn complete_checkout_idempotency(
     sqlx::query(
         r#"
         UPDATE commerce_idempotency_key
-        SET response_json = $1, status = 'completed', locked_until = NULL, updated_at = $2
+        SET response_json = $1, status = 'completed', locked_until = NULL, updated_at = CAST($2 AS TIMESTAMPTZ)
         WHERE tenant_id = $3 AND scope = $4 AND idempotency_key = $5
        "#,
     )
@@ -903,7 +903,7 @@ async fn complete_checkout_quote_idempotency(
     sqlx::query(
         r#"
         UPDATE commerce_idempotency_key
-        SET response_json = $1, status = 'completed', locked_until = NULL, updated_at = $2
+        SET response_json = $1, status = 'completed', locked_until = NULL, updated_at = CAST($2 AS TIMESTAMPTZ)
         WHERE tenant_id = $3 AND scope = $4 AND idempotency_key = $5
        "#,
     )

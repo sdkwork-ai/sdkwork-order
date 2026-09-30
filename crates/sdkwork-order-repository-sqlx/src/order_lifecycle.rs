@@ -75,7 +75,8 @@ pub async fn insert_order_event_postgres(
              from_status, to_status, actor_type, actor_id, reason_code, message,
              payload_json, request_id, idempotency_key, created_at)
         VALUES
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, '{}', $13, $14, $15)
+            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, '{}', $13, $14,
+             CAST($15 AS TIMESTAMPTZ))
         ON CONFLICT (id) DO NOTHING
         "#,
     )
@@ -119,7 +120,7 @@ pub async fn insert_order_cancellation_postgres(
         INSERT INTO commerce_order_cancellation
             (id, tenant_id, order_id, status, reason_code, reason_message, created_at)
         VALUES
-            ($1, $2, $3, 'completed', $4, $5, $6)
+            ($1, $2, $3, 'completed', $4, $5, CAST($6 AS TIMESTAMPTZ))
         ON CONFLICT (id) DO NOTHING
         "#,
     )

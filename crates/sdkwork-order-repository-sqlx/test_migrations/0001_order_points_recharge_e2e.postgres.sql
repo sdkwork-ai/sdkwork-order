@@ -132,8 +132,8 @@ CREATE TABLE IF NOT EXISTS commerce_after_sales_request (
     requested_by TEXT,
     request_no TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_after_sales_request_tenant_owner
@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS commerce_after_sales_request_item (
     quantity INTEGER NOT NULL,
     requested_amount NUMERIC(20,0) NOT NULL,
     currency_code TEXT NOT NULL,
-    created_at TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
     FOREIGN KEY (after_sales_id) REFERENCES commerce_after_sales_request(id) ON DELETE CASCADE
 );
 
@@ -171,7 +171,7 @@ CREATE TABLE IF NOT EXISTS commerce_after_sales_event (
     actor_id TEXT,
     request_id TEXT,
     idempotency_key TEXT NOT NULL,
-    created_at TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
     FOREIGN KEY (after_sales_id) REFERENCES commerce_after_sales_request(id) ON DELETE CASCADE
 );
 
@@ -189,8 +189,8 @@ CREATE TABLE IF NOT EXISTS commerce_after_sales_return_shipment (
     status TEXT NOT NULL DEFAULT 'submitted',
     request_no TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     FOREIGN KEY (after_sales_id) REFERENCES commerce_after_sales_request(id) ON DELETE CASCADE
 );
 
@@ -213,7 +213,7 @@ CREATE TABLE IF NOT EXISTS commerce_order_event (
     payload_json TEXT NOT NULL DEFAULT '{}',
     request_id TEXT,
     idempotency_key TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS commerce_order_cancellation (
@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS commerce_order_cancellation (
     status TEXT NOT NULL,
     reason_code TEXT NOT NULL,
     reason_message TEXT,
-    created_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS commerce_order_amount_breakdown (
@@ -251,9 +251,9 @@ CREATE TABLE IF NOT EXISTS commerce_fulfillment_order (
     warehouse_id TEXT,
     address_snapshot_id TEXT,
     provider_code TEXT,
-    created_at TEXT NOT NULL,
-    completed_at TEXT,
-    updated_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    completed_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS commerce_shipment (
@@ -265,10 +265,10 @@ CREATE TABLE IF NOT EXISTS commerce_shipment (
     carrier_code TEXT NOT NULL,
     tracking_no TEXT,
     status TEXT NOT NULL,
-    shipped_at TEXT,
-    delivered_at TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    shipped_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_commerce_shipment_tenant_created
@@ -283,7 +283,7 @@ CREATE TABLE IF NOT EXISTS commerce_shipment_package (
     package_type TEXT NOT NULL,
     tracking_no TEXT,
     status TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_commerce_shipment_package_shipment
@@ -299,7 +299,7 @@ CREATE TABLE IF NOT EXISTS commerce_shipment_tracking_event (
     event_status TEXT,
     event_time TEXT NOT NULL,
     location_text TEXT,
-    created_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS commerce_account_value_package (
@@ -319,8 +319,8 @@ CREATE TABLE IF NOT EXISTS commerce_account_value_package (
     valid_to TEXT,
     request_no TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     retired_at TEXT
 );
 
@@ -349,8 +349,8 @@ CREATE TABLE IF NOT EXISTS commerce_token_bank_plan (
     sort_weight INTEGER NOT NULL DEFAULT 0,
     request_no TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     retired_at TEXT
 );
 
@@ -382,8 +382,8 @@ CREATE TABLE IF NOT EXISTS commerce_order_refund_request (
     provider_reference_id TEXT,
     account_effect_reference_id TEXT,
     idempotency_key TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_order_refund_request_idempotency
@@ -411,8 +411,8 @@ CREATE TABLE IF NOT EXISTS commerce_order_withdrawal_request (
     provider_reference_id TEXT,
     account_effect_reference_id TEXT,
     idempotency_key TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_order_withdrawal_request_idempotency

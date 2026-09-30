@@ -544,7 +544,8 @@ async fn advance_owner_order_to_shipped(
     sqlx::query(
         r#"
         UPDATE commerce_shipment
-        SET status = 'shipped', shipped_at = COALESCE(shipped_at, $1), updated_at = $1
+        SET status = 'shipped', shipped_at = COALESCE(shipped_at, CAST($1 AS TIMESTAMPTZ)),
+            updated_at = CAST($1 AS TIMESTAMPTZ)
         WHERE tenant_id = CAST($2 AS TEXT)
           AND id = CAST($3 AS TEXT)
           AND LOWER(COALESCE(status, '')) NOT IN ('shipped', 'delivered')
@@ -560,7 +561,7 @@ async fn advance_owner_order_to_shipped(
     sqlx::query(
         r#"
         UPDATE commerce_fulfillment_order fo
-        SET status = 'shipped', updated_at = $1
+        SET status = 'shipped', updated_at = CAST($1 AS TIMESTAMPTZ)
         FROM commerce_shipment s
         WHERE s.tenant_id = CAST($2 AS TEXT)
           AND s.id = CAST($3 AS TEXT)
