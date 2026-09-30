@@ -2,6 +2,7 @@ import {
   createClient as createGeneratedAppClient,
   SdkworkAppClient as GeneratedSdkworkAppClient,
 } from '../generated/server-openapi/src/index';
+import { OrdersRefundRequestsApi } from '../generated/server-openapi/src/api/orders';
 import type { SdkworkAppConfig } from '../generated/server-openapi/src/types/common';
 import { applySdkworkIdempotencyRequestFingerprint } from './idempotency-request-fingerprint';
 
@@ -31,7 +32,8 @@ export class SdkworkAppClient extends GeneratedSdkworkAppClient {
   public readonly checkout: GeneratedSdkworkAppClient["orderCheckout"]["checkout"];
   public readonly fulfillments: GeneratedSdkworkAppClient["orderFulfillments"]["fulfillments"];
   public readonly memberships: GeneratedSdkworkAppClient["orderMemberships"]["memberships"];
-  public readonly orders: GeneratedSdkworkAppClient["orderOrders"]["orders"];
+  public readonly orders: GeneratedSdkworkAppClient["orderOrders"]["orders"] &
+    Pick<GeneratedSdkworkAppClient["orders"], "refundRequests">;
   public readonly payments: GeneratedSdkworkAppClient["orderPayments"]["payments"];
   public readonly shipments: GeneratedSdkworkAppClient["orderShipments"]["shipments"];
 
@@ -41,7 +43,12 @@ export class SdkworkAppClient extends GeneratedSdkworkAppClient {
     this.checkout = this.orderCheckout.checkout;
     this.fulfillments = this.orderFulfillments.fulfillments;
     this.memberships = this.orderMemberships.memberships;
-    this.orders = this.orderOrders.orders;
+    // The grouped orders surface carries the richer order operations while the
+    // refund-request subtree lives on the base orders API; attach it onto the
+    // grouped instance so `client.orders.refundRequests` keeps working.
+    this.orders = Object.assign(this.orderOrders.orders, {
+      refundRequests: new OrdersRefundRequestsApi(this.http),
+    });
     this.payments = this.orderPayments.payments;
     this.shipments = this.orderShipments.shipments;
     (this.http as unknown as RequestInterceptorRegistrar)
