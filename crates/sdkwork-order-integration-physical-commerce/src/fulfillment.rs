@@ -134,11 +134,7 @@ fn fulfillment_id(order_id: &str) -> String {
     format!("physical-fulfillment-{order_id}")
 }
 fn now_string() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|value| value.as_secs())
-        .unwrap_or(0)
-        .to_string()
+    sdkwork_order_service::canonical_now_timestamp()
 }
 fn store_error(message: &'static str) -> impl FnOnce(sqlx::Error) -> CommerceServiceError {
     move |error| CommerceServiceError::storage(format!("{message}: {error}"))

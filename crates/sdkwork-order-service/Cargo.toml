@@ -17,6 +17,7 @@ path = "src/lib.rs"
 sdkwork_contract_service.workspace = true
 sdkwork_payment_service.workspace = true
 sdkwork-utils-rust.workspace = true
+chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing.workspace = true

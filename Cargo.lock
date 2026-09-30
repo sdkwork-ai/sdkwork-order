@@ -2573,6 +2573,7 @@ dependencies = [
 name = "sdkwork-order-service"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "sdkwork-contract-service",
  "sdkwork-payment-service",
  "sdkwork-utils-rust",

@@ -233,11 +233,7 @@ fn scheduler_batch_size() -> i64 {
 }
 
 fn current_command_timestamp() -> String {
-    let seconds = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0);
-    format!("{seconds}")
+    sdkwork_order_service::canonical_now_timestamp()
 }
 
 #[cfg(test)]

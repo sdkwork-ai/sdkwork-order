@@ -1,9 +1,9 @@
 //! Order expiration sweep used by the in-process expiration scheduler.
 //!
 //! Orders whose payment window (`expired_at`) has elapsed transition to
-//! `expired` with a system lifecycle event. `expired_at` is stored either as
-//! unix seconds (checkout / membership) or RFC3339 (recharge / account
-//! value), so the due predicate accepts both encodings. Every transition is
+//! `expired` with a system lifecycle event. `expired_at` is stored in the
+//! canonical RFC 3339 UTC store format (see `crate::store_clock`), so the
+//! due predicate casts the column explicitly. Every transition is
 //! idempotent: a row already moved to a terminal state yields `Ok(false)`.
 
 use sdkwork_contract_service::CommerceServiceError;
@@ -40,10 +40,7 @@ pub async fn list_due_expiring_orders(
         FROM commerce_order
         WHERE LOWER(COALESCE(status, '')) IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay')
           AND NULLIF(expired_at, '') IS NOT NULL
-          AND (
-            (expired_at ~ '^[0-9]+$' AND to_timestamp(expired_at::bigint) <= CURRENT_TIMESTAMP)
-            OR (expired_at !~ '^[0-9]+$' AND NULLIF(expired_at, '')::timestamptz <= CURRENT_TIMESTAMP)
-          )
+          AND NULLIF(expired_at, '')::timestamptz <= CURRENT_TIMESTAMP
         ORDER BY expired_at, id
         LIMIT $1
         "#,
@@ -158,9 +155,11 @@ mod tests {
     use super::current_command_timestamp;
 
     #[test]
-    fn expiration_timestamp_is_unix_seconds_text() {
+    fn expiration_timestamp_is_canonical_rfc3339() {
         let value = current_command_timestamp();
-        assert!(value.parse::<i64>().is_ok());
-        assert_eq!(value.chars().filter(|c| *c == '.').count(), 0);
+        // Canonical store format (DATABASE_SPEC §8.1.1): RFC 3339 UTC with
+        // fixed millisecond precision, lexicographically ordered.
+        assert!(chrono::DateTime::parse_from_rfc3339(&value).is_ok());
+        assert!(value.ends_with('Z'));
     }
 }

@@ -60,7 +60,7 @@ impl HttpAccountPointsCreditAdapter {
             .ok()
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
-        Self::new(origin, auth_token).map_err(|error| error.to_string())
+        Self::new(origin, auth_token).map_err(|error| format!("{error:?}"))
     }
 }
 

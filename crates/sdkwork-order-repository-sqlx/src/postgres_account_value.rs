@@ -1,4 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{SecondsFormat, Utc};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
@@ -1367,7 +1366,7 @@ impl PostgresCommerceRechargeStore {
         .bind(
             Self::REFUND_REQUEST_TERMINAL_STATUSES
                 .iter()
-                .copied()
+                .map(|status| status.to_string())
                 .collect::<Vec<String>>(),
         )
         .execute(self.pool())
@@ -1467,7 +1466,7 @@ impl PostgresCommerceRechargeStore {
         .bind(
             Self::WITHDRAWAL_REQUEST_TERMINAL_STATUSES
                 .iter()
-                .copied()
+                .map(|status| status.to_string())
                 .collect::<Vec<String>>(),
         )
         .execute(self.pool())

@@ -984,11 +984,12 @@ fn checkout_idempotency_id(tenant_id: &str, scope: &str, idempotency_key: &str) 
 }
 
 fn checkout_expires_at(now: &str) -> String {
-    let seconds = now.trim().parse::<i64>().unwrap_or(0);
-    format!(
-        "{}",
-        seconds.saturating_add(sdkwork_order_service::payment_expire_seconds())
-    )
+    // `now` is a canonical RFC 3339 store instant (store_clock); the payment
+    // window is added on the instant, never on epoch seconds.
+    let base = sdkwork_utils_rust::datetime::parse_datetime(now, None)
+        .unwrap_or_else(sdkwork_utils_rust::datetime::now);
+    let expires = base + chrono::Duration::seconds(sdkwork_order_service::payment_expire_seconds());
+    sdkwork_utils_rust::datetime::format_datetime(expires, None)
 }
 
 fn checkout_line_title(row: &sqlx::postgres::PgRow) -> String {

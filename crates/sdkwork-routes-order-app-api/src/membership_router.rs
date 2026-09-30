@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::State;
 use axum::http::HeaderMap;
@@ -434,9 +433,13 @@ fn membership_order_organization_scope(organization_id: Option<&str>) -> String 
 fn build_create_membership_command(
     input: CreateMembershipCommandInput<'_>,
 ) -> Result<CreateMembershipOrderCommand, CommerceServiceError> {
-    let now = current_unix_timestamp();
-    let requested_at = format_unix_timestamp(now);
-    let expire_at = format_unix_timestamp(now + payment_expire_seconds());
+    // Canonical RFC 3339 store format (sdkwork_order_service::clock): the
+    // command constructor validates RFC 3339 inputs, so unix-seconds text
+    // here made every membership creation fail validation.
+    let requested_at = sdkwork_order_service::canonical_now_timestamp();
+    let expire_at = sdkwork_order_service::canonical_timestamp_after_seconds(
+        payment_expire_seconds(),
+    );
     let order_id = Uuid::new_v4().to_string();
     let order_item_id = Uuid::new_v4().to_string();
     let token = stable_hex_token(&format!(
@@ -554,38 +557,6 @@ fn stable_hex_token(value: &str) -> String {
         hash = hash.wrapping_mul(0x100000001b3);
     }
     format!("{hash:016x}")
-}
-
-fn current_unix_timestamp() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-fn format_unix_timestamp(seconds: i64) -> String {
-    let days = seconds.div_euclid(86_400);
-    let seconds_of_day = seconds.rem_euclid(86_400);
-    let (year, month, day) = civil_from_days(days);
-    let hour = seconds_of_day / 3_600;
-    let minute = (seconds_of_day % 3_600) / 60;
-    let second = seconds_of_day % 60;
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
-}
-
-fn civil_from_days(days: i64) -> (i64, i64, i64) {
-    let days = days + 719_468;
-    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
-    let day_of_era = days - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_prime = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
-    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    let year = year + if month <= 2 { 1 } else { 0 };
-    (year, month, day)
 }
 
 #[cfg(test)]

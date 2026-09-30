@@ -9,19 +9,17 @@
 //! therefore compare lexicographically consistently and cast explicitly
 //! (`col::timestamptz`) when comparing against real instants.
 
-use sdkwork_utils_rust::datetime;
-
 /// Current instant in the canonical store format.
 pub(crate) fn now_canonical() -> String {
-    datetime::format_datetime(datetime::now(), None)
+    sdkwork_order_service::canonical_now_timestamp()
 }
 
 /// Canonical store format for an instant `seconds` in the future (a negative
 /// value reaches into the past) — used to derive payment-window deadlines
 /// such as `expired_at`.
+#[allow(dead_code)]
 pub(crate) fn canonical_after_seconds(seconds: i64) -> String {
-    let instant = datetime::now() + chrono::Duration::seconds(seconds);
-    datetime::format_datetime(instant, None)
+    sdkwork_order_service::canonical_timestamp_after_seconds(seconds)
 }
 
 #[cfg(test)]

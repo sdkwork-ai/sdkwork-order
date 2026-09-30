@@ -288,8 +288,8 @@ async fn restock_postgres(
     })
 }
 
-/// Releases every reservation whose `expires_at` (unix seconds, set at
-/// reserve time) has elapsed while still `reserved`. This is the consistency
+/// Releases every reservation whose `expires_at` (canonical store instant,
+/// set at reserve time) has elapsed while still `reserved`. This is the consistency
 /// backstop for failed releases, legacy orders without `expired_at`, and
 /// abandoned payment windows. Returns the number of affected orders.
 async fn sweep_expired_reservations_postgres(
@@ -301,12 +301,12 @@ async fn sweep_expired_reservations_postgres(
         SELECT DISTINCT tenant_id, order_id
         FROM commerce_inventory_reservation
         WHERE status = 'reserved'
-          AND NULLIF(expires_at, '')::bigint <= $1::bigint
+          AND NULLIF(expires_at, '')::timestamptz <= $1::timestamptz
         ORDER BY order_id
         LIMIT $2
         "#,
     )
-    .bind(now_seconds())
+    .bind(now_string())
     .bind(limit)
     .fetch_all(pool)
     .await
@@ -513,22 +513,15 @@ where
             },
         )
 }
+// Reservation instants follow the canonical order-domain store format
+// (RFC 3339 UTC, millisecond precision) so reservation expiry is comparable
+// with the order `expired_at` plane and lexicographic ordering holds.
 fn now_string() -> String {
-    now_seconds().to_string()
+    sdkwork_order_service::canonical_now_timestamp()
 }
-fn now_seconds() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|v| v.as_secs() as i64)
-        .unwrap_or(0)
-}
+
 fn expires_at() -> String {
-    (std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|v| v.as_secs())
-        .unwrap_or(0)
-        + 1800)
-        .to_string()
+    sdkwork_order_service::canonical_timestamp_after_seconds(1_800)
 }
 fn text_postgres(row: &sqlx::postgres::PgRow, column: &str) -> String {
     optional_text_postgres(row, column).unwrap_or_default()
