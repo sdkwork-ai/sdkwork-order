@@ -239,7 +239,7 @@ async fn load_membership_order_in_tx(
                 o.request_fingerprint,
                 COALESCE(NULLIF(o.membership_action, ''), $1) AS membership_action,
                 TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expires_at,
-                CAST(COALESCE(ab.payable_amount, oi.total_amount, '0') AS TEXT) AS amount,
+                CAST(COALESCE(ab.payable_amount, oi.total_amount, 0) AS TEXT) AS amount,
                 COALESCE(NULLIF(ab.currency_code, ''), 'CNY') AS currency_code,
                 COALESCE(
                     NULLIF(COALESCE(to_jsonb(oi) ->> 'sku_snapshot_json', '{}')::jsonb ->> 'packageId', ''),

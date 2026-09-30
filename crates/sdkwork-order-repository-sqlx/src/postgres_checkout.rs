@@ -564,7 +564,7 @@ async fn insert_checkout_lines(
                  fulfillment_type, price_amount_snapshot, currency_code, selected, created_at,
                  updated_at)
             VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8, 'default', $9, 'one_time', $10, $11, $12, 1, $13, $14)
+                ($1, $2, $3, $4, $5, $6, $7, $8, 'default', $9, 'one_time', CAST($10 AS NUMERIC), $11, $12, 1, $13, $14)
            "#,
         )
         .bind(&line_id)
@@ -605,7 +605,7 @@ async fn insert_checkout_quote(
             (id, tenant_id, organization_id, checkout_session_id, quote_no, original_amount,
              discount_amount, payable_amount, currency_code, quote_status, expires_at, created_at)
         VALUES
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'ready', $10, $11)
+            ($1, $2, $3, $4, $5, CAST($6 AS NUMERIC), CAST($7 AS NUMERIC), CAST($8 AS NUMERIC), $9, 'ready', $10, $11)
        "#,
     )
     .bind(quote_id)
@@ -659,7 +659,7 @@ async fn load_checkout_lines_for_quote(
 ) -> Result<Vec<ResolvedCheckoutLine>, CommerceServiceError> {
     let rows = sqlx::query(
         r#"
-        SELECT sku_id, product_id, shop_id, sku_snapshot_json, quantity, price_amount_snapshot, fulfillment_type
+        SELECT sku_id, product_id, shop_id, sku_snapshot_json, quantity, CAST(price_amount_snapshot AS TEXT) AS price_amount_snapshot, fulfillment_type
         FROM commerce_checkout_line
         WHERE tenant_id = CAST($1 AS TEXT)
           AND checkout_session_id = CAST($2 AS TEXT)

@@ -684,7 +684,7 @@ async fn load_management_order_items(
 ) -> Result<Vec<OrderOwnerItem>, CommerceServiceError> {
     let rows = sqlx::query(
         r#"
-        SELECT id, title AS product_name, quantity, unit_price_amount, total_amount
+        SELECT id, title AS product_name, quantity, CAST(unit_price_amount AS TEXT) AS unit_price_amount, CAST(total_amount AS TEXT) AS total_amount
         FROM commerce_order_item
         WHERE tenant_id = CAST($1 AS TEXT)
           AND order_id = CAST($2 AS TEXT)

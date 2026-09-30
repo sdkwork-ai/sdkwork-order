@@ -1807,7 +1807,7 @@ async fn insert_order_item(
         INSERT INTO commerce_order_item
             (id, tenant_id, order_id, sku_id, sku_snapshot_json, title, quantity, unit_price_amount, total_amount, fulfillment_status, refund_status, created_at)
         VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, $7, $7, 'unfulfilled', 'none', $8)
+            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, CAST($7 AS NUMERIC), CAST($7 AS NUMERIC), 'unfulfilled', 'none', $8)
         "#,
     )
     .bind(&command.order_item_id)
@@ -1838,7 +1838,7 @@ async fn insert_order_amount_breakdown(
         INSERT INTO commerce_order_amount_breakdown
             (id, tenant_id, order_id, original_amount, discount_amount, payable_amount, currency_code, created_at)
         VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, '0', $4, $5, $6::timestamptz)
+            ($1, CAST($2 AS TEXT), $3, CAST($4 AS NUMERIC), 0, CAST($4 AS NUMERIC), $5, $6::timestamptz)
         "#,
     )
     .bind(format!("{}-amount", command.order_id))

@@ -47,7 +47,7 @@ SELECT
     TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expire_time,
     COALESCE(
         (
-            SELECT b.payable_amount
+            SELECT CAST(b.payable_amount AS TEXT) AS payable_amount
             FROM commerce_order_amount_breakdown b
             WHERE b.tenant_id = o.tenant_id
               AND b.order_id = o.id
@@ -156,7 +156,7 @@ SELECT
     TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expire_time,
     COALESCE(
         (
-            SELECT b.payable_amount
+            SELECT CAST(b.payable_amount AS TEXT) AS payable_amount
             FROM commerce_order_amount_breakdown b
             WHERE b.tenant_id = o.tenant_id
               AND b.order_id = o.id
@@ -289,7 +289,7 @@ FROM (
         o.status,
         COALESCE(
             (
-                SELECT b.payable_amount
+                SELECT CAST(b.payable_amount AS TEXT) AS payable_amount
                 FROM commerce_order_amount_breakdown b
                 WHERE b.tenant_id = o.tenant_id
                   AND b.order_id = o.id
@@ -699,7 +699,7 @@ impl PostgresCommerceOrderStore {
                 o.partner_snapshot_json,
                 COALESCE(
                     (
-                        SELECT b.payable_amount
+                        SELECT CAST(b.payable_amount AS TEXT) AS payable_amount
                         FROM commerce_order_amount_breakdown b
                         WHERE b.tenant_id = o.tenant_id
                           AND b.order_id = o.id
@@ -1394,7 +1394,7 @@ async fn load_checkout_lines_for_order(
 ) -> Result<Vec<sqlx::postgres::PgRow>, CommerceServiceError> {
     sqlx::query(
         r#"
-        SELECT id, product_id, shop_id, sku_id, sku_snapshot_json, quantity, price_amount_snapshot,
+        SELECT id, product_id, shop_id, sku_id, sku_snapshot_json, quantity, CAST(price_amount_snapshot AS TEXT) AS price_amount_snapshot,
                fulfillment_type
         FROM commerce_checkout_line
         WHERE tenant_id = CAST($1 AS TEXT)
@@ -1416,7 +1416,7 @@ async fn load_checkout_quote_for_order(
 ) -> Result<sqlx::postgres::PgRow, CommerceServiceError> {
     let row = sqlx::query(
         r#"
-        SELECT original_amount, discount_amount, payable_amount, expires_at
+        SELECT CAST(original_amount AS TEXT) AS original_amount, CAST(discount_amount AS TEXT) AS discount_amount, CAST(payable_amount AS TEXT) AS payable_amount, expires_at
         FROM commerce_checkout_quote
         WHERE tenant_id = CAST($1 AS TEXT)
           AND checkout_session_id = $2

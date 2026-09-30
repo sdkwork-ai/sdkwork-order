@@ -543,7 +543,7 @@ async fn refund_request_rejects_unpaid_orders() {
     };
     insert_order(
         &pool,
-        "order-refund-1",
+        "order-refund-unpaid-1",
         "pending_payment",
         "pending",
         None,
@@ -560,7 +560,7 @@ async fn refund_request_rejects_unpaid_orders() {
                 Some("0"),
                 "user-1",
                 "refund-request-1",
-                "order-refund-1",
+                "order-refund-unpaid-1",
                 sdkwork_order_service::AccountValueAssetCode::Points,
                 sdkwork_contract_service::CommerceMoney::new("100").expect("money"),
                 "CNY",

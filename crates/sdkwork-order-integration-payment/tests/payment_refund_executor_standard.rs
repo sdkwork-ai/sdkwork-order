@@ -232,8 +232,8 @@ CREATE TABLE commerce_order_amount_breakdown (
     organization_id TEXT NOT NULL DEFAULT '0',
     order_id TEXT NOT NULL,
     allocation_type TEXT NOT NULL,
-    payable_amount TEXT NOT NULL,
-    discount_amount TEXT NOT NULL DEFAULT '0',
+    payable_amount NUMERIC(20,0) NOT NULL,
+    discount_amount NUMERIC(20,0) NOT NULL DEFAULT 0,
     currency_code TEXT,
     created_at TEXT NOT NULL
 );

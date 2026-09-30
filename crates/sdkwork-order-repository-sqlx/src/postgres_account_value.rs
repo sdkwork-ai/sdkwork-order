@@ -722,8 +722,9 @@ impl PostgresCommerceRechargeStore {
                  status, reason_code, reason_detail, review_comment, provider_reference_id,
                  account_effect_reference_id, idempotency_key, created_at, updated_at)
             SELECT
-                $1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, CAST($6 AS TEXT), $7, $8, $9,
-                $10, $11, 'requested', $12, $13, NULL, NULL, NULL, $14, $15, $16
+                $1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, CAST($6 AS TEXT), $7,
+                CAST($8 AS NUMERIC), $9, CAST($10 AS NUMERIC), $11, 'requested', $12, $13,
+                NULL, NULL, NULL, $14, $15, $16
             FROM commerce_order o
             WHERE o.tenant_id = CAST($2 AS TEXT)
               AND ((o.organization_id = CAST($3 AS TEXT))
@@ -1878,7 +1879,7 @@ async fn insert_account_value_amount_breakdown(
             (id, tenant_id, organization_id, order_id, order_item_id, allocation_type,
              original_amount, discount_amount, payable_amount, currency_code, created_at)
         VALUES
-            ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, NULL, 'order_total', $5, '0', $6, $7, CAST($8 AS timestamptz))
+            ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, NULL, 'order_total', CAST($5 AS NUMERIC), 0, CAST($6 AS NUMERIC), $7, CAST($8 AS timestamptz))
         "#,
     )
     .bind(format!("{order_id}-amount"))
