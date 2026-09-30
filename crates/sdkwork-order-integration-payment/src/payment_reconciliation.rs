@@ -581,7 +581,7 @@ mod tests {
             "CREATE TABLE commerce_order (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, organization_id TEXT, owner_user_id TEXT NOT NULL)",
             "CREATE TABLE commerce_payment_channel (id TEXT PRIMARY KEY, provider_account_id TEXT)",
             "CREATE TABLE commerce_payment_intent (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, organization_id TEXT, owner_user_id TEXT NOT NULL, order_id TEXT NOT NULL, status TEXT NOT NULL, updated_at TIMESTAMPTZ, deleted_at TEXT)",
-            "CREATE TABLE commerce_payment_attempt (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, organization_id TEXT, owner_user_id TEXT NOT NULL, order_id TEXT NOT NULL, payment_intent_id TEXT NOT NULL, provider_code TEXT NOT NULL, channel_id TEXT, out_trade_no TEXT NOT NULL, amount TEXT NOT NULL, currency_code TEXT NOT NULL, status TEXT NOT NULL, callback_payload TEXT NOT NULL, idempotency_key TEXT NOT NULL, paid_at TIMESTAMPTZ, updated_at TIMESTAMPTZ, deleted_at TEXT)",
+            "CREATE TABLE commerce_payment_attempt (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, organization_id TEXT, owner_user_id TEXT NOT NULL, order_id TEXT NOT NULL, payment_intent_id TEXT NOT NULL, provider_code TEXT NOT NULL, channel_id TEXT, out_trade_no TEXT NOT NULL, amount TEXT NOT NULL, currency_code TEXT NOT NULL, status TEXT NOT NULL, callback_payload JSONB NOT NULL DEFAULT '{}'::jsonb, idempotency_key TEXT NOT NULL, paid_at TIMESTAMPTZ, updated_at TIMESTAMPTZ, deleted_at TEXT)",
         ] {
             sqlx::query(sqlx::AssertSqlSafe(statement))
                 .execute(&pool)

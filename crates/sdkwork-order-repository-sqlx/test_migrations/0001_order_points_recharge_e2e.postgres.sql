@@ -70,8 +70,8 @@ CREATE TABLE IF NOT EXISTS commerce_payment_intent (
     amount TEXT,
     currency_code TEXT,
     payment_method TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS commerce_payment_attempt (
@@ -84,10 +84,12 @@ CREATE TABLE IF NOT EXISTS commerce_payment_attempt (
     amount TEXT,
     currency_code TEXT,
     payment_method TEXT,
-    paid_at TEXT,
-    callback_payload TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    provider_transaction_id TEXT,
+    paid_at TIMESTAMPTZ,
+    callback_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS commerce_idempotency_key (

@@ -10,11 +10,13 @@ use sdkwork_order_service::{
     AccountPointsCreditFuture, AccountPointsCreditPort, AccountValueFuture,
     AccountValueLedgerCommand, AccountValueLedgerOperation, AccountValueLedgerOutcome,
     AccountValueLedgerPort, NoopAccountValueLedgerPort, NoopMembershipPurchaseFulfillmentPort,
-    PaymentExecutorOutcome, PaymentRefundExecutionRequest, PaymentRefundExecutorPort,
-    PointsRechargeCreditOutcome,
-    PointsRechargeCreditRequest, UnavailablePhysicalInventoryReservationPort,
+    NoopPaymentPayoutExecutorPort, NoopPaymentRefundExecutorPort, PaymentExecutorOutcome,
+    PaymentPayoutExecutionRequest, PaymentPayoutExecutorPort, PaymentRefundExecutionRequest,
+    PaymentRefundExecutorPort, PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
+    UnavailablePhysicalInventoryReservationPort,
 };
 use sdkwork_order_service_host::OrderServiceHost;
+use sdkwork_routes_order_backend_api::backend_commerce_admin_router_with_postgres_pool_and_ports;
 use sdkwork_routes_order_backend_api::{
     backend_commerce_admin_router_with_postgres_pool,
     backend_order_admin_router_with_postgres_pool, openapi_contract::mount_backend_openapi,
@@ -54,6 +56,20 @@ impl AccountPointsCreditPort for NoopAccountPointsCreditPort {
 }
 
 fn build_test_backend_router(pool: sqlx::PgPool) -> Router {
+    build_test_backend_router_with_ledger(
+        pool,
+        Arc::new(NoopAccountValueLedgerPort),
+        Arc::new(NoopPaymentRefundExecutorPort),
+        Arc::new(NoopPaymentPayoutExecutorPort),
+    )
+}
+
+fn build_test_backend_router_with_ledger(
+    pool: sqlx::PgPool,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
+    payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
+) -> Router {
     let credit = Arc::new(NoopAccountPointsCreditPort);
     mount_backend_openapi(
         Router::new()
@@ -61,8 +77,12 @@ fn build_test_backend_router(pool: sqlx::PgPool) -> Router {
                 pool.clone(),
                 Arc::new(UnavailablePhysicalInventoryReservationPort),
             ))
-            .merge(backend_commerce_admin_router_with_postgres_pool(
+            .merge(backend_commerce_admin_router_with_postgres_pool_and_ports(
                 pool.clone(),
+                account_value_ledger_port,
+                payment_refund_executor_port,
+                payment_payout_executor_port,
+                Arc::new(UnavailablePhysicalInventoryReservationPort),
             ))
             .merge(payment_confirmation_router_with_postgres_pool(
                 pool,
@@ -222,6 +242,10 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
         eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
         return;
     };
+    sqlx::query("DELETE FROM commerce_order_refund_request WHERE id = 'refund-request-1'")
+        .execute(&pool)
+        .await
+        .expect("clear refund request fixture");
     sqlx::query(
         r#"
         INSERT INTO commerce_order_refund_request
@@ -252,7 +276,12 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
             .await
             .expect("test order service host"),
     );
-    let app = sdkwork_routes_order_backend_api::routes::build_order_backend_router(host);
+    let app = build_test_backend_router_with_ledger(
+        pool.clone(),
+        ledger.clone(),
+        refunds.clone(),
+        Arc::new(NoopPaymentPayoutExecutorPort),
+    );
     let body = serde_json::json!({
         "reasonCode": "approved",
         "reviewComment": "approved by operator"

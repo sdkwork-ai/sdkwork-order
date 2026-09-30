@@ -29,9 +29,9 @@ SELECT
     o.order_no AS order_sn,
     o.status,
     o.subject,
-    o.created_at,
-    o.paid_at AS pay_time,
-    o.expired_at AS expire_time,
+    TO_CHAR(o.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+    TO_CHAR(o.paid_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS pay_time,
+    TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expire_time,
     COALESCE(
         (
             SELECT b.payable_amount
@@ -99,8 +99,8 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
         OR o.subject ILIKE $4
         OR o.id ILIKE $4
       )
-  AND ($5 IS NULL OR o.created_at::timestamptz >= $5::timestamptz)
-  AND ($6 IS NULL OR o.created_at::timestamptz <= $6::timestamptz)
+  AND ($5 IS NULL OR o.created_at >= $5::timestamptz)
+  AND ($6 IS NULL OR o.created_at <= $6::timestamptz)
 ORDER BY o.created_at DESC, o.id DESC
 LIMIT $7 OFFSET $8
 "#;
@@ -120,8 +120,8 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
         OR o.subject ILIKE $4
         OR o.id ILIKE $4
       )
-  AND ($5 IS NULL OR o.created_at::timestamptz >= $5::timestamptz)
-  AND ($6 IS NULL OR o.created_at::timestamptz <= $6::timestamptz)
+  AND ($5 IS NULL OR o.created_at >= $5::timestamptz)
+  AND ($6 IS NULL OR o.created_at <= $6::timestamptz)
 "#;
 
 /// Escapes LIKE wildcards in user-provided free text so `q` cannot widen the
@@ -203,9 +203,9 @@ impl PostgresCommerceOrderStore {
                 o.status,
                 o.payment_status,
                 o.subject,
-                o.created_at,
-                o.paid_at AS pay_time,
-                o.expired_at AS expire_time,
+                TO_CHAR(o.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+                TO_CHAR(o.paid_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS pay_time,
+                TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expire_time,
                 COALESCE(
                     (
                         SELECT b.payable_amount
@@ -366,8 +366,8 @@ impl PostgresCommerceOrderStore {
             UPDATE commerce_order
             SET status = 'cancelled',
                 payment_status = 'closed',
-                cancelled_at = $1,
-                updated_at = $2
+                cancelled_at = CAST($1 AS TIMESTAMPTZ),
+                updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($3 AS TEXT)
               AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
               AND id = CAST($5 AS TEXT)
@@ -504,7 +504,7 @@ impl PostgresCommerceOrderStore {
             r#"
             UPDATE commerce_order
             SET status = 'closed',
-                updated_at = $1
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND id = CAST($4 AS TEXT)

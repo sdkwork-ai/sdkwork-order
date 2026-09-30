@@ -1065,9 +1065,7 @@ impl OrderPaymentRecordStore for PostgresCommercePaymentRecordStore {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        order_payment_succeeded, payment_success_organization_scopes,
-    };
+    use super::{order_payment_succeeded, payment_success_organization_scopes};
     use sdkwork_order_service::OrderOwnerPaymentStatus;
 
     #[test]

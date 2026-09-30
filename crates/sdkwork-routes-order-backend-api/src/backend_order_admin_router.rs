@@ -7,9 +7,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
-};
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
 use sdkwork_order_service::{
     AccountValueAssetCode, CancelManagementOrderCommand, CloseManagementOrderCommand,
     CreateOrderRefundRequestCommand, OrderCancellationListQuery, OrderCancellationPage,
@@ -254,7 +252,6 @@ impl BackendManagementOrderStore {
             Self::Postgres(store) => store.retrieve_management_order(query).await,
         }
     }
-
 
     async fn list_management_order_events(
         &self,

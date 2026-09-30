@@ -41,12 +41,8 @@ fn recharge_payment_queries_use_standard_payment_method_columns() {
 #[test]
 fn recharge_purchase_intent_reuse_requires_a_future_expiration_boundary() {
     let postgres = normalized(include_str!("../src/postgres_recharge.rs"));
-    assert!(
-        postgres.contains("NULLIF(CAST(o.expired_at AS TEXT), '')::timestamptz > $10::timestamptz")
-    );
-    assert!(
-        postgres.contains("NULLIF(CAST(expired_at AS TEXT), '')::timestamptz <= $4::timestamptz")
-    );
+    assert!(postgres.contains("o.expired_at > $10::timestamptz"));
+    assert!(postgres.contains("expired_at <= $4::timestamptz"));
     assert!(postgres.contains("expire_stale_recharge_orders(&mut tx, &command).await?"));
     assert!(!postgres.contains("o.expired_at IS NULL OR o.expired_at = '' OR o.expired_at >"));
 }

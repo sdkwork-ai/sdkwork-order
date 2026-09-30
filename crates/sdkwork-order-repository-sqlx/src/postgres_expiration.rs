@@ -39,9 +39,9 @@ pub async fn list_due_expiring_orders(
         SELECT tenant_id, organization_id, owner_user_id, id, fulfillment_status
         FROM commerce_order
         WHERE LOWER(COALESCE(status, '')) IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay')
-          AND NULLIF(expired_at, '') IS NOT NULL
-          AND NULLIF(expired_at, '')::timestamptz <= CURRENT_TIMESTAMP
-        ORDER BY NULLIF(expired_at, '')::timestamptz, id
+          AND expired_at IS NOT NULL
+          AND expired_at <= CURRENT_TIMESTAMP
+        ORDER BY expired_at, id
         LIMIT $1
         "#,
     )
@@ -98,7 +98,7 @@ pub async fn expire_due_order(
     let updated = sqlx::query(
         r#"
         UPDATE commerce_order
-        SET status = 'expired', payment_status = 'expired', updated_at = $1
+        SET status = 'expired', payment_status = 'expired', updated_at = CAST($1 AS TIMESTAMPTZ)
         WHERE tenant_id = CAST($2 AS TEXT)
           AND id = CAST($3 AS TEXT)
           AND LOWER(COALESCE(status, '')) IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay')

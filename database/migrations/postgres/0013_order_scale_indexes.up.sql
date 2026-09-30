@@ -20,15 +20,16 @@
 
 BEGIN;
 
--- Expiration sweep: expression index over the canonical RFC 3339 instant with
--- the partial predicate matching the scheduler's expirable-status filter, so
--- the sweep reads only live payment windows (the index self-shrinks as orders
--- expire). `id` is appended to match the deterministic tiebreak ordering.
+-- Expiration sweep: partial b-tree matching the scheduler's expirable-status
+-- filter, so the sweep reads only live payment windows (the index self-shrinks
+-- as orders expire). `id` is appended to match the deterministic tiebreak
+-- ordering. NOTE: an expression index over `(expired_at::timestamptz)` is
+-- ILLEGAL here -- text->timestamptz casts are STABLE (timezone dependent), and
+-- index expressions must be IMMUTABLE. Migration 0015 converts the column to
+-- native TIMESTAMPTZ and replaces this index with a plain partial index over
+-- the native column.
 CREATE INDEX IF NOT EXISTS idx_order_expiration_due
-    ON commerce_order (
-        (NULLIF(expired_at, '')::timestamptz),
-        id
-    )
+    ON commerce_order (expired_at, id)
     WHERE LOWER(COALESCE(status, ''))
           IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay');
 

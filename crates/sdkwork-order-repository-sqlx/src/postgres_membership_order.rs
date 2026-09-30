@@ -238,7 +238,7 @@ async fn load_membership_order_in_tx(
                 COALESCE(NULLIF(o.request_no, ''), o.order_no) AS out_trade_no,
                 o.request_fingerprint,
                 COALESCE(NULLIF(o.membership_action, ''), $1) AS membership_action,
-                CAST(o.expired_at AS TEXT) AS expires_at,
+                TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expires_at,
                 CAST(COALESCE(ab.payable_amount, oi.total_amount, '0') AS TEXT) AS amount,
                 COALESCE(NULLIF(ab.currency_code, ''), 'CNY') AS currency_code,
                 COALESCE(
@@ -282,7 +282,7 @@ async fn load_membership_order_in_tx(
                      AND o.purchase_intent_key = CAST($8 AS TEXT)
                      AND o.status IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay', 'created')
                      AND o.expired_at IS NOT NULL
-                     AND NULLIF(o.expired_at, '')::timestamptz > $9::timestamptz)
+                     AND o.expired_at > $9::timestamptz)
                   )
             ORDER BY oi.created_at ASC NULLS LAST, oi.id ASC
             LIMIT 1
@@ -345,7 +345,7 @@ async fn expire_stale_membership_orders(
     sqlx::query(
         r#"
         UPDATE commerce_order
-        SET status = 'expired', payment_status = 'expired', updated_at = CAST($1 AS TEXT)
+        SET status = 'expired', payment_status = 'expired', updated_at = CAST($1 AS TIMESTAMPTZ)
         WHERE tenant_id = CAST($2 AS TEXT)
           AND organization_id = CAST($3 AS TEXT)
           AND owner_user_id = CAST($4 AS TEXT)
@@ -353,7 +353,7 @@ async fn expire_stale_membership_orders(
           AND purchase_intent_key = CAST($5 AS TEXT)
           AND status IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay', 'created')
           AND expired_at IS NOT NULL
-          AND NULLIF(expired_at, '')::timestamptz <= $6::timestamptz
+          AND expired_at <= $6::timestamptz
         "#,
     )
     .bind(&command.requested_at)
@@ -509,6 +509,7 @@ async fn insert_membership_order_item(
         r#"
         INSERT INTO commerce_order_item
         SELECT * FROM jsonb_populate_record(NULL::commerce_order_item, $1::jsonb)
+        ON CONFLICT (id) DO NOTHING
         "#,
     )
     .bind(payload.to_string())
@@ -543,6 +544,7 @@ async fn insert_membership_order_amount_breakdown(
         r#"
         INSERT INTO commerce_order_amount_breakdown
         SELECT * FROM jsonb_populate_record(NULL::commerce_order_amount_breakdown, $1::jsonb)
+        ON CONFLICT (id) DO NOTHING
         "#,
     )
     .bind(payload.to_string())
@@ -752,8 +754,8 @@ mod tests {
         assert!(source.contains("jsonb_populate_record(NULL::commerce_order_amount_breakdown,"));
         assert!(source.contains("to_jsonb(oi) ->> 'sku_snapshot_json'"));
         assert!(source.contains("to_jsonb(oi) ->> 'item_title'"));
-        assert!(source.contains("NULLIF(o.expired_at, '')::timestamptz > $9::timestamptz"));
-        assert!(source.contains("NULLIF(expired_at, '')::timestamptz <= $6::timestamptz"));
+        assert!(source.contains("AND o.expired_at > $9::timestamptz"));
+        assert!(source.contains("AND expired_at <= $6::timestamptz"));
     }
 
     #[test]

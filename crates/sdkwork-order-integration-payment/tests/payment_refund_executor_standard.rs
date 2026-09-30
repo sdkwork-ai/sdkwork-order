@@ -107,7 +107,11 @@ async fn sandbox_refund_executor_reuses_payment_refund_for_same_idempotency_key(
     assert_eq!(count, 1);
 }
 
+/// 两个测试并行执行时会竞争同一组共享表的 DROP/CREATE,串行化 schema 初始化。
+static SCHEMA_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn payment_refund_pool() -> Option<sqlx::PgPool> {
+    let _guard = SCHEMA_LOCK.lock().await;
     let url = postgres_url()?;
     let pool = PgPoolOptions::new()
         .max_connections(1)
@@ -132,7 +136,8 @@ async fn seed_paid_sandbox_order(pool: &sqlx::PgPool) {
              currency_code, payment_status, paid_at, expired_at, created_at, updated_at)
         VALUES
             ('order-1', 'tenant-1', 'org-1', 'user-1', 'ORDER-1', 'paid',
-             'token_bank_recharge', 'USD', 'paid', $1, '2099-01-01T00:00:00Z', $2, $3)
+             'token_bank_recharge', 'USD', 'paid', CAST($1 AS TIMESTAMPTZ),
+             '2099-01-01T00:00:00Z'::timestamptz, CAST($2 AS TIMESTAMPTZ), CAST($3 AS TIMESTAMPTZ))
         "#,
     )
     .bind(now)
@@ -163,10 +168,11 @@ async fn seed_paid_sandbox_order(pool: &sqlx::PgPool) {
             (id, tenant_id, organization_id, owner_user_id, payment_intent_id, order_id,
              attempt_no, payment_method, provider_code, out_trade_no, amount, currency_code,
              status, callback_payload, paid_at, request_no, idempotency_key, created_at, updated_at)
-        VALUES
+            VALUES
             ('payment-attempt-1', 'tenant-1', 'org-1', 'user-1', 'payment-intent-1', 'order-1',
              'PAY-ATTEMPT-1', 'sandbox', 'sandbox', 'OUT-TRADE-1', '1000', 'USD',
-             'succeeded', '{}', $1, 'pay-request-1', 'pay-idem-1', $2, $3)
+             'succeeded', '{}', CAST($1 AS TIMESTAMPTZ), 'pay-request-1', 'pay-idem-1',
+             CAST($2 AS TIMESTAMPTZ), CAST($3 AS TIMESTAMPTZ))
         "#,
     )
     .bind(now)
@@ -201,11 +207,23 @@ CREATE TABLE commerce_order (
     status TEXT NOT NULL,
     subject TEXT NOT NULL,
     currency_code TEXT NOT NULL,
+    merchant_organization_id TEXT,
+    shop_id TEXT,
+    shipping_address_snapshot_json TEXT,
+    shop_snapshot_json TEXT,
     payment_status TEXT,
-    paid_at TEXT,
-    expired_at TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    fulfillment_status TEXT,
+    refund_status TEXT,
+    request_no TEXT,
+    idempotency_key TEXT,
+    request_fingerprint TEXT,
+    purchase_intent_key TEXT,
+    membership_action TEXT,
+    paid_at TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    expired_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE commerce_order_amount_breakdown (
@@ -235,8 +253,8 @@ CREATE TABLE commerce_payment_attempt (
     amount TEXT NOT NULL,
     currency_code TEXT NOT NULL,
     status TEXT NOT NULL,
-    callback_payload TEXT NOT NULL DEFAULT '{}',
-    paid_at TEXT,
+    callback_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    paid_at TIMESTAMPTZ,
     request_no TEXT,
     idempotency_key TEXT NOT NULL,
     created_at TEXT NOT NULL,

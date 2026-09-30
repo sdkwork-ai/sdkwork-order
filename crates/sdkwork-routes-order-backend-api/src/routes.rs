@@ -24,7 +24,7 @@ pub fn build_order_backend_business_router(host: Arc<OrderServiceHost>) -> Route
     let payment_refund_executor_port = host.payment_refund_executor_port();
     let payment_payout_executor_port = host.payment_payout_executor_port();
     let DatabasePool::Postgres(pool, _) = host.database_pool();
-    
+
     Router::new()
         .merge(backend_order_admin_router_with_postgres_pool(
             pool.clone(),

@@ -56,6 +56,18 @@ async fn fixture() -> Option<PgPool> {
     order_points_recharge_e2e_postgres_pool_from_env().await
 }
 
+fn now_iso() -> String {
+    sdkwork_order_service::canonical_now_timestamp()
+}
+
+fn minutes_ago_iso(minutes: i64) -> String {
+    sdkwork_order_service::canonical_timestamp_after_seconds(-minutes * 60)
+}
+
+fn hours_ago_iso(hours: i64) -> String {
+    sdkwork_order_service::canonical_timestamp_after_seconds(-hours * 3_600)
+}
+
 fn default_config() -> PaymentCompensationPassConfig {
     PaymentCompensationPassConfig {
         tenant_id: Some("tenant-1".to_owned()),
@@ -246,7 +258,7 @@ async fn sandbox_compensation_pass_settles_due_payment_attempt() {
         eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
         return;
     };
-    insert_order(&pool, "order-comp-1", "now() - interval '5 minutes'")
+    insert_order(&pool, "order-comp-1", &minutes_ago_iso(5))
         .await
         .expect("seed order");
     insert_payment_attempt(
@@ -255,7 +267,7 @@ async fn sandbox_compensation_pass_settles_due_payment_attempt() {
         "order-comp-1",
         "trade-comp-1",
         "pending",
-        "now() - interval '5 minutes'",
+        &minutes_ago_iso(5),
     )
     .await
     .expect("seed due payment attempt");
@@ -301,7 +313,7 @@ async fn sandbox_compensation_pass_marks_due_refund_succeeded_and_order_refunded
         eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
         return;
     };
-    insert_order(&pool, "order-comp-refund", "now() - interval '10 minutes'")
+    insert_order(&pool, "order-comp-refund", &minutes_ago_iso(10))
         .await
         .expect("seed order");
     insert_payment_attempt(
@@ -310,7 +322,7 @@ async fn sandbox_compensation_pass_marks_due_refund_succeeded_and_order_refunded
         "order-comp-refund",
         "trade-comp-refund",
         "succeeded",
-        "now() - interval '10 minutes'",
+        &minutes_ago_iso(10),
     )
     .await
     .expect("seed settled payment attempt");
@@ -320,7 +332,7 @@ async fn sandbox_compensation_pass_marks_due_refund_succeeded_and_order_refunded
         "order-comp-refund",
         "attempt-comp-refund",
         "processing",
-        "now() - interval '5 minutes'",
+        &minutes_ago_iso(5),
     )
     .await
     .expect("seed due refund");
@@ -352,7 +364,7 @@ async fn compensation_pass_respects_scan_window_and_terminal_states() {
         return;
     };
     // Fresh attempt (younger than min_age) must not be claimed yet.
-    insert_order(&pool, "order-comp-fresh", "now()")
+    insert_order(&pool, "order-comp-fresh", &now_iso())
         .await
         .expect("seed fresh order");
     insert_payment_attempt(
@@ -361,14 +373,14 @@ async fn compensation_pass_respects_scan_window_and_terminal_states() {
         "order-comp-fresh",
         "trade-comp-fresh",
         "pending",
-        "now()",
+        &now_iso(),
     )
     .await
     .expect("seed fresh attempt");
     // Aged attempt (well past the webhook window) must be claimed: the
     // compensation sweep is the at-least-once safety net and the claim set is
     // bounded by the attempt's own expiry, not by age.
-    insert_order(&pool, "order-comp-aged", "now() - interval '25 hours'")
+    insert_order(&pool, "order-comp-aged", &hours_ago_iso(25))
         .await
         .expect("seed aged order");
     insert_payment_attempt(
@@ -377,25 +389,21 @@ async fn compensation_pass_respects_scan_window_and_terminal_states() {
         "order-comp-aged",
         "trade-comp-aged",
         "pending",
-        "now() - interval '25 hours'",
+        &hours_ago_iso(25),
     )
     .await
     .expect("seed aged attempt");
     // Terminal attempt (already succeeded) must never be claimed.
-    insert_order(
-        &pool,
-        "order-comp-terminal",
-        "now() - interval '10 minutes'",
-    )
-    .await
-    .expect("seed terminal order");
+    insert_order(&pool, "order-comp-terminal", &minutes_ago_iso(10))
+        .await
+        .expect("seed terminal order");
     insert_payment_attempt(
         &pool,
         "attempt-comp-terminal",
         "order-comp-terminal",
         "trade-comp-terminal",
         "succeeded",
-        "now() - interval '10 minutes'",
+        &minutes_ago_iso(10),
     )
     .await
     .expect("seed terminal attempt");

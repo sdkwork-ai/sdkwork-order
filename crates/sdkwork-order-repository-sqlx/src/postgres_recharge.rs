@@ -528,7 +528,7 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND LOWER(COALESCE(NULLIF(o.status, ''), 'pending_payment')) IN ('draft', 'pending', 'pending_payment')
   AND LOWER(COALESCE(NULLIF(pi.status, ''), 'pending')) IN ('created', 'pending', 'processing')
   AND LOWER(COALESCE(NULLIF(pa.status, ''), 'pending')) IN ('created', 'pending', 'processing')
-  AND NULLIF(CAST(o.expired_at AS TEXT), '')::timestamptz > $10::timestamptz
+  AND o.expired_at > $10::timestamptz
 ORDER BY COALESCE(CAST(pa.created_at AS TEXT), CAST(pi.created_at AS TEXT), CAST(o.created_at AS TEXT)) DESC NULLS LAST, o.id DESC
 LIMIT 1
 "#;
@@ -857,7 +857,7 @@ impl PostgresCommerceRechargeStore {
             r#"
             UPDATE commerce_order
             SET fulfillment_status = 'processing',
-                updated_at = $1
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
@@ -909,7 +909,7 @@ impl PostgresCommerceRechargeStore {
             r#"
             UPDATE commerce_order
             SET fulfillment_status = 'processing',
-                updated_at = $1
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
@@ -961,7 +961,7 @@ impl PostgresCommerceRechargeStore {
             r#"
             UPDATE commerce_order
             SET fulfillment_status = 'unfulfilled',
-                updated_at = $1
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
@@ -997,7 +997,7 @@ impl PostgresCommerceRechargeStore {
             r#"
             UPDATE commerce_order
             SET fulfillment_status = 'unfulfilled',
-                updated_at = $1
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
@@ -1055,8 +1055,8 @@ impl PostgresCommerceRechargeStore {
             SET status = 'paid',
                 payment_status = 'success',
                 fulfillment_status = 'fulfilled',
-                paid_at = COALESCE(paid_at, $1),
-                updated_at = $1
+                paid_at = COALESCE(paid_at, CAST($1 AS TIMESTAMPTZ)),
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
@@ -1138,8 +1138,8 @@ impl PostgresCommerceRechargeStore {
             SET status = 'paid',
                 payment_status = 'success',
                 fulfillment_status = 'fulfilled',
-                paid_at = COALESCE(paid_at, $1),
-                updated_at = $1
+                paid_at = COALESCE(paid_at, CAST($1 AS TIMESTAMPTZ)),
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
@@ -1205,7 +1205,7 @@ impl PostgresCommerceRechargeStore {
             UPDATE commerce_order
             SET status = $1,
                 fulfillment_status = 'unfulfilled',
-                updated_at = $2
+                updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($3 AS TEXT)
               AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
@@ -1283,7 +1283,7 @@ impl PostgresCommerceRechargeStore {
             r#"
             UPDATE commerce_order
             SET payment_status = 'success',
-                updated_at = $1
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
@@ -1746,13 +1746,13 @@ async fn expire_stale_recharge_orders(
     sqlx::query(
         r#"
         UPDATE commerce_order
-        SET status = 'expired', updated_at = $4
+        SET status = 'expired', updated_at = CAST($4 AS TIMESTAMPTZ)
         WHERE tenant_id = CAST($1 AS TEXT)
           AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
           AND owner_user_id = CAST($3 AS TEXT)
           AND subject = 'points_recharge'
           AND LOWER(COALESCE(NULLIF(status, ''), 'pending_payment')) IN ('draft', 'pending', 'pending_payment')
-          AND NULLIF(CAST(expired_at AS TEXT), '')::timestamptz <= $4::timestamptz
+          AND expired_at <= $4::timestamptz
         "#,
     )
     .bind(&command.tenant_id)
@@ -1775,7 +1775,8 @@ async fn insert_order(
         INSERT INTO commerce_order
             (id, tenant_id, organization_id, owner_user_id, order_no, status, payment_status, fulfillment_status, refund_status, subject, currency_code, request_no, idempotency_key, created_at, paid_at, cancelled_at, expired_at, updated_at)
         VALUES
-            ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), CAST($4 AS TEXT), $5, 'pending_payment', 'pending', 'unfulfilled', 'none', 'points_recharge', $6, $7, $8, $9, NULL, NULL, $10, $9)
+            ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), CAST($4 AS TEXT), $5, 'pending_payment', 'pending', 'unfulfilled', 'none', 'points_recharge', $6, $7, $8,
+             CAST($9 AS TIMESTAMPTZ), NULL, NULL, CAST($10 AS TIMESTAMPTZ), CAST($9 AS TIMESTAMPTZ))
         "#,
     )
     .bind(&command.order_id)

@@ -607,7 +607,7 @@ async fn advance_owner_order_to_shipped(
     let updated = sqlx::query(
         r#"
         UPDATE commerce_order
-        SET status = 'shipped', fulfillment_status = 'shipped', updated_at = $1
+        SET status = 'shipped', fulfillment_status = 'shipped', updated_at = CAST($1 AS TIMESTAMPTZ)
         WHERE tenant_id = CAST($2 AS TEXT)
           AND id = CAST($3 AS TEXT)
           AND LOWER(COALESCE(status, '')) IN ('paid', 'fulfilled')

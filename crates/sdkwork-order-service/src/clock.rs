@@ -15,6 +15,14 @@ pub fn canonical_now_timestamp() -> String {
     datetime::format_datetime(datetime::now(), None)
 }
 
+/// Canonical order-domain format for a given instant — the decode-side
+/// counterpart of [`canonical_now_timestamp`]: native TIMESTAMPTZ reads
+/// re-encode through this so the wire/store value stays the exact canonical
+/// RFC 3339 UTC string it was before the column went native.
+pub fn canonical_now_timestamp_from(instant: chrono::DateTime<chrono::Utc>) -> String {
+    datetime::format_datetime(instant, None)
+}
+
 /// Canonical order-domain format for an instant `seconds` in the future
 /// (a negative value reaches into the past) — used to derive payment-window
 /// deadlines such as `expired_at` / checkout `expires_at`.

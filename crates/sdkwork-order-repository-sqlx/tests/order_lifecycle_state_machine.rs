@@ -25,6 +25,10 @@ async fn insert_order(
     fulfillment_status: Option<&str>,
     expired_at: Option<&str>,
 ) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM commerce_order WHERE id = $1")
+        .bind(order_id)
+        .execute(pool)
+        .await?;
     sqlx::query(
         r#"
         INSERT INTO commerce_order
@@ -33,7 +37,7 @@ async fn insert_order(
              request_no, idempotency_key, created_at, updated_at, expired_at)
         VALUES
             ($1, 'tenant-1', '0', 'user-1', $1, $2, $3, $4, 'product', 'CNY',
-             $1, $1, '1000', '1000', $5)
+             $1, $1, '1971-01-01T00:00:00.000Z', '1971-01-01T00:00:00.000Z', CAST($5 AS TIMESTAMPTZ))
         "#,
     )
     .bind(order_id)
@@ -308,11 +312,10 @@ async fn payment_failure_webhook_marks_pending_order_cancelled_but_preserves_ter
     .await
     .expect("reload order");
     let payment_status: String = row.try_get("payment_status").unwrap_or_default();
-    let cancelled_at: Option<String> = row.try_get("cancelled_at").ok().flatten();
+    let cancelled_at: Option<chrono::DateTime<chrono::Utc>> =
+        row.try_get("cancelled_at").ok().flatten();
     assert_eq!("failed", payment_status);
-    assert!(cancelled_at
-        .as_deref()
-        .is_some_and(|value| !value.is_empty()));
+    assert!(cancelled_at.is_some());
 
     // A late failure callback must never overwrite a confirmed success.
     let terminal_attempt = sdkwork_order_service::OrderPaymentSettlementAttempt {
@@ -339,7 +342,7 @@ async fn expiration_sweep_transitions_due_orders_with_events() {
         "pending_payment",
         "pending",
         None,
-        Some("1"),
+        Some("1971-01-01T00:00:01.000Z"),
     )
     .await
     .expect("insert expiring order");
@@ -352,7 +355,7 @@ async fn expiration_sweep_transitions_due_orders_with_events() {
         .find(|record| record.order_id == "order-expire-1")
         .expect("due order listed");
 
-    let expired = expire_due_order(&pool, record, "2000")
+    let expired = expire_due_order(&pool, record, "1971-01-01T00:33:20.000Z")
         .await
         .expect("expire order");
     assert!(expired);
@@ -368,7 +371,7 @@ async fn expiration_sweep_transitions_due_orders_with_events() {
     assert_eq!(event_count(&pool, "order-expire-1", "expired").await, 1);
 
     // Idempotent replay.
-    let replay = expire_due_order(&pool, record, "2000")
+    let replay = expire_due_order(&pool, record, "1971-01-01T00:33:20.000Z")
         .await
         .expect("expire replay");
     assert!(!replay);
@@ -448,6 +451,20 @@ async fn merchant_shipment_advance_marks_orders_shipped() {
     )
     .await
     .expect("insert paid order");
+    sqlx::query("DELETE FROM commerce_shipment_package WHERE id IN ('package-1')")
+        .execute(&pool)
+        .await
+        .expect("clear package fixture");
+    sqlx::query("DELETE FROM commerce_shipment WHERE id IN ('shipment-1')")
+        .execute(&pool)
+        .await
+        .expect("clear shipment fixture");
+    sqlx::query(
+        "DELETE FROM commerce_fulfillment_order WHERE id IN ('physical-fulfillment-order-ship-1')",
+    )
+    .execute(&pool)
+    .await
+    .expect("clear fulfillment fixture");
     sqlx::query(
         r#"
         INSERT INTO commerce_fulfillment_order
@@ -455,7 +472,7 @@ async fn merchant_shipment_advance_marks_orders_shipped() {
              status, provider_code, created_at, updated_at)
         VALUES
             ('physical-fulfillment-order-ship-1', 'tenant-1', '0', 'f-1', 'order-ship-1',
-             'physical_shipment', 'awaiting_shipment', 'merchant', '1000', '1000')
+             'physical_shipment', 'awaiting_shipment', 'merchant', '1971-01-01T00:00:00.000Z', '1971-01-01T00:00:00.000Z')
         "#,
     )
     .execute(&pool)
@@ -466,7 +483,7 @@ async fn merchant_shipment_advance_marks_orders_shipped() {
         INSERT INTO commerce_shipment
             (id, tenant_id, organization_id, shipment_no, fulfillment_id, carrier_code, status, created_at, updated_at)
         VALUES
-            ('shipment-1', 'tenant-1', '0', 's-1', 'physical-fulfillment-order-ship-1', 'sf', 'created', '1000', '1000')
+            ('shipment-1', 'tenant-1', '0', 's-1', 'physical-fulfillment-order-ship-1', 'sf', 'created', '1971-01-01T00:00:00.000Z', '1971-01-01T00:00:00.000Z')
         "#,
     )
     .execute(&pool)
@@ -477,7 +494,7 @@ async fn merchant_shipment_advance_marks_orders_shipped() {
         INSERT INTO commerce_shipment_package
             (id, tenant_id, organization_id, shipment_id, package_no, package_type, status, created_at)
         VALUES
-            ('package-1', 'tenant-1', '0', 'shipment-1', 'p-1', 'standard', 'created', '1000')
+            ('package-1', 'tenant-1', '0', 'shipment-1', 'p-1', 'standard', 'created', '1971-01-01T00:00:00.000Z')
         "#,
     )
     .execute(&pool)

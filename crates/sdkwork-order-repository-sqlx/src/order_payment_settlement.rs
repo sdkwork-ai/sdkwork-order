@@ -76,8 +76,8 @@ impl PostgresCommerceOrderStore {
                     ELSE 'paid'
                 END,
                 payment_status = 'success',
-                paid_at = COALESCE(NULLIF(paid_at, ''), $1),
-                updated_at = $1
+                paid_at = COALESCE(paid_at, CAST($1 AS TIMESTAMPTZ)),
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
@@ -192,8 +192,8 @@ impl PostgresCommerceOrderStore {
             UPDATE commerce_order
             SET status = 'cancelled',
                 payment_status = $1,
-                cancelled_at = COALESCE(NULLIF(cancelled_at, ''), $2),
-                updated_at = $2
+                cancelled_at = COALESCE(cancelled_at, CAST($2 AS TIMESTAMPTZ)),
+                updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($3 AS TEXT)
               AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
@@ -331,7 +331,7 @@ async fn mark_owner_order_refund_status_postgres(
         r#"
         UPDATE commerce_order
         SET refund_status = $1,
-            updated_at = $2
+            updated_at = CAST($2 AS TIMESTAMPTZ)
         WHERE tenant_id = CAST($3 AS TEXT)
           AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
           AND owner_user_id = CAST($5 AS TEXT)

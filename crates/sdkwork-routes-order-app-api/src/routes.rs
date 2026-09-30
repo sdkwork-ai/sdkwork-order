@@ -38,7 +38,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
     ));
     let DatabasePool::Postgres(pool, _) = host.database_pool();
     let pool = pool.clone();
-    
+
     Router::new()
         .merge(app_order_router_with_postgres_pool_and_inventory(
             pool.clone(),

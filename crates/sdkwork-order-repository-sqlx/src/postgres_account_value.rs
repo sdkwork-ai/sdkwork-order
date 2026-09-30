@@ -1628,7 +1628,7 @@ impl AccountValueRequestExecutionStore for PostgresCommerceRechargeStore {
             let result = sqlx::query(
                 r#"
                 UPDATE commerce_order
-                SET refund_status = $1, updated_at = $2
+                SET refund_status = $1, updated_at = CAST($2 AS TIMESTAMPTZ)
                 WHERE tenant_id = CAST($3 AS TEXT)
                   AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $5 IS NULL) OR (organization_id = '0' AND $5 IS NULL))
                   AND owner_user_id = CAST($6 AS TEXT)
@@ -1671,7 +1671,8 @@ async fn insert_account_value_order(
              idempotency_key, created_at, paid_at, cancelled_at, expired_at, updated_at)
         VALUES
             ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), CAST($4 AS TEXT), $5, 'pending_payment',
-             'pending', 'unfulfilled', 'none', $6, $7, $8, $9, $10, NULL, NULL, $11, $12)
+             'pending', 'unfulfilled', 'none', $6, $7, $8, $9, CAST($10 AS TIMESTAMPTZ),
+             NULL, NULL, CAST($11 AS TIMESTAMPTZ), CAST($12 AS TIMESTAMPTZ))
         "#,
     )
     .bind(&command.order_id)
@@ -1757,7 +1758,8 @@ async fn insert_coupon_recharge_order(
              idempotency_key, created_at, paid_at, cancelled_at, expired_at, updated_at)
         VALUES
             ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), CAST($4 AS TEXT), $5, $6, $7, 'unfulfilled',
-             'none', 'coupon_recharge', $8, $9, $10, $11, NULL, NULL, $12, $13)
+             'none', 'coupon_recharge', $8, $9, $10, CAST($11 AS TIMESTAMPTZ),
+             NULL, NULL, CAST($12 AS TIMESTAMPTZ), CAST($13 AS TIMESTAMPTZ))
         "#,
     )
     .bind(&command.order_id)

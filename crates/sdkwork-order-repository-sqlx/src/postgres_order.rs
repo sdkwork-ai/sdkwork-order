@@ -42,9 +42,9 @@ SELECT
     o.status,
     o.payment_status,
     o.subject,
-    o.created_at,
-    o.paid_at AS pay_time,
-    o.expired_at AS expire_time,
+    TO_CHAR(o.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+    TO_CHAR(o.paid_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS pay_time,
+    TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expire_time,
     COALESCE(
         (
             SELECT b.payable_amount
@@ -151,9 +151,9 @@ SELECT
     o.status,
     o.payment_status,
     o.subject,
-    o.created_at,
-    o.paid_at AS pay_time,
-    o.expired_at AS expire_time,
+    TO_CHAR(o.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+    TO_CHAR(o.paid_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS pay_time,
+    TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expire_time,
     COALESCE(
         (
             SELECT b.payable_amount
@@ -694,7 +694,7 @@ impl PostgresCommerceOrderStore {
                 o.order_no AS order_sn,
                 o.status,
                 o.merchant_organization_id,
-                o.expired_at,
+                TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expired_at,
                 o.partner_id,
                 o.partner_snapshot_json,
                 COALESCE(
@@ -801,7 +801,8 @@ impl PostgresCommerceOrderStore {
             VALUES
                 ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), CAST($4 AS TEXT), $5, 'pending_inventory',
                  'pending', 'unfulfilled', 'none', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                 $16, $17, NULL, NULL, $18, $19)
+                 CAST($16 AS TIMESTAMPTZ), NULL, NULL, CAST($17 AS TIMESTAMPTZ),
+                 CAST($18 AS TIMESTAMPTZ))
             "#,
         )
         .bind(&order_id)
@@ -896,7 +897,7 @@ impl PostgresCommerceOrderStore {
         sqlx::query(
             r#"
             UPDATE commerce_checkout_session
-            SET status = 'submitted', submitted_at = $1, updated_at = $2
+            SET status = 'submitted', submitted_at = $1, updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE id = $3
               AND tenant_id = CAST($4 AS TEXT)
               AND owner_user_id = CAST($5 AS TEXT)
@@ -936,7 +937,7 @@ impl PostgresCommerceOrderStore {
         let result = sqlx::query(
             r#"
             UPDATE commerce_order
-            SET status = 'pending_payment', fulfillment_status = 'inventory_reserved', updated_at = $1
+            SET status = 'pending_payment', fulfillment_status = 'inventory_reserved', updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT) AND owner_user_id = CAST($3 AS TEXT)
               AND id = CAST($4 AS TEXT) AND status IN ('pending_inventory', 'pending_payment')
             "#,
@@ -965,7 +966,7 @@ impl PostgresCommerceOrderStore {
         sqlx::query(
             r#"
             UPDATE commerce_order
-            SET status = 'inventory_failed', fulfillment_status = 'inventory_failed', updated_at = $1
+            SET status = 'inventory_failed', fulfillment_status = 'inventory_failed', updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT) AND owner_user_id = CAST($3 AS TEXT)
               AND id = CAST($4 AS TEXT) AND status = 'pending_inventory'
             "#,
@@ -1034,8 +1035,8 @@ impl PostgresCommerceOrderStore {
             UPDATE commerce_order
             SET status = 'cancelled',
                 payment_status = 'closed',
-                cancelled_at = $1,
-                updated_at = $2
+                cancelled_at = CAST($1 AS TIMESTAMPTZ),
+                updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($3 AS TEXT)
               AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
@@ -1170,7 +1171,7 @@ impl PostgresCommerceOrderStore {
             UPDATE commerce_order
             SET status = 'completed',
                 fulfillment_status = 'delivered',
-                updated_at = $1
+                updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
