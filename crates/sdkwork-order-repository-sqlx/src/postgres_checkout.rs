@@ -1036,11 +1036,7 @@ fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceE
 }
 
 fn current_timestamp_string() -> String {
-    let seconds = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0);
-    format!("{seconds}")
+    crate::store_clock::now_canonical()
 }
 
 fn optional_string_cell(row: &sqlx::postgres::PgRow, column: &str) -> Option<String> {

@@ -663,7 +663,28 @@ impl PostgresCommerceRechargeStore {
         Ok(())
     }
 
+    /// Owner-surface refund request creation.
+    ///
+    /// 退款申请仅对已支付订单开放（行业订单中心一致性：未支付/已取消/
+    /// 已关闭/已过期的订单不可发起资金退款）。资金安全与管理侧同一条
+    /// 原子路径：订单维度 advisory 锁 + `INSERT ... SELECT` 内联
+    /// 已支付与累计退款上限谓词，创建侧即完成超付预约。
     pub async fn create_order_refund_request(
+        &self,
+        command: CreateOrderRefundRequestCommand,
+    ) -> Result<AccountValueRequestView, CommerceServiceError> {
+        self.create_refund_request_within_bounds(command).await
+    }
+
+    /// Single atomic money-safety path for refund request creation.
+    ///
+    /// The per-order advisory transaction lock serializes concurrent creators
+    /// (the `CREATE`/`RETRY` free status words book the in-flight amount back
+    /// into the bound when a request ends `rejected`/`provider_refund_failed`),
+    /// and the `INSERT ... SELECT` evaluates the paid-order and
+    /// `payable >= in-flight + this refund` predicates in the same statement,
+    /// so no interleaving can commit an over-refund reservation.
+    async fn create_refund_request_within_bounds(
         &self,
         command: CreateOrderRefundRequestCommand,
     ) -> Result<AccountValueRequestView, CommerceServiceError> {
@@ -679,44 +700,21 @@ impl PostgresCommerceRechargeStore {
             self.validate_refund_request_replay(&command, &view).await?;
             return Ok(view);
         }
-        // 退款申请仅对已支付订单开放（行业订单中心一致性：未支付/已取消/
-        // 已关闭/已过期的订单不可发起资金退款）。
-        let order_payment = sqlx::query_scalar::<_, String>(
-            r#"
-            SELECT COALESCE(NULLIF(payment_status, ''), 'none')
-            FROM commerce_order
-            WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
-              AND owner_user_id = CAST($4 AS TEXT)
-              AND id = CAST($5 AS TEXT)
-            LIMIT 1
-            "#,
-        )
-        .bind(&command.tenant_id)
-        .bind(command.organization_id.as_deref())
-        .bind(command.organization_id.as_deref())
-        .bind(&command.owner_user_id)
-        .bind(&command.original_order_id)
-        .fetch_optional(self.pool())
-        .await
-        .map_err(|error| store_error("failed to load order for refund request", error))?;
-        match order_payment
-            .as_deref()
-            .map(str::trim)
-            .map(str::to_ascii_lowercase)
-        {
-            Some(status) if matches!(status.as_str(), "success" | "succeeded" | "paid") => {}
-            Some(_) => {
-                return Err(CommerceServiceError::conflict(
-                    "order is not paid; refund requests require a paid order",
-                ))
-            }
-            None => {
-                return Err(CommerceServiceError::not_found(
-                    "order was not found for refund request",
-                ))
-            }
-        }
+
+        let mut tx = self
+            .pool()
+            .begin()
+            .await
+            .map_err(|error| store_error("failed to begin refund request creation", error))?;
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(format!(
+                "refund-bounds:{}:{}",
+                command.tenant_id, command.original_order_id
+            ))
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| store_error("failed to lock refund bounds", error))?;
+
         let now = current_command_timestamp();
         let inserted = sqlx::query(
             r#"
@@ -725,9 +723,28 @@ impl PostgresCommerceRechargeStore {
                  target_asset, amount, currency_code, provider_amount, provider_currency_code,
                  status, reason_code, reason_detail, review_comment, provider_reference_id,
                  account_effect_reference_id, idempotency_key, created_at, updated_at)
-            VALUES
-                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, CAST($6 AS TEXT), $7, $8, $9,
-                 $10, $11, 'requested', $12, $13, NULL, NULL, NULL, $14, $15, $16)
+            SELECT
+                $1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, CAST($6 AS TEXT), $7, $8, $9,
+                $10, $11, 'requested', $12, $13, NULL, NULL, NULL, $14, $15, $16
+            FROM commerce_order o
+            WHERE o.tenant_id = CAST($2 AS TEXT)
+              AND ((o.organization_id = CAST($3 AS TEXT))
+                   OR (o.organization_id IS NULL AND $3 IS NULL)
+                   OR (o.organization_id = '0' AND $3 IS NULL))
+              AND o.owner_user_id = CAST($6 AS TEXT)
+              AND o.id = CAST($5 AS TEXT)
+              AND LOWER(COALESCE(o.payment_status, '')) IN ('success', 'succeeded', 'paid')
+              AND COALESCE((
+                    SELECT b.payable_amount FROM commerce_order_amount_breakdown b
+                    WHERE b.tenant_id = o.tenant_id AND b.order_id = o.id
+                      AND b.allocation_type = 'order_total'
+                    LIMIT 1
+                  ), '0')::NUMERIC
+                  >= COALESCE((
+                    SELECT SUM(CAST(r.amount AS NUMERIC)) FROM commerce_order_refund_request r
+                    WHERE r.tenant_id = o.tenant_id AND r.original_order_id = o.id
+                      AND r.status NOT IN ('rejected', 'provider_refund_failed')
+                  ), 0) + CAST($8 AS NUMERIC)
             ON CONFLICT DO NOTHING
             "#,
         )
@@ -747,12 +764,20 @@ impl PostgresCommerceRechargeStore {
         .bind(&command.idempotency_key)
         .bind(&now)
         .bind(&now)
-        .execute(self.pool())
+        .execute(&mut *tx)
         .await
         .map_err(|error| store_error("failed to create refund request", error))?
         .rows_affected();
+
+        tx.commit()
+            .await
+            .map_err(|error| store_error("failed to commit refund request creation", error))?;
+
         if inserted == 0 {
-            let view = self
+            // Zero rows means exactly one of: idempotency replay, order not
+            // found, order not paid, or the cumulative bound was exceeded.
+            // Disambiguate with the same messages the pre-checks produced.
+            if let Some(view) = self
                 .load_refund_request_by_idempotency(
                     &command.tenant_id,
                     command.organization_id.as_deref(),
@@ -760,14 +785,13 @@ impl PostgresCommerceRechargeStore {
                     &command.idempotency_key,
                 )
                 .await?
-                .ok_or_else(|| {
-                    CommerceServiceError::storage(
-                        "refund request idempotency conflict has no persisted request",
-                    )
-                })?;
-            self.validate_refund_request_replay(&command, &view).await?;
-            return Ok(view);
+            {
+                self.validate_refund_request_replay(&command, &view).await?;
+                return Ok(view);
+            }
+            return Err(self.classify_refund_request_rejection(&command).await);
         }
+
         self.retrieve_order_refund_request(AccountValueRequestDetailQuery {
             tenant_id: command.tenant_id,
             organization_id: command.organization_id,
@@ -779,54 +803,32 @@ impl PostgresCommerceRechargeStore {
         .ok_or_else(|| CommerceServiceError::storage("refund request was not persisted"))
     }
 
-    /// Admin-surface refund request creation.
-    ///
-    /// Safety contract against duplicate and over-refunds:
-    /// 1. Replaying the same Idempotency-Key returns the persisted request
-    ///    (idempotent replay validation first).
-    /// 2. The order must be paid.
-    /// 3. The cumulative in-flight refund amount plus this refund must not
-    ///    exceed the order payable amount (evaluated in SQL).
-    /// 4. `INSERT ... ON CONFLICT DO NOTHING` keeps the idempotency key
-    ///    unique at the database level.
-    pub async fn create_admin_order_refund_request(
+    /// Explains a rejected refund creation with the same precision as the
+    /// legacy pre-checks: order existence, payment state, then bounds.
+    async fn classify_refund_request_rejection(
         &self,
-        command: CreateOrderRefundRequestCommand,
-    ) -> Result<AccountValueRequestView, CommerceServiceError> {
-        if let Some(view) = self
-            .load_refund_request_by_idempotency(
-                &command.tenant_id,
-                command.organization_id.as_deref(),
-                &command.owner_user_id,
-                &command.idempotency_key,
-            )
-            .await?
-        {
-            self.validate_refund_request_replay(&command, &view).await?;
-            return Ok(view);
-        }
-
-        let bounds = sqlx::query(
+        command: &CreateOrderRefundRequestCommand,
+    ) -> CommerceServiceError {
+        let row = sqlx::query(
             r#"
             SELECT
                 COALESCE(NULLIF(o.payment_status, ''), 'none') AS payment_status,
-                COALESCE(
-                    (SELECT b.payable_amount FROM commerce_order_amount_breakdown b
-                     WHERE b.tenant_id = o.tenant_id AND b.order_id = o.id
-                       AND b.allocation_type = 'order_total'
-                     LIMIT 1),
-                    '0'
-                )::NUMERIC
-                >=
-                COALESCE(
-                    (SELECT SUM(CAST(r.amount AS NUMERIC)) FROM commerce_order_refund_request r
-                     WHERE r.tenant_id = o.tenant_id AND r.original_order_id = o.id
-                       AND r.status NOT IN ('rejected', 'provider_refund_failed')),
-                    0
-                ) + CAST($4 AS NUMERIC) AS within_refund_bounds
+                COALESCE((
+                    SELECT b.payable_amount FROM commerce_order_amount_breakdown b
+                    WHERE b.tenant_id = o.tenant_id AND b.order_id = o.id
+                      AND b.allocation_type = 'order_total'
+                    LIMIT 1
+                ), '0')::NUMERIC
+                >= COALESCE((
+                    SELECT SUM(CAST(r.amount AS NUMERIC)) FROM commerce_order_refund_request r
+                    WHERE r.tenant_id = o.tenant_id AND r.original_order_id = o.id
+                      AND r.status NOT IN ('rejected', 'provider_refund_failed')
+                ), 0) + CAST($4 AS NUMERIC) AS within_refund_bounds
             FROM commerce_order o
             WHERE o.tenant_id = CAST($1 AS TEXT)
-              AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+              AND ((o.organization_id = CAST($2 AS TEXT))
+                   OR (o.organization_id IS NULL AND $2 IS NULL)
+                   OR (o.organization_id = '0' AND $2 IS NULL))
               AND o.id = CAST($3 AS TEXT)
             LIMIT 1
             "#,
@@ -836,96 +838,47 @@ impl PostgresCommerceRechargeStore {
         .bind(&command.original_order_id)
         .bind(command.amount.as_str())
         .fetch_optional(self.pool())
-        .await
-        .map_err(|error| store_error("failed to load admin refund bounds", error))?;
+        .await;
 
-        let (payment_status, within_refund_bounds) = match bounds {
-            Some(row) => (
-                row.get::<String, _>("payment_status"),
-                row.get::<bool, _>("within_refund_bounds"),
-            ),
-            None => {
-                return Err(CommerceServiceError::not_found(
-                    "order was not found for refund request",
-                ))
-            }
+        let Ok(Some(row)) = row else {
+            return CommerceServiceError::not_found("order was not found for refund request");
         };
+        let payment_status = row.get::<String, _>("payment_status");
         if !matches!(
             payment_status.trim().to_ascii_lowercase().as_str(),
             "success" | "succeeded" | "paid"
         ) {
-            return Err(CommerceServiceError::conflict(
+            return CommerceServiceError::conflict(
                 "order is not paid; refund requests require a paid order",
-            ));
+            );
         }
-        if !within_refund_bounds {
-            return Err(CommerceServiceError::conflict(
+        if !row.get::<bool, _>("within_refund_bounds") {
+            return CommerceServiceError::conflict(
                 "refund amount exceeds the remaining refundable amount of the order",
-            ));
+            );
         }
-
-        let now = current_command_timestamp();
-        let inserted = sqlx::query(
-            r#"
-            INSERT INTO commerce_order_refund_request
-                (id, tenant_id, organization_id, request_no, original_order_id, owner_user_id,
-                 target_asset, amount, currency_code, provider_amount, provider_currency_code,
-                 status, reason_code, reason_detail, review_comment, provider_reference_id,
-                 account_effect_reference_id, idempotency_key, created_at, updated_at)
-            VALUES
-                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, CAST($6 AS TEXT), $7, $8, $9,
-                 $10, $11, 'requested', $12, $13, NULL, NULL, NULL, $14, $15, $16)
-            ON CONFLICT DO NOTHING
-            "#,
+        CommerceServiceError::storage(
+            "refund request was not created; concurrent state changed during creation",
         )
-        .bind(&command.refund_request_id)
-        .bind(&command.tenant_id)
-        .bind(command.organization_id.as_deref())
-        .bind(&command.request_no)
-        .bind(&command.original_order_id)
-        .bind(&command.owner_user_id)
-        .bind(command.target_asset.as_str())
-        .bind(command.amount.as_str())
-        .bind(&command.currency_code)
-        .bind(command.provider_amount.as_ref().map(CommerceMoney::as_str))
-        .bind(command.provider_currency_code.as_deref())
-        .bind(command.reason_code.as_deref())
-        .bind(command.reason_detail.as_deref())
-        .bind(&command.idempotency_key)
-        .bind(&now)
-        .bind(&now)
-        .execute(self.pool())
-        .await
-        .map_err(|error| store_error("failed to create admin refund request", error))?
-        .rows_affected();
+    }
 
-        if inserted == 0 {
-            let view = self
-                .load_refund_request_by_idempotency(
-                    &command.tenant_id,
-                    command.organization_id.as_deref(),
-                    &command.owner_user_id,
-                    &command.idempotency_key,
-                )
-                .await?
-                .ok_or_else(|| {
-                    CommerceServiceError::storage(
-                        "admin refund request idempotency conflict has no persisted request",
-                    )
-                })?;
-            self.validate_refund_request_replay(&command, &view).await?;
-            return Ok(view);
-        }
-
-        self.retrieve_order_refund_request(AccountValueRequestDetailQuery {
-            tenant_id: command.tenant_id,
-            organization_id: command.organization_id,
-            owner_user_id: Some(command.owner_user_id),
-            subject: Some(AccountValueOrderSubject::RefundRequest),
-            request_id: command.refund_request_id,
-        })
-        .await?
-        .ok_or_else(|| CommerceServiceError::storage("admin refund request was not persisted"))
+    /// Admin-surface refund request creation.
+    ///
+    /// Safety contract against duplicate and over-refunds:
+    /// 1. Replaying the same Idempotency-Key returns the persisted request
+    ///    (idempotent replay validation first).
+    /// 2. Creation runs inside one transaction guarded by a per-order
+    ///    advisory lock, so concurrent creators cannot interleave between the
+    ///    cumulative-in-flight bound check and the insert.
+    /// 3. The order must be paid and `paid >= in-flight refunds + this
+    ///    refund` is evaluated in the same atomic `INSERT ... SELECT`.
+    /// 4. `ON CONFLICT DO NOTHING` keeps the idempotency key unique at the
+    ///    database level.
+    pub async fn create_admin_order_refund_request(
+        &self,
+        command: CreateOrderRefundRequestCommand,
+    ) -> Result<AccountValueRequestView, CommerceServiceError> {
+        self.create_refund_request_within_bounds(command).await
     }
 
     pub async fn list_order_refund_requests(
@@ -1090,21 +1043,6 @@ impl PostgresCommerceRechargeStore {
             .await
             .map_err(|error| store_error("failed to retrieve withdrawal request", error))?;
         row.as_ref().map(map_withdrawal_request).transpose()
-    }
-
-    pub async fn review_account_value_request(
-        &self,
-        command: ReviewAccountValueRequestCommand,
-    ) -> Result<AccountValueRequestView, CommerceServiceError> {
-        match command.subject {
-            AccountValueOrderSubject::RefundRequest => self.review_refund_request(command).await,
-            AccountValueOrderSubject::CashWithdrawal => {
-                self.review_withdrawal_request(command).await
-            }
-            _ => Err(CommerceServiceError::validation(
-                "unsupported account value request subject",
-            )),
-        }
     }
 
     async fn update_account_value_request_status(
@@ -1388,51 +1326,10 @@ impl PostgresCommerceRechargeStore {
         Ok(())
     }
 
-    async fn review_refund_request(
-        &self,
-        command: ReviewAccountValueRequestCommand,
-    ) -> Result<AccountValueRequestView, CommerceServiceError> {
-        let now = current_command_timestamp();
-        let updated = sqlx::query(
-            r#"
-            UPDATE commerce_order_refund_request
-            SET status = $1,
-                reason_code = COALESCE($2, reason_code),
-                review_comment = $3,
-                updated_at = $4
-            WHERE tenant_id = CAST($5 AS TEXT)
-              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL) OR (organization_id = '0' AND $6 IS NULL))
-              AND id = CAST($7 AS TEXT)
-            "#,
-        )
-        .bind(command.next_status())
-        .bind(command.reason_code.as_deref())
-        .bind(command.review_comment.as_deref())
-        .bind(&now)
-        .bind(&command.tenant_id)
-        .bind(command.organization_id.as_deref())
-        .bind(&command.request_id)
-        .execute(self.pool())
-        .await
-        .map_err(|error| store_error("failed to review refund request", error))?
-        .rows_affected();
-        if updated == 0 {
-            return Err(CommerceServiceError::not_found(
-                "refund request was not found",
-            ));
-        }
-        self.retrieve_order_refund_request(AccountValueRequestDetailQuery {
-            tenant_id: command.tenant_id,
-            organization_id: command.organization_id,
-            owner_user_id: None,
-            subject: Some(AccountValueOrderSubject::RefundRequest),
-            request_id: command.request_id,
-        })
-        .await?
-        .ok_or_else(|| {
-            CommerceServiceError::storage("refund request was not persisted after review")
-        })
-    }
+    /// Terminal refund request states: money movement completed or the
+    /// request was cancelled. Store-enforced so no caller (review action,
+    /// execution retry, compensation replay) can re-transition them.
+    const REFUND_REQUEST_TERMINAL_STATUSES: [&str; 2] = ["refunded", "rejected"];
 
     async fn update_refund_request_status(
         &self,
@@ -1453,6 +1350,7 @@ impl PostgresCommerceRechargeStore {
             WHERE tenant_id = CAST($9 AS TEXT)
               AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $10 IS NULL) OR (organization_id = '0' AND $10 IS NULL))
               AND id = CAST($11 AS TEXT)
+              AND status <> ALL($12)
             "#,
         )
         .bind(&command.status)
@@ -1466,14 +1364,18 @@ impl PostgresCommerceRechargeStore {
         .bind(&command.tenant_id)
         .bind(command.organization_id.as_deref())
         .bind(&command.request_id)
+        .bind(
+            Self::REFUND_REQUEST_TERMINAL_STATUSES
+                .iter()
+                .copied()
+                .collect::<Vec<String>>(),
+        )
         .execute(self.pool())
         .await
         .map_err(|error| store_error("failed to update refund request status", error))?
         .rows_affected();
         if updated == 0 {
-            return Err(CommerceServiceError::not_found(
-                "refund request was not found",
-            ));
+            self.classify_refund_status_rejection(&command).await?;
         }
         self.retrieve_order_refund_request(AccountValueRequestDetailQuery {
             tenant_id: command.tenant_id,
@@ -1488,51 +1390,46 @@ impl PostgresCommerceRechargeStore {
         })
     }
 
-    async fn review_withdrawal_request(
+    /// Zero updated rows for a refund status transition means either the
+    /// request does not exist (`not_found`) or it sits in a terminal state
+    /// that must not be re-transitioned (`invalid_state`).
+    async fn classify_refund_status_rejection(
         &self,
-        command: ReviewAccountValueRequestCommand,
-    ) -> Result<AccountValueRequestView, CommerceServiceError> {
-        let now = current_command_timestamp();
-        let updated = sqlx::query(
+        command: &AccountValueRequestStatusCommand,
+    ) -> Result<(), CommerceServiceError> {
+        let current = sqlx::query_scalar::<_, String>(
             r#"
-            UPDATE commerce_order_withdrawal_request
-            SET status = $1,
-                reason_code = COALESCE($2, reason_code),
-                review_comment = $3,
-                updated_at = $4
-            WHERE tenant_id = CAST($5 AS TEXT)
-              AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id IS NULL AND $6 IS NULL) OR (organization_id = '0' AND $6 IS NULL))
-              AND id = CAST($7 AS TEXT)
+            SELECT COALESCE(status, '')
+            FROM commerce_order_refund_request
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+              AND id = CAST($3 AS TEXT)
+            LIMIT 1
             "#,
         )
-        .bind(command.next_status())
-        .bind(command.reason_code.as_deref())
-        .bind(command.review_comment.as_deref())
-        .bind(&now)
         .bind(&command.tenant_id)
         .bind(command.organization_id.as_deref())
         .bind(&command.request_id)
-        .execute(self.pool())
+        .fetch_optional(self.pool())
         .await
-        .map_err(|error| store_error("failed to review withdrawal request", error))?
-        .rows_affected();
-        if updated == 0 {
-            return Err(CommerceServiceError::not_found(
-                "withdrawal request was not found",
-            ));
+        .map_err(|error| store_error("failed to load refund request status", error))?;
+        match current {
+            None => Err(CommerceServiceError::not_found(
+                "refund request was not found",
+            )),
+            Some(status) if Self::REFUND_REQUEST_TERMINAL_STATUSES.contains(&status.as_str()) => {
+                Err(CommerceServiceError::invalid_state(format!(
+                    "refund request already reached terminal status {status}; it cannot be re-transitioned"
+                )))
+            }
+            Some(_) => Err(CommerceServiceError::storage(
+                "refund request status transition did not apply",
+            )),
         }
-        self.retrieve_cash_withdrawal_request(AccountValueRequestDetailQuery {
-            tenant_id: command.tenant_id,
-            organization_id: command.organization_id,
-            owner_user_id: None,
-            subject: Some(AccountValueOrderSubject::CashWithdrawal),
-            request_id: command.request_id,
-        })
-        .await?
-        .ok_or_else(|| {
-            CommerceServiceError::storage("withdrawal request was not persisted after review")
-        })
     }
+
+    /// Terminal withdrawal request states: payout completed or cancelled.
+    const WITHDRAWAL_REQUEST_TERMINAL_STATUSES: [&str; 2] = ["paid_out", "rejected"];
 
     async fn update_withdrawal_request_status(
         &self,
@@ -1553,6 +1450,7 @@ impl PostgresCommerceRechargeStore {
             WHERE tenant_id = CAST($9 AS TEXT)
               AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $10 IS NULL) OR (organization_id = '0' AND $10 IS NULL))
               AND id = CAST($11 AS TEXT)
+              AND status <> ALL($12)
             "#,
         )
         .bind(&command.status)
@@ -1566,14 +1464,18 @@ impl PostgresCommerceRechargeStore {
         .bind(&command.tenant_id)
         .bind(command.organization_id.as_deref())
         .bind(&command.request_id)
+        .bind(
+            Self::WITHDRAWAL_REQUEST_TERMINAL_STATUSES
+                .iter()
+                .copied()
+                .collect::<Vec<String>>(),
+        )
         .execute(self.pool())
         .await
         .map_err(|error| store_error("failed to update withdrawal request status", error))?
         .rows_affected();
         if updated == 0 {
-            return Err(CommerceServiceError::not_found(
-                "withdrawal request was not found",
-            ));
+            self.classify_withdrawal_status_rejection(&command).await?;
         }
         self.retrieve_cash_withdrawal_request(AccountValueRequestDetailQuery {
             tenant_id: command.tenant_id,
@@ -1588,6 +1490,43 @@ impl PostgresCommerceRechargeStore {
                 "withdrawal request was not persisted after status update",
             )
         })
+    }
+
+    async fn classify_withdrawal_status_rejection(
+        &self,
+        command: &AccountValueRequestStatusCommand,
+    ) -> Result<(), CommerceServiceError> {
+        let current = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT COALESCE(status, '')
+            FROM commerce_order_withdrawal_request
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+              AND id = CAST($3 AS TEXT)
+            LIMIT 1
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(&command.request_id)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to load withdrawal request status", error))?;
+        match current {
+            None => Err(CommerceServiceError::not_found(
+                "withdrawal request was not found",
+            )),
+            Some(status)
+                if Self::WITHDRAWAL_REQUEST_TERMINAL_STATUSES.contains(&status.as_str()) =>
+            {
+                Err(CommerceServiceError::invalid_state(format!(
+                    "withdrawal request already reached terminal status {status}; it cannot be re-transitioned"
+                )))
+            }
+            Some(_) => Err(CommerceServiceError::storage(
+                "withdrawal request status transition did not apply",
+            )),
+        }
     }
 
     pub async fn load_account_value_order_by_idempotency(
@@ -2274,11 +2213,7 @@ fn string_cell(row: &sqlx::postgres::PgRow, column: &str) -> String {
 }
 
 fn current_command_timestamp() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or(0);
-    seconds.to_string()
+    crate::store_clock::now_canonical()
 }
 
 /// RFC3339 timestamp for columns typed `timestamptz` (e.g.

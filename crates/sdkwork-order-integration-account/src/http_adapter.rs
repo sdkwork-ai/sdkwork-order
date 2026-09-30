@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::time::Duration;
 
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use sdkwork_contract_service::{
@@ -13,26 +13,41 @@ use sdkwork_order_service::{
 use sdkwork_utils_rust::SdkWorkProblemDetail;
 use serde::Deserialize;
 
-static HTTP: OnceLock<reqwest::Client> = OnceLock::new();
+/// Ledger mutations are money-moving commands: every external await is
+/// bounded (RUST_CODE_SPEC) so a hung account backend cannot stall payment
+/// settlement or the compensation worker indefinitely. The bounds leave
+/// generous room for the remote service while guaranteeing liveness.
+const ACCOUNT_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const ACCOUNT_HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
-fn http_client() -> &'static reqwest::Client {
-    HTTP.get_or_init(reqwest::Client::new)
+fn build_http_client() -> Result<reqwest::Client, CommerceServiceError> {
+    reqwest::Client::builder()
+        .connect_timeout(ACCOUNT_HTTP_CONNECT_TIMEOUT)
+        .timeout(ACCOUNT_HTTP_REQUEST_TIMEOUT)
+        .build()
+        .map_err(|error| {
+            CommerceServiceError::storage(format!(
+                "account backend HTTP client failed to initialize: {error}"
+            ))
+        })
 }
 
 #[derive(Clone, Debug)]
 pub struct HttpAccountPointsCreditAdapter {
     origin: String,
     auth_token: Option<String>,
+    http: reqwest::Client,
 }
 
 impl HttpAccountPointsCreditAdapter {
-    pub fn new(origin: String, auth_token: Option<String>) -> Self {
-        Self {
+    pub fn new(origin: String, auth_token: Option<String>) -> Result<Self, CommerceServiceError> {
+        Ok(Self {
             origin: origin.trim().trim_end_matches('/').to_owned(),
             auth_token: auth_token
                 .map(|value| value.trim().to_owned())
                 .filter(|value| !value.is_empty()),
-        }
+            http: build_http_client()?,
+        })
     }
 
     pub fn from_env() -> Result<Self, String> {
@@ -45,7 +60,7 @@ impl HttpAccountPointsCreditAdapter {
             .ok()
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
-        Ok(Self::new(origin, auth_token))
+        Self::new(origin, auth_token).map_err(|error| error.to_string())
     }
 }
 
@@ -116,7 +131,7 @@ impl HttpAccountPointsCreditAdapter {
             ));
         }
 
-        let mut builder = http_client()
+        let mut builder = self.http
             .post(&url)
             .header(CONTENT_TYPE, "application/json")
             .json(&body);
@@ -165,7 +180,7 @@ impl HttpAccountPointsCreditAdapter {
             command.asset,
             &command.direction,
             &command.business_type,
-        );
+        )?;
         let body = serde_json::json!({
             "tenantId": command.tenant_id,
             "organizationId": command.organization_id,
@@ -189,7 +204,7 @@ impl HttpAccountPointsCreditAdapter {
             ));
         }
 
-        let mut builder = http_client()
+        let mut builder = self.http
             .post(&url)
             .header(CONTENT_TYPE, "application/json")
             .json(&body);
@@ -248,7 +263,7 @@ impl HttpAccountPointsCreditAdapter {
             "requestNo": command.request_no,
             "idempotencyKey": command.idempotency_key,
         });
-        let path = account_value_hold_create_path(command.asset);
+        let path = account_value_hold_create_path(command.asset)?;
         self.post_account_value_hold_command(path, body).await
     }
 
@@ -268,7 +283,7 @@ impl HttpAccountPointsCreditAdapter {
             command.asset,
             &command.resource_id,
             AccountValueLedgerOperation::HoldSettle,
-        );
+        )?;
         self.post_account_value_hold_command(path, body).await
     }
 
@@ -285,7 +300,7 @@ impl HttpAccountPointsCreditAdapter {
             command.asset,
             &command.resource_id,
             AccountValueLedgerOperation::HoldRelease,
-        );
+        )?;
         self.post_account_value_hold_command(path, body).await
     }
 
@@ -303,7 +318,7 @@ impl HttpAccountPointsCreditAdapter {
             ));
         }
 
-        let mut builder = http_client()
+        let mut builder = self.http
             .post(&url)
             .header(CONTENT_TYPE, "application/json")
             .json(&body);
@@ -424,15 +439,22 @@ fn account_value_transaction_no(command: &AccountValueLedgerCommand) -> String {
     format!("{}:{}", command.business_type, command.resource_id)
 }
 
-fn account_value_hold_create_path(asset: AccountValueAssetCode) -> String {
+fn unsupported_asset(asset: AccountValueAssetCode) -> CommerceServiceError {
+    CommerceServiceError::validation(format!(
+        "account value asset {} is not handled by the account backend adapter",
+        asset.as_str()
+    ))
+}
+
+fn account_value_hold_create_path(
+    asset: AccountValueAssetCode,
+) -> Result<String, CommerceServiceError> {
     match asset {
-        AccountValueAssetCode::TokenBank => "/backend/v3/api/token_bank/holds".to_owned(),
+        AccountValueAssetCode::TokenBank => Ok("/backend/v3/api/token_bank/holds".to_owned()),
         AccountValueAssetCode::Cash | AccountValueAssetCode::Points => {
-            "/backend/v3/api/wallet/holds".to_owned()
+            Ok("/backend/v3/api/wallet/holds".to_owned())
         }
-        AccountValueAssetCode::Subscription => {
-            unreachable!("subscription coupons are fulfilled by Membership")
-        }
+        AccountValueAssetCode::Subscription => Err(unsupported_asset(asset)),
     }
 }
 
@@ -440,22 +462,24 @@ fn account_value_hold_mutation_path(
     asset: AccountValueAssetCode,
     hold_id: &str,
     operation: AccountValueLedgerOperation,
-) -> String {
+) -> Result<String, CommerceServiceError> {
     let suffix = match operation {
         AccountValueLedgerOperation::HoldSettle => "settle",
         AccountValueLedgerOperation::HoldRelease => "release",
-        _ => unreachable!("only hold mutations have hold-id paths"),
+        _ => {
+            return Err(CommerceServiceError::validation(
+                "only hold settle and hold release mutate an existing hold",
+            ))
+        }
     };
     match asset {
         AccountValueAssetCode::TokenBank => {
-            format!("/backend/v3/api/token_bank/holds/{hold_id}/{suffix}")
+            Ok(format!("/backend/v3/api/token_bank/holds/{hold_id}/{suffix}"))
         }
         AccountValueAssetCode::Cash | AccountValueAssetCode::Points => {
-            format!("/backend/v3/api/wallet/holds/{hold_id}/{suffix}")
+            Ok(format!("/backend/v3/api/wallet/holds/{hold_id}/{suffix}"))
         }
-        AccountValueAssetCode::Subscription => {
-            unreachable!("subscription coupons are fulfilled by Membership")
-        }
+        AccountValueAssetCode::Subscription => Err(unsupported_asset(asset)),
     }
 }
 
@@ -463,24 +487,22 @@ fn account_value_adjustment_path(
     asset: AccountValueAssetCode,
     direction: &CommerceLedgerDirection,
     business_type: &str,
-) -> &'static str {
+) -> Result<&'static str, CommerceServiceError> {
     match asset {
         AccountValueAssetCode::TokenBank => {
             if business_type == CommerceLedgerBusinessType::TOKEN_BANK_GRANT {
-                "/backend/v3/api/token_bank/grants"
+                Ok("/backend/v3/api/token_bank/grants")
             } else if business_type == CommerceLedgerBusinessType::TOKEN_BANK_REVERSAL {
-                "/backend/v3/api/token_bank/reversals"
+                Ok("/backend/v3/api/token_bank/reversals")
             } else if direction == &CommerceLedgerDirection::Debit {
-                "/backend/v3/api/token_bank/debits"
+                Ok("/backend/v3/api/token_bank/debits")
             } else {
-                "/backend/v3/api/token_bank/credits"
+                Ok("/backend/v3/api/token_bank/credits")
             }
         }
-        AccountValueAssetCode::Points => "/backend/v3/api/wallet/adjustments/points",
-        AccountValueAssetCode::Cash => "/backend/v3/api/wallet/adjustments/cash",
-        AccountValueAssetCode::Subscription => {
-            unreachable!("subscription coupons are fulfilled by Membership")
-        }
+        AccountValueAssetCode::Points => Ok("/backend/v3/api/wallet/adjustments/points"),
+        AccountValueAssetCode::Cash => Ok("/backend/v3/api/wallet/adjustments/cash"),
+        AccountValueAssetCode::Subscription => Err(unsupported_asset(asset)),
     }
 }
 

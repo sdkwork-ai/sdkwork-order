@@ -94,9 +94,21 @@ async fn run_expiration_pass(host: &OrderServiceHost, batch_size: i64) -> Result
         .map_err(|error| format!("list expiring orders failed: {error:?}"))?;
     for record in records {
         let now = current_command_timestamp();
-        let expired = expire_due_order(pool, &record, &now)
-            .await
-            .map_err(|error| format!("expire order {} failed: {error:?}", record.order_id))?;
+        // Per-record error isolation: one poisoned row must never block the
+        // orders queued behind it (the listing is ordered by `expired_at`, so
+        // an early `?` would stall the whole queue until manual cleanup).
+        let expired = match expire_due_order(pool, &record, &now).await {
+            Ok(expired) => expired,
+            Err(error) => {
+                tracing::error!(
+                    target = "order.expiration",
+                    order_id = %record.order_id,
+                    error = ?error,
+                    "order expiration failed; skipping to keep the batch moving"
+                );
+                continue;
+            }
+        };
         if !expired {
             continue;
         }

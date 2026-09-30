@@ -22,6 +22,17 @@ pub struct OrderRefundBounds {
     pub within_refund_bounds: bool,
 }
 
+/// Admin order list.
+///
+/// The payment intent/attempt sides are `LATERAL ... LIMIT 1` picks instead
+/// of plain joins: an order retried its payment N times owns N attempts, and
+/// a plain join would duplicate the order row N times (inflating both the
+/// page and `COUNT(*) OVER()`). Organization matching uses the platform
+/// sentinel (`'0'`, DATABASE_SPEC §6.3) instead of `IS NULL` fuzziness so a
+/// NULL-org payment row can never decorate another organization's order.
+/// Time-range predicates cast the TEXT instant column explicitly
+/// (DATABASE_SPEC §8.1.1); the free-text `q` pattern is pre-escaped so user
+/// input cannot inject `%`/`_` wildcards.
 const LIST_MANAGEMENT_ORDERS: &str = r#"
 SELECT
     o.id AS order_id,
@@ -71,16 +82,24 @@ SELECT
     o.partner_snapshot_json,
     COUNT(*) OVER() AS total_count
 FROM commerce_order o
-LEFT JOIN commerce_payment_intent pi
-    ON pi.tenant_id = o.tenant_id
-   AND (pi.organization_id IS NULL OR o.organization_id IS NULL OR pi.organization_id = o.organization_id)
-   AND pi.owner_user_id = o.owner_user_id
-   AND pi.order_id = o.id
-LEFT JOIN commerce_payment_attempt pa
-    ON pa.tenant_id = o.tenant_id
-   AND (pa.organization_id IS NULL OR o.organization_id IS NULL OR pa.organization_id = o.organization_id)
-   AND pa.owner_user_id = o.owner_user_id
-   AND pa.order_id = o.id
+LEFT JOIN LATERAL (
+    SELECT pi.payment_method
+    FROM commerce_payment_intent pi
+    WHERE pi.tenant_id = o.tenant_id
+      AND pi.order_id = o.id
+      AND COALESCE(pi.organization_id, '0') IN (o.organization_id, '0')
+    ORDER BY pi.created_at DESC, pi.id DESC
+    LIMIT 1
+) pi ON TRUE
+LEFT JOIN LATERAL (
+    SELECT pa.payment_method
+    FROM commerce_payment_attempt pa
+    WHERE pa.tenant_id = o.tenant_id
+      AND pa.order_id = o.id
+      AND COALESCE(pa.organization_id, '0') IN (o.organization_id, '0')
+    ORDER BY pa.created_at DESC, pa.id DESC
+    LIMIT 1
+) pa ON TRUE
 WHERE o.tenant_id = CAST($1 AS TEXT)
   AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
   AND ($3 IS NULL OR o.status = $3)
@@ -88,20 +107,55 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
         $4 IS NULL
         OR o.order_no ILIKE $4
         OR o.subject ILIKE $4
-        OR CAST(o.id AS TEXT) ILIKE $4
+        OR o.id ILIKE $4
       )
-  AND ($5 IS NULL OR o.created_at >= CAST($5 AS TIMESTAMPTZ))
-  AND ($6 IS NULL OR o.created_at <= CAST($6 AS TIMESTAMPTZ))
+  AND ($5 IS NULL OR o.created_at::timestamptz >= $5::timestamptz)
+  AND ($6 IS NULL OR o.created_at::timestamptz <= $6::timestamptz)
 ORDER BY o.created_at DESC, o.id DESC
 LIMIT $7 OFFSET $8
 "#;
+
+/// Counts the same filter set as [`LIST_MANAGEMENT_ORDERS`] without the page
+/// projection: when the requested page is past the end, `COUNT(*) OVER()`
+/// never materializes a row and the page total would read as zero.
+const COUNT_MANAGEMENT_ORDERS: &str = r#"
+SELECT COUNT(*) AS total_count
+FROM commerce_order o
+WHERE o.tenant_id = CAST($1 AS TEXT)
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ($3 IS NULL OR o.status = $3)
+  AND (
+        $4 IS NULL
+        OR o.order_no ILIKE $4
+        OR o.subject ILIKE $4
+        OR o.id ILIKE $4
+      )
+  AND ($5 IS NULL OR o.created_at::timestamptz >= $5::timestamptz)
+  AND ($6 IS NULL OR o.created_at::timestamptz <= $6::timestamptz)
+"#;
+
+/// Escapes LIKE wildcards in user-provided free text so `q` cannot widen the
+/// search into a full scan (`%`/`_`/`\` are the LIKE metacharacters).
+fn escape_ilike_pattern(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len() + 2);
+    for character in value.chars() {
+        if matches!(character, '%' | '_' | '\\') {
+            escaped.push('\\');
+        }
+        escaped.push(character);
+    }
+    escaped
+}
 
 impl PostgresCommerceOrderStore {
     pub async fn list_management_orders(
         &self,
         query: OrderManagementListQuery,
     ) -> Result<OrderManagementListPage, CommerceServiceError> {
-        let search = query.q.as_deref().map(|value| format!("%{value}%"));
+        let search = query
+            .q
+            .as_deref()
+            .map(|value| format!("%{}%", escape_ilike_pattern(value.trim())));
         let rows = sqlx::query(LIST_MANAGEMENT_ORDERS)
             .bind(&query.tenant_id)
             .bind(query.organization_id.as_deref())
@@ -115,10 +169,22 @@ impl PostgresCommerceOrderStore {
             .await
             .map_err(|error| store_error("failed to list management orders", error))?;
 
-        let total = rows
-            .first()
-            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
-            .unwrap_or(0);
+        let total = if rows.is_empty() {
+            sqlx::query_scalar::<_, i64>(COUNT_MANAGEMENT_ORDERS)
+                .bind(&query.tenant_id)
+                .bind(query.organization_id.as_deref())
+                .bind(query.status.as_deref())
+                .bind(search.as_deref())
+                .bind(query.created_from.as_deref())
+                .bind(query.created_to.as_deref())
+                .fetch_one(self.pool())
+                .await
+                .map_err(|error| store_error("failed to count management orders", error))?
+        } else {
+            rows.first()
+                .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+                .unwrap_or(0)
+        };
         let items = rows
             .iter()
             .map(map_management_summary_row)
@@ -784,9 +850,5 @@ fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceE
 }
 
 fn current_command_timestamp() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis().to_string())
-        .unwrap_or_else(|_| "0".to_owned())
+    crate::store_clock::now_canonical()
 }

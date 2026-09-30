@@ -2381,11 +2381,7 @@ fn recharge_payment_product(method: &str) -> Result<&'static str, CommerceServic
 }
 
 fn current_query_timestamp() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or(0);
-    format_unix_timestamp(seconds)
+    crate::store_clock::now_canonical()
 }
 
 fn format_unix_timestamp(seconds: i64) -> String {

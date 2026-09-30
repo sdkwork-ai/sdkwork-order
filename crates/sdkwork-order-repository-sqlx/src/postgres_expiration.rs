@@ -21,8 +21,15 @@ pub struct ExpiringOrderRecord {
 }
 
 /// Returns up to `limit` orders whose payment window has elapsed and that are
-/// still in an expirable state. Rows are locked (`FOR UPDATE SKIP LOCKED`) so
-/// concurrent scheduler instances never double-expire the same order.
+/// still in an expirable state.
+///
+/// The listing is a plain read: locks taken here through an autocommit pool
+/// query would be released the moment the statement completes, so mutual
+/// exclusion between concurrent scheduler replicas is enforced by
+/// [`expire_due_order`] instead — it re-locks the row inside its own
+/// transaction and re-checks the expirable-status predicate, making the
+/// transition idempotent (`Ok(false)` for a row another replica already
+/// expired).
 pub async fn list_due_expiring_orders(
     pool: &PgPool,
     limit: i64,
@@ -39,7 +46,6 @@ pub async fn list_due_expiring_orders(
           )
         ORDER BY expired_at, id
         LIMIT $1
-        FOR UPDATE SKIP LOCKED
         "#,
     )
     .bind(limit)
@@ -136,11 +142,7 @@ pub async fn expire_due_order(
 }
 
 fn current_command_timestamp() -> String {
-    let seconds = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0);
-    format!("{seconds}")
+    crate::store_clock::now_canonical()
 }
 
 fn optional_string_cell(row: &sqlx::postgres::PgRow, column: &str) -> Option<String> {

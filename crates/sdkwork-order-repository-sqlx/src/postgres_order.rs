@@ -1513,11 +1513,7 @@ fn checkout_line_title(row: &sqlx::postgres::PgRow) -> String {
 }
 
 fn current_command_timestamp() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or(0);
-    format!("{seconds}")
+    crate::store_clock::now_canonical()
 }
 
 fn empty_order_statistics() -> OrderOwnerStatistics {

@@ -362,15 +362,7 @@ async fn mark_owner_order_refund_status_postgres(
 }
 
 fn paid_at_now() -> String {
-    // Unix-seconds text matching `current_command_timestamp` used across the
-    // order store; order timestamp columns are TEXT and the settlement
-    // queries compare them lexicographically-consistently.
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or(0);
-    format!("{seconds}")
+    crate::store_clock::now_canonical()
 }
 
 fn required_paid_at(paid_at: &str) -> Result<&str, CommerceServiceError> {

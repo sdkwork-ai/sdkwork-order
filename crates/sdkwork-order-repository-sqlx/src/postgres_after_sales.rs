@@ -417,21 +417,35 @@ impl PostgresCommerceOrderStore {
         &self,
         command: ReviewAfterSalesRequestCommand,
     ) -> Result<AfterSalesRequestView, CommerceServiceError> {
-        let existing = self
-            .retrieve_management_after_sales_request(AfterSalesManagementDetailQuery {
-                after_sales_request_id: command.after_sales_request_id.clone(),
-                organization_id: command.organization_id.clone(),
-                tenant_id: command.tenant_id.clone(),
-            })
-            .await?
-            .ok_or_else(|| CommerceServiceError::not_found("after sales request was not found"))?;
-
-        let next_status = command.resolved_status();
-        validate_management_after_sales_status_transition(&existing.status, &next_status)?;
-
+        // The status transition must be decided against a locked row: two
+        // concurrent reviews (approve + reject) would otherwise both pass the
+        // application-level transition check and both apply, leaving the
+        // request in whichever state wrote last with duplicated events.
         let mut tx = self.pool().begin().await.map_err(|error| {
             store_error("failed to begin after sales review transaction", error)
         })?;
+        let locked_status = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT COALESCE(status, '')
+            FROM commerce_after_sales_request
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND id = CAST($4 AS TEXT)
+            FOR UPDATE
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(command.organization_id.as_deref())
+        .bind(&command.after_sales_request_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to lock after sales request", error))?
+        .ok_or_else(|| CommerceServiceError::not_found("after sales request was not found"))?;
+
+        let next_status = command.resolved_status();
+        validate_management_after_sales_status_transition(&locked_status, &next_status)?;
+
         let now = current_timestamp_string();
 
         sqlx::query(
@@ -448,6 +462,7 @@ impl PostgresCommerceOrderStore {
             WHERE tenant_id = CAST($9 AS TEXT)
               AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $11 IS NULL) OR (organization_id = '0' AND $11 IS NULL))
               AND id = CAST($12 AS TEXT)
+              AND status = $13
             "#,
         )
         .bind(&next_status)
@@ -462,9 +477,18 @@ impl PostgresCommerceOrderStore {
         .bind(command.organization_id.as_deref())
         .bind(command.organization_id.as_deref())
         .bind(&command.after_sales_request_id)
+        .bind(&locked_status)
         .execute(&mut *tx)
         .await
-        .map_err(|error| store_error("failed to review after sales request", error))?;
+        .map_err(|error| store_error("failed to review after sales request", error))?
+        .rows_affected()
+        .eq(1)
+        .then_some(())
+        .ok_or_else(|| {
+            CommerceServiceError::conflict(
+                "after sales request changed concurrently; review was not applied",
+            )
+        })?;
 
         insert_after_sales_event(
             &mut tx,
@@ -953,12 +977,7 @@ fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceE
 }
 
 fn current_timestamp_string() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0);
-    format!("{seconds}")
+    crate::store_clock::now_canonical()
 }
 
 fn optional_string_cell(row: &sqlx::postgres::PgRow, column: &str) -> Option<String> {

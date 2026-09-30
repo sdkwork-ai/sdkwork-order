@@ -17,6 +17,7 @@ pub mod postgres_shipment;
 pub mod read_model;
 pub mod recharge_platform_catalog;
 pub mod sql_store_error;
+mod store_clock;
 
 #[cfg(test)]
 mod membership_order_postgres_tests;
