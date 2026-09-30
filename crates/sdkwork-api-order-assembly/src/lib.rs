@@ -6,7 +6,20 @@ use sdkwork_web_bootstrap::WebModule;
 mod bootstrap;
 mod generated;
 
-pub use bootstrap::{assemble_api_router, ApiAssembly, ApiAssemblyContribution, assemble_api_router_with_pool, assemble_app_api_contribution, assemble_app_api_contribution_with_pool, assemble_backend_business_router, BusinessRouterAssembly, OrderAssemblyContract, web_module_with_pool};
+pub use bootstrap::{
+    assemble_api_router, assemble_api_router_with_pool, assemble_api_router_with_runtime,
+    assemble_app_api_contribution, assemble_app_api_contribution_with_pool,
+    assemble_backend_business_router, web_module_with_pool, ApiAssembly, ApiAssemblyContribution,
+    BusinessRouterAssembly, OrderAssemblyContract, OrderRuntimeWorkers,
+};
+
+/// Standalone entrypoint variant that also returns the background worker
+/// handles so the process can stop workers deterministically on shutdown.
+pub async fn assemble_api_router_with_runtime_from_env(
+) -> Result<(ApiAssembly, OrderRuntimeWorkers), String> {
+    let host = std::sync::Arc::new(sdkwork_order_service_host::OrderServiceHost::from_env().await?);
+    assemble_api_router_with_runtime(host).await
+}
 
 pub async fn assemble_api_router_from_env() -> Result<ApiAssembly, String> {
     let host = std::sync::Arc::new(sdkwork_order_service_host::OrderServiceHost::from_env().await?);
@@ -35,5 +48,7 @@ pub fn assembly_route_count() -> usize {
 /// (API_ASSEMBLY_SPEC §4.1.1): the complete HTTP surface — every route,
 /// manifest, and OpenAPI document of this owner — as one installable module.
 pub async fn web_module() -> Result<WebModule, String> {
-    Ok(WebModule::from_contribution(assemble_api_router_from_env().await?))
+    Ok(WebModule::from_contribution(
+        assemble_api_router_from_env().await?,
+    ))
 }

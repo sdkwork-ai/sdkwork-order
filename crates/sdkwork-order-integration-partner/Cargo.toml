@@ -11,6 +11,7 @@ description = "Order → Partner relation integration adapter: resolves the cust
 [lints]
 workspace = true
 [lib]
+name = "sdkwork_order_integration_partner"
 path = "src/lib.rs"
 
 [dependencies]

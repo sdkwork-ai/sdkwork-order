@@ -610,7 +610,9 @@ async fn insert_checkout_quote(
     )
     .bind(quote_id)
     .bind(&command.tenant_id)
-    .bind(normalize_organization_scope(command.organization_id.as_deref()))
+    .bind(normalize_organization_scope(
+        command.organization_id.as_deref(),
+    ))
     .bind(session_id)
     .bind(&command.request_no)
     .bind(original_amount)
@@ -716,7 +718,9 @@ async fn insert_checkout_quote_for_command(
     )
     .bind(quote_id)
     .bind(&command.tenant_id)
-    .bind(normalize_organization_scope(command.organization_id.as_deref()))
+    .bind(normalize_organization_scope(
+        command.organization_id.as_deref(),
+    ))
     .bind(&command.checkout_session_id)
     .bind(format!(
         "{}:{}",

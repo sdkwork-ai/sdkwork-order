@@ -6,19 +6,19 @@
 //! - Readiness probe reflects the real database health via `SELECT 1`.
 //! - Graceful shutdown drains in-flight requests on SIGINT / SIGTERM.
 
-use sdkwork_api_order_assembly::assemble_api_router_from_env;
+use sdkwork_api_order_assembly::assemble_api_router_with_runtime_from_env;
 use sdkwork_iam_web_adapter::{
     build_web_framework_builder, iam_web_request_context_resolver_from_env,
 };
-use sdkwork_web_bootstrap::{ApiModuleRegistry, ComposedApiAssembly, infra_public_path_prefixes};
+use sdkwork_web_bootstrap::{infra_public_path_prefixes, ApiModuleRegistry};
 use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let assembly = match assemble_api_router_from_env().await {
-        Ok(assembly) => assembly,
+    let (assembly, mut runtime_workers) = match assemble_api_router_with_runtime_from_env().await {
+        Ok(result) => result,
         Err(error) => {
             tracing::error!(target = "order.bootstrap", error = %error, "order API assembly bootstrap failed");
             return Err(error.into());
@@ -57,9 +57,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Err(error) = serve.await {
         tracing::error!(target = "order.runtime", error = %error, "axum serve failed");
+        runtime_workers.shutdown();
         return Err(error.into());
     }
 
+    // The HTTP plane has drained; stop the background worker loops
+    // deterministically instead of letting runtime teardown cancel them at an
+    // arbitrary await point. Passes are transactional and idempotent, so the
+    // next process run resumes cleanly.
+    runtime_workers.shutdown();
     tracing::info!(target = "order.runtime", "order api server stopped");
     Ok(())
 }

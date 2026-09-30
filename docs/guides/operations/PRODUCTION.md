@@ -27,6 +27,26 @@ Run multiple instances behind a load balancer. All instances share the same Post
 | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | Production | Public base URL for PSP notify: `{base}/app/v3/api/orders/payments/webhooks/{providerCode}` |
 | `RUST_LOG` | No | e.g. `info,order.bootstrap=info,order.runtime=info` |
 
+### Background workers (in-process)
+
+The gateway spawns two worker loops at bootstrap; both are multi-replica safe
+(claim transitions are transactional and idempotent):
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `SDKWORK_ORDER_EXPIRATION_SCHEDULER_ENABLED` | `true` | Set `0`/`false` to disable the order expiry sweep |
+| `SDKWORK_ORDER_EXPIRATION_SCHEDULER_INTERVAL_SECONDS` | `60` | Clamped 10–3600 |
+| `SDKWORK_ORDER_EXPIRATION_BATCH_SIZE` | `200` | Clamped 1–2000 |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED` | `false` | **Opt-in.** PSP query sweep for stuck attempts/refunds — enable in production after credentials are configured |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_INTERVAL_MILLIS` | `30000` | Clamped 5000–3600000 |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_BATCH_SIZE` | `50` | Clamped 1–1000 |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_MIN_AGE_SECONDS` | `60` | Keeps fresh attempts inside their webhook window |
+| `SDKWORK_ORDER_PAYMENT_COMPENSATION_TENANT_ID` / `_ORGANIZATION_ID` | unset | Optional scan scope narrowing |
+
+Worker loops stop deterministically during graceful shutdown (handles aborted
+after the HTTP plane drains; passes are transactional and idempotent, so the
+next run resumes cleanly).
+
 ## Payment Webhooks
 
 PSP notify URLs **must** target the **order gateway**, not `sdkwork-payment`:
@@ -35,7 +55,7 @@ PSP notify URLs **must** target the **order gateway**, not `sdkwork-payment`:
 POST {ORDER_PAYMENT_WEBHOOK_BASE_URL}/app/v3/api/orders/payments/webhooks/{providerCode}
 ```
 
-The legacy payment path `POST /app/v3/api/payments/webhooks/{providerCode}` returns **410 Gone**.
+The order-owned payment webhook is the only notify surface; the historical platform-level path `POST /app/v3/api/payments/webhooks/{providerCode}` is not mounted by this gateway (plain 404 from the standalone deployment). PSP notify URLs must always use the order gateway path above.
 
 Operator manual settlement replay:
 

@@ -1,8 +1,5 @@
 export * from './common';
-export type { AfterSalesItem } from './after-sales-item';
-export type { AfterSalesRequest } from './after-sales-request';
 export type { AfterSalesRequestResponse } from './after-sales-request-response';
-export type { AfterSalesReturnShipment } from './after-sales-return-shipment';
 export type { AfterSalesReturnShipmentResponse } from './after-sales-return-shipment-response';
 export type { CheckoutLineRequest } from './checkout-line-request';
 export type { CreateCheckoutSessionRequest } from './create-checkout-session-request';
@@ -20,8 +17,6 @@ export type { CreateAfterSalesRequestItem } from './create-after-sales-request-i
 export type { CreateAfterSalesReturnShipmentRequest } from './create-after-sales-return-shipment-request';
 export type { FieldError } from './field-error';
 export type { ProblemDetail } from './problem-detail';
-export type { ShopReadiness } from './shop-readiness';
-export type { ShopReadinessItem } from './shop-readiness-item';
 export type { UpdateAfterSalesRequest } from './update-after-sales-request';
 export type { CouponRedemptionCreateCommand } from './coupon-redemption-create-command';
 export type { CouponTokenBankBenefit } from './coupon-token-bank-benefit';
@@ -46,11 +41,7 @@ export type { OrderPaymentSuccessResponse } from './order-payment-success-respon
 export type { SdkWorkListResponse } from './sdk-work-list-response';
 export type { RefundRequestCreateCommand } from './refund-request-create-command';
 export type { WithdrawalRequestCreateCommand } from './withdrawal-request-create-command';
-export type { AccountValueRequestResponse } from './account-value-request-response';
-export type { TokenBankPlanResponse } from './token-bank-plan-response';
-export type { OrdersPaymentsWebhooksReceiveRequest } from './orders-payments-webhooks-receive-request';
 export type { AfterSalesRequestsCreateResponse201 } from './after-sales-requests-create-response201';
 export type { AfterSalesRequestsRetrieveResponse } from './after-sales-requests-retrieve-response';
 export type { AfterSalesRequestsUpdateResponse } from './after-sales-requests-update-response';
 export type { AfterSalesReturnShipmentsCreateResponse201 } from './after-sales-return-shipments-create-response201';
-export type { OrdersRefundsWebhooksReceiveRequest } from './orders-refunds-webhooks-receive-request';

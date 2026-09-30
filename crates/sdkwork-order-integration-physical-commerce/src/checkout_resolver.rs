@@ -325,10 +325,7 @@ fn non_blank(value: Option<&str>) -> Option<String> {
 /// fact, but the mode its currency rounds in is the registry's. Placing a point performs no
 /// conversion, so the mode leaves this amount unchanged today; naming one locally would still be
 /// the one place a bad `rounding_mode` token stopped being reported.
-fn sku_unit_price(
-    sku: &SkuRecord,
-    rounding: RoundingMode,
-) -> Result<String, CommerceServiceError> {
+fn sku_unit_price(sku: &SkuRecord, rounding: RoundingMode) -> Result<String, CommerceServiceError> {
     let scale = u8::try_from(sku.price_scale).map_err(|_| {
         CommerceServiceError::validation(format!(
             "physical SKU price scale {} is out of range",

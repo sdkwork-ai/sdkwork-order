@@ -4,11 +4,11 @@ import type { ApiRequestOptions, HttpClient } from '../http/client';
 import type { WithdrawalRequestCreateCommand } from '../types';
 
 
-export interface WithdrawalsRequestsCreateParams {
+export interface OrderWithdrawalsWithdrawalsRequestsCreateParams {
   idempotencyKey: string;
 }
 
-export class WithdrawalsRequestsApi {
+export class OrderWithdrawalsWithdrawalsRequestsApi {
   private client: HttpClient;
 
   constructor(client: HttpClient) {
@@ -17,7 +17,7 @@ export class WithdrawalsRequestsApi {
 
 
 /** Withdrawal requests create. */
-  async create(body: WithdrawalRequestCreateCommand, params: WithdrawalsRequestsCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+  async create(body: WithdrawalRequestCreateCommand, params: OrderWithdrawalsWithdrawalsRequestsCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
@@ -33,17 +33,26 @@ export class WithdrawalsRequestsApi {
   }
 }
 
-export class WithdrawalsApi {
-  public readonly requests: WithdrawalsRequestsApi;
+export class OrderWithdrawalsWithdrawalsApi {
+  public readonly requests: OrderWithdrawalsWithdrawalsRequestsApi;
 
   constructor(client: HttpClient) {
-    this.requests = new WithdrawalsRequestsApi(client);
+    this.requests = new OrderWithdrawalsWithdrawalsRequestsApi(client);
   }
 
 }
 
-export function createWithdrawalsApi(client: HttpClient): WithdrawalsApi {
-  return new WithdrawalsApi(client);
+export class OrderWithdrawalsApi {
+  public readonly withdrawals: OrderWithdrawalsWithdrawalsApi;
+
+  constructor(client: HttpClient) {
+    this.withdrawals = new OrderWithdrawalsWithdrawalsApi(client);
+  }
+
+}
+
+export function createOrderWithdrawalsApi(client: HttpClient): OrderWithdrawalsApi {
+  return new OrderWithdrawalsApi(client);
 }
 
 

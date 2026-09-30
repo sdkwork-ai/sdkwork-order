@@ -176,110 +176,110 @@ const HTTP_ROUTES: &[HttpRoute] = &[
     HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/shipments/{shipmentId}",
-        "shipments",
+        "orderShipments",
         "shipments.retrieve",
     ),
     HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/shipments/{shipmentId}/packages",
-        "shipments",
+        "orderShipments",
         "shipments.packages.list",
     ),
     HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/shipments/{shipmentId}/tracking_events",
-        "shipments",
+        "orderShipments",
         "shipments.trackingEvents.list",
     ),
     // === Recharges ===
     HttpRoute::public(
         HttpMethod::Get,
         "/app/v3/api/recharges/packages",
-        "recharges",
+        "orderRecharges",
         "recharges.packages.list",
     ),
     HttpRoute::public(
         HttpMethod::Get,
         "/app/v3/api/recharges/plans",
-        "recharges",
+        "orderRecharges",
         "recharges.plans.list",
     ),
     HttpRoute::public(
         HttpMethod::Get,
         "/app/v3/api/recharges/settings",
-        "recharges",
+        "orderRecharges",
         "recharges.settings.retrieve",
     ),
     HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/recharges/orders",
-        "recharges",
+        "orderRecharges",
         "recharges.orders.list",
     ),
     HttpRoute::dual_token(
         HttpMethod::Post,
         "/app/v3/api/recharges/orders",
-        "recharges",
+        "orderRecharges",
         "recharges.orders.create",
     )
     .with_idempotent(true),
     HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/recharges/orders/{orderId}",
-        "recharges",
+        "orderRecharges",
         "recharges.orders.retrieve",
     ),
     HttpRoute::dual_token(
         HttpMethod::Post,
         "/app/v3/api/recharges/orders/{orderId}/cancel",
-        "recharges",
+        "orderRecharges",
         "recharges.orders.cancel",
     )
     .with_idempotent(true),
     HttpRoute::dual_token(
         HttpMethod::Post,
         "/app/v3/api/orders/coupon_redemptions",
-        "orders",
+        "orderOrders",
         "orders.couponRedemptions.create",
     )
     .with_idempotent(true),
     HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/orders/refund_requests",
-        "orders",
+        "orderOrders",
         "orders.refundRequests.list",
     ),
     HttpRoute::dual_token(
         HttpMethod::Post,
         "/app/v3/api/orders/refund_requests",
-        "orders",
+        "orderOrders",
         "orders.refundRequests.create",
     )
     .with_idempotent(true),
     HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/orders/refund_requests/{refundRequestId}",
-        "orders",
+        "orderOrders",
         "orders.refundRequests.retrieve",
     ),
     HttpRoute::dual_token(
         HttpMethod::Post,
         "/app/v3/api/withdrawals/requests",
-        "withdrawals",
+        "orderWithdrawals",
         "withdrawals.requests.create",
     )
     .with_idempotent(true),
     HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/withdrawals/requests/{withdrawalRequestId}",
-        "withdrawals",
+        "orderWithdrawals",
         "withdrawals.requests.retrieve",
     ),
     // === Memberships ===
     HttpRoute::dual_token(
         HttpMethod::Post,
         "/app/v3/api/memberships/orders",
-        "memberships",
+        "orderMemberships",
         "memberships.orders.create",
     )
     .with_idempotent(true),

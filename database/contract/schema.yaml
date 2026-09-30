@@ -9,45 +9,72 @@ engines:
   - postgres
 table_prefix: commerce_
 tables:
-  - name: commerce_order
+  - name: commerce_account_value_package
     write_owner: sdkwork-order
     reference_only: false
-  - name: commerce_order_item
+  - name: commerce_after_sales_event
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_after_sales_request
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_after_sales_request_item
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_after_sales_return_shipment
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_checkout_line
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_checkout_quote
     write_owner: sdkwork-order
     reference_only: false
   - name: commerce_checkout_session
-    lifecycle_status: active
-    owner: sdkwork-order
-  - name: commerce_checkout_line
-    lifecycle_status: active
-    owner: sdkwork-order
-  - name: commerce_checkout_quote
-    lifecycle_status: active
-    owner: sdkwork-order
-  - name: commerce_fulfillment_order
-    lifecycle_status: active
-    owner: sdkwork-order
-  - name: commerce_order_amount_breakdown
-    write_owner: sdkwork-order
-    reference_only: false
-  - name: commerce_recharge_package
-    write_owner: sdkwork-order
-    reference_only: false
-  - name: commerce_exchange_rule
     write_owner: sdkwork-order
     reference_only: false
   - name: commerce_exchange_currency_rate
     write_owner: sdkwork-order
     reference_only: false
-  - name: commerce_account_value_package
+  - name: commerce_exchange_rule
     write_owner: sdkwork-order
     reference_only: false
-  - name: commerce_token_bank_plan
+  - name: commerce_fulfillment_order
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_order
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_order_amount_breakdown
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_order_cancellation
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_order_event
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_order_item
     write_owner: sdkwork-order
     reference_only: false
   - name: commerce_order_refund_request
     write_owner: sdkwork-order
     reference_only: false
   - name: commerce_order_withdrawal_request
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_recharge_package
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_shipment
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_shipment_package
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_shipment_tracking_event
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_token_bank_plan
     write_owner: sdkwork-order
     reference_only: false

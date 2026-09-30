@@ -11,6 +11,7 @@ description = "Order physical merchandise, shop, inventory, and fulfillment adap
 [lints]
 workspace = true
 [lib]
+name = "sdkwork_order_integration_physical_commerce"
 path = "src/lib.rs"
 
 [dependencies]

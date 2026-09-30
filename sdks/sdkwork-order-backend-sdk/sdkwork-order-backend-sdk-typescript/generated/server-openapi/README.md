@@ -72,8 +72,8 @@ const client = new SdkworkOrderBackendClient({
 // List order cancellation audit records
 const params = {
   status: 'status',
-  page: 2,
-  page_size: 3,
+  page: 'page',
+  page_size: 'page_size',
 };
 const result = await client.orderAdminOrders.orders.admin.cancellations.list(params);
 ```
@@ -86,8 +86,8 @@ const params = {
   status: 'status',
   after_sales_type: 'after_sales_type',
   order_id: 'order_id',
-  page: 4,
-  page_size: 5,
+  page: 'page',
+  page_size: 'page_size',
 };
 const result = await client.orderAdminAfterSales.afterSales.management.list(params);
 ```
@@ -100,8 +100,8 @@ const params = {
   status: 'status',
   order_id: 'order_id',
   fulfillment_id: 'fulfillment_id',
-  page: 4,
-  page_size: 5,
+  page: 'page',
+  page_size: 'page_size',
 };
 const result = await client.orderAdminShipments.shipments.list(params);
 ```
@@ -150,7 +150,7 @@ This SDK includes cross-platform publish scripts in `bin/`:
 - `bin/publish.sh`
 - `bin/publish.ps1`
 
-TypeScript check and publish commands use pnpm to materialize workspace dependency versions in a temporary tarball. They reject local-only dependency protocols before npm publication and do not rewrite the source `package.json`.
+TypeScript check and publish commands materialize workspace dependency versions in a temporary tarball with pnpm. They reject local-only dependency protocols before npm publication and do not rewrite the source `package.json`.
 
 ### Check
 

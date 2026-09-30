@@ -11,6 +11,7 @@ description = "Order → Membership fulfillment integration adapters."
 [lints]
 workspace = true
 [lib]
+name = "sdkwork_order_integration_membership"
 path = "src/lib.rs"
 
 [dependencies]

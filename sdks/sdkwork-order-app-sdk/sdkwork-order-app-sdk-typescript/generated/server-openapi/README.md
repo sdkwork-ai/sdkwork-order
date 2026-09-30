@@ -60,10 +60,9 @@ const client = new SdkworkAppClient({
 - `client.orderAfterSales` - order_after_sales API
 - `client.orderFulfillments` - order_fulfillments API
 - `client.orderShipments` - order_shipments API
-- `client.recharges` - recharges API
+- `client.orderRecharges` - order_recharges API
 - `client.orderMemberships` - order_memberships API
-- `client.orders` - orders API
-- `client.withdrawals` - withdrawals API
+- `client.orderWithdrawals` - order_withdrawals API
 
 ## Usage Examples
 
@@ -127,11 +126,11 @@ const shipmentId = '1';
 const result = await client.orderShipments.shipments.retrieve(shipmentId);
 ```
 
-### recharges
+### order_recharges
 
 ```typescript
 // Recharges settings retrieve.
-const result = await client.recharges.settings.retrieve();
+const result = await client.orderRecharges.recharges.settings.retrieve();
 ```
 
 ### order_memberships
@@ -155,24 +154,12 @@ const params = {
 const result = await client.orderMemberships.memberships.orders.create(body, params);
 ```
 
-### orders
-
-```typescript
-// Order refund requests list.
-const params = {
-  status: 'status',
-  page: 2,
-  page_size: 3,
-};
-const result = await client.orders.refundRequests.list(params);
-```
-
-### withdrawals
+### order_withdrawals
 
 ```typescript
 // Withdrawal requests retrieve.
 const withdrawalRequestId = '1';
-const result = await client.withdrawals.requests.retrieve(withdrawalRequestId);
+const result = await client.orderWithdrawals.withdrawals.requests.retrieve(withdrawalRequestId);
 ```
 
 ## Error Handling
@@ -202,7 +189,7 @@ This SDK includes cross-platform publish scripts in `bin/`:
 - `bin/publish.sh`
 - `bin/publish.ps1`
 
-TypeScript check and publish commands use pnpm to materialize workspace dependency versions in a temporary tarball. They reject local-only dependency protocols before npm publication and do not rewrite the source `package.json`.
+TypeScript check and publish commands materialize workspace dependency versions in a temporary tarball with pnpm. They reject local-only dependency protocols before npm publication and do not rewrite the source `package.json`.
 
 ### Check
 

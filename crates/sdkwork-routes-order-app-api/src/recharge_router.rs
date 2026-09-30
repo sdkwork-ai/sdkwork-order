@@ -44,7 +44,10 @@ use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
 use crate::owner_order_cancel::{cancel_owner_order_with_payments, compensate_failed_recharge_pay};
 use crate::owner_order_payment_enrich::enriched_postgres_owner_order_payments;
-use crate::subject::{app_runtime_subject_from_contexts, app_runtime_subject_from_contexts_or_default, AppRuntimeSubject};
+use crate::subject::{
+    app_runtime_subject_from_contexts, app_runtime_subject_from_contexts_or_default,
+    AppRuntimeSubject,
+};
 
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;

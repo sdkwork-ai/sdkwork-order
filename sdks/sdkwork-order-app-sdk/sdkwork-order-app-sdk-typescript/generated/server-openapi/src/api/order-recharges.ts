@@ -1,20 +1,16 @@
 import { appApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { RefundRequestCreateCommand, SdkWorkPageData } from '../types';
+import type { CommerceOperationCommand, RechargeOrderCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
 
-export interface OrdersRefundRequestsListParams {
+export interface OrderRechargesRechargesPlansListParams {
   status?: string;
   page?: number;
   pageSize?: number;
 }
 
-export interface OrdersRefundRequestsCreateParams {
-  idempotencyKey: string;
-}
-
-export class OrdersRefundRequestsApi {
+export class OrderRechargesRechargesPlansApi {
   private client: HttpClient;
 
   constructor(client: HttpClient) {
@@ -22,44 +18,142 @@ export class OrdersRefundRequestsApi {
   }
 
 
-/** Order refund requests list. */
-  async list(params?: OrdersRefundRequestsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
+/** Token Bank plans list. */
+  async list(params?: OrderRechargesRechargesPlansListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/refund_requests`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/plans`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, skipAuth: true, sdkworkUnwrapKind: 'page' });
+  }
+}
+
+export interface OrderRechargesRechargesOrdersListParams {
+  subject?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface OrderRechargesRechargesOrdersCreateParams {
+  idempotencyKey: string;
+}
+
+export interface OrderRechargesRechargesOrdersCancelParams {
+  idempotencyKey: string;
+}
+
+export class OrderRechargesRechargesOrdersApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
   }
 
-/** Order refund requests create. */
-  async create(body: RefundRequestCreateCommand, params: OrdersRefundRequestsCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+
+/** Recharges orders list. */
+  async list(params?: OrderRechargesRechargesOrdersListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
+    const query = buildQueryString([
+      { name: 'subject', value: params?.subject, style: 'form', explode: true, allowReserved: false },
+      { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/orders`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+  }
+
+/** Recharges orders create. */
+  async create(body: RechargeOrderCreateCommand, params: OrderRechargesRechargesOrdersCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
+    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/orders`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 
-/** Order refund requests retrieve. */
-  async retrieve(refundRequestId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+/** Recharges orders retrieve. */
+  async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+  }
+
+/** Recharges orders cancel. */
+  async cancel(orderId: string, params: OrderRechargesRechargesOrdersCancelParams, body?: CommerceOperationCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
   }
 }
 
-export class OrdersApi {
-  public readonly refundRequests: OrdersRefundRequestsApi;
+export class OrderRechargesRechargesSettingsApi {
+  private client: HttpClient;
 
   constructor(client: HttpClient) {
-    this.refundRequests = new OrdersRefundRequestsApi(client);
+    this.client = client;
+  }
+
+
+/** Recharges settings retrieve. */
+  async retrieve(requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/settings`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, skipAuth: true, sdkworkUnwrapKind: 'item' });
+  }
+}
+
+export interface OrderRechargesRechargesPackagesListParams {
+  page?: number;
+  pageSize?: number;
+}
+
+export class OrderRechargesRechargesPackagesApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Recharges packages list. */
+  async list(params?: OrderRechargesRechargesPackagesListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
+    const query = buildQueryString([
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/packages`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, skipAuth: true, sdkworkUnwrapKind: 'page' });
+  }
+}
+
+export class OrderRechargesRechargesApi {
+  public readonly packages: OrderRechargesRechargesPackagesApi;
+  public readonly settings: OrderRechargesRechargesSettingsApi;
+  public readonly orders: OrderRechargesRechargesOrdersApi;
+  public readonly plans: OrderRechargesRechargesPlansApi;
+
+  constructor(client: HttpClient) {
+    this.packages = new OrderRechargesRechargesPackagesApi(client);
+    this.settings = new OrderRechargesRechargesSettingsApi(client);
+    this.orders = new OrderRechargesRechargesOrdersApi(client);
+    this.plans = new OrderRechargesRechargesPlansApi(client);
   }
 
 }
 
-export function createOrdersApi(client: HttpClient): OrdersApi {
-  return new OrdersApi(client);
+export class OrderRechargesApi {
+  public readonly recharges: OrderRechargesRechargesApi;
+
+  constructor(client: HttpClient) {
+    this.recharges = new OrderRechargesRechargesApi(client);
+  }
+
+}
+
+export function createOrderRechargesApi(client: HttpClient): OrderRechargesApi {
+  return new OrderRechargesApi(client);
 }
 
 function appendQueryString(path: string, rawQueryString: string): string {

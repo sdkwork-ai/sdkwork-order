@@ -90,29 +90,46 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn database_module_exposes_membership_order_postgres_upgrade() {
+    async fn database_module_exposes_order_postgres_migrations() {
         let module = database_module().expect("load order database module");
         let migrations = module
             .list_migrations(DatabaseEngine::Postgres)
             .await
             .expect("list order postgres migrations");
-        let migration = migrations
+        assert!(
+            migrations.len() >= 10,
+            "the order migration set (0004-0013) must be discoverable"
+        );
+        let lifecycle = migrations
             .iter()
-            .find(|migration| migration.version == "0002")
-            .expect("membership order postgres migration");
-
-        assert_eq!(migration.name, "membership_order_purchase_intent");
-        let sql = std::fs::read_to_string(&migration.up_path)
-            .expect("read membership order postgres migration");
+            .find(|migration| migration.version == "0004")
+            .expect("order lifecycle tables migration");
+        let sql =
+            std::fs::read_to_string(&lifecycle.up_path).expect("read order lifecycle migration");
         for required_schema_object in [
-            "request_fingerprint",
-            "purchase_intent_key",
-            "membership_action",
-            "uk_membership_order_active_purchase_intent",
+            "commerce_order_event",
+            "commerce_order_cancellation",
+            "idx_order_event_order",
         ] {
             assert!(
                 sql.contains(required_schema_object),
-                "migration must contain {required_schema_object}"
+                "lifecycle migration must contain {required_schema_object}"
+            );
+        }
+        let scale_indexes = migrations
+            .iter()
+            .find(|migration| migration.version == "0013")
+            .expect("order scale index migration");
+        let scale_sql = std::fs::read_to_string(&scale_indexes.up_path)
+            .expect("read order scale index migration");
+        for required_index in [
+            "idx_order_expiration_due",
+            "idx_order_management_list",
+            "idx_order_refund_request_original",
+        ] {
+            assert!(
+                scale_sql.contains(required_index),
+                "scale index migration must contain {required_index}"
             );
         }
     }

@@ -121,7 +121,9 @@ impl PostgresCommerceOrderStore {
             )
             .bind(&item_id)
             .bind(&command.tenant_id)
-            .bind(normalize_organization_scope(command.organization_id.as_deref()))
+            .bind(normalize_organization_scope(
+                command.organization_id.as_deref(),
+            ))
             .bind(&request_id)
             .bind(&item.order_item_id)
             .bind(item.quantity)

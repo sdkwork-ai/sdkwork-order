@@ -62,7 +62,6 @@ fn default_config() -> PaymentCompensationPassConfig {
         organization_id: None,
         batch_size: 100,
         min_age_seconds: 60,
-        max_age_seconds: 24 * 60 * 60,
     }
 }
 
@@ -366,7 +365,9 @@ async fn compensation_pass_respects_scan_window_and_terminal_states() {
     )
     .await
     .expect("seed fresh attempt");
-    // Aged attempt (older than max_age) must never be claimed again.
+    // Aged attempt (well past the webhook window) must be claimed: the
+    // compensation sweep is the at-least-once safety net and the claim set is
+    // bounded by the attempt's own expiry, not by age.
     insert_order(&pool, "order-comp-aged", "now() - interval '25 hours'")
         .await
         .expect("seed aged order");
@@ -408,8 +409,11 @@ async fn compensation_pass_respects_scan_window_and_terminal_states() {
     )
     .await
     .expect("compensation pass must run");
-    assert_eq!(0, summary.claimed_payment_attempts);
-    assert_eq!(0, summary.payment_events_applied);
+    // Fresh attempt: inside the webhook window, never claimed. Aged attempt:
+    // claimed exactly once (idempotent replay makes repeats safe). Terminal
+    // attempt: never claimed. PSP query outcomes are provider-dependent, so
+    // the pass contract asserts on claims and error-free execution.
+    assert_eq!(1, summary.claimed_payment_attempts);
     assert_eq!(0, summary.claimed_refunds);
     assert_eq!(0, summary.errors);
 }

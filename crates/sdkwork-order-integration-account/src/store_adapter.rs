@@ -1,6 +1,4 @@
-use sdkwork_account_repository_sqlx::{
-    hold_request_hash, PostgresCommerceAccountStore,
-};
+use sdkwork_account_repository_sqlx::{hold_request_hash, PostgresCommerceAccountStore};
 use sdkwork_account_service::{
     AppendLedgerEntryCommand, CreateAccountHoldCommand, HoldMutationOutcome,
     ReleaseAccountHoldCommand, SettleAccountHoldCommand,

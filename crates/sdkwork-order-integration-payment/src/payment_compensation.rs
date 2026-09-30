@@ -66,8 +66,6 @@ pub struct PaymentCompensationPassConfig {
     /// Attempts younger than this are never claimed (fresh payments still
     /// have their webhook window).
     pub min_age_seconds: i64,
-    /// Attempts older than this are never claimed (bound PSP query load).
-    pub max_age_seconds: i64,
 }
 
 impl Default for PaymentCompensationPassConfig {
@@ -77,7 +75,6 @@ impl Default for PaymentCompensationPassConfig {
             organization_id: None,
             batch_size: 50,
             min_age_seconds: 60,
-            max_age_seconds: 24 * 60 * 60,
         }
     }
 }
@@ -151,7 +148,6 @@ pub async fn run_payment_compensation_pass_with_registries(
         config.batch_size,
         now_seconds,
         config.min_age_seconds,
-        config.max_age_seconds,
     )
     .await?;
     summary.claimed_payment_attempts = attempts.len();
@@ -200,7 +196,6 @@ pub async fn run_payment_compensation_pass_with_registries(
         config.batch_size,
         now_seconds,
         config.min_age_seconds,
-        config.max_age_seconds,
     )
     .await?;
     summary.claimed_refunds = refunds.len();

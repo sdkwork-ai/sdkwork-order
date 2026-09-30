@@ -35,7 +35,11 @@ pub async fn physical_commerce_ports_from_env(
     let inventory_pool = dependency_pool("INVENTORY").await?;
 
     Ok(PhysicalCommercePorts {
-        checkout_resolver: Arc::new(PhysicalCheckoutAdapter::new(merchandise_pool, shop_pool, ids)),
+        checkout_resolver: Arc::new(PhysicalCheckoutAdapter::new(
+            merchandise_pool,
+            shop_pool,
+            ids,
+        )),
         inventory: Arc::new(PhysicalInventoryAdapter::new(inventory_pool.clone())),
         fulfillment: Arc::new(PhysicalFulfillmentAdapter::new(
             inventory_pool,

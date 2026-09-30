@@ -85,49 +85,48 @@ pub(crate) async fn consume_order_inventory(
         panic!("physical inventory consume requires a PostgreSQL pool");
     };
     let mut tx = pool
-            .begin()
-            .await
-            .map_err(store_error("begin inventory consume"))?;
-        let rows = sqlx::query(
+        .begin()
+        .await
+        .map_err(store_error("begin inventory consume"))?;
+    let rows = sqlx::query(
             "SELECT id, tenant_id, organization_id, sku_id, warehouse_id, fulfillment_node_id, quantity, status FROM commerce_inventory_reservation WHERE tenant_id = $1 AND order_id = $2 ORDER BY id FOR UPDATE",
         )
         .bind(tenant_id).bind(order_id).fetch_all(&mut *tx).await
         .map_err(store_error("load inventory reservations for consume"))?;
-        if rows.is_empty() {
-            return Err(CommerceServiceError::invalid_state(
-                "physical order has no inventory reservation",
-            ));
-        }
-        let replayed = rows
-            .iter()
-            .all(|row| text_postgres(row, "status").eq_ignore_ascii_case("consumed"));
-        if !replayed {
-            for row in &rows {
-                let status = text_postgres(row, "status");
-                if status.eq_ignore_ascii_case("consumed") {
-                    continue;
-                }
-                if !status.eq_ignore_ascii_case("reserved") {
-                    return Err(CommerceServiceError::invalid_state(
-                        "inventory reservation cannot be consumed",
-                    ));
-                }
-                consume_stock_postgres(&mut tx, row).await?;
-                sqlx::query("UPDATE commerce_inventory_reservation SET status = 'consumed', consumed_quantity = quantity, consumed_at = $1, updated_at = $2, idempotency_key = $3 WHERE id = $4 AND status = 'reserved'")
+    if rows.is_empty() {
+        return Err(CommerceServiceError::invalid_state(
+            "physical order has no inventory reservation",
+        ));
+    }
+    let replayed = rows
+        .iter()
+        .all(|row| text_postgres(row, "status").eq_ignore_ascii_case("consumed"));
+    if !replayed {
+        for row in &rows {
+            let status = text_postgres(row, "status");
+            if status.eq_ignore_ascii_case("consumed") {
+                continue;
+            }
+            if !status.eq_ignore_ascii_case("reserved") {
+                return Err(CommerceServiceError::invalid_state(
+                    "inventory reservation cannot be consumed",
+                ));
+            }
+            consume_stock_postgres(&mut tx, row).await?;
+            sqlx::query("UPDATE commerce_inventory_reservation SET status = 'consumed', consumed_quantity = quantity, consumed_at = $1, updated_at = $2, idempotency_key = $3 WHERE id = $4 AND status = 'reserved'")
                     .bind(now_string()).bind(now_string()).bind(idempotency_key)
                     .bind(text_postgres(row, "id"))
                     .execute(&mut *tx).await.map_err(store_error("consume inventory reservation"))?;
-            }
         }
-        tx.commit()
-            .await
-            .map_err(store_error("commit inventory consume"))?;
-        Ok(PhysicalInventoryMutationOutcome {
-            accepted: true,
-            replayed,
-        })
+    }
+    tx.commit()
+        .await
+        .map_err(store_error("commit inventory consume"))?;
+    Ok(PhysicalInventoryMutationOutcome {
+        accepted: true,
+        replayed,
+    })
 }
-
 
 async fn reserve_postgres(
     pool: &sqlx::PgPool,
@@ -184,7 +183,6 @@ async fn reserve_postgres(
         replayed: false,
     })
 }
-
 
 async fn release_postgres(
     pool: &sqlx::PgPool,
@@ -365,7 +363,6 @@ fn validate_reserve_request(
     Ok(())
 }
 
-
 async fn validate_reservation_replay_postgres(
     tx: &mut Transaction<'_, Postgres>,
     request: &ReservePhysicalOrderInventoryRequest,
@@ -380,7 +377,6 @@ async fn validate_reservation_replay_postgres(
     }
     Ok(())
 }
-
 
 async fn insert_reservation_postgres(
     tx: &mut Transaction<'_, Postgres>,
@@ -460,7 +456,6 @@ async fn mutate_stock_postgres(
 fn reservation_id(order_id: &str, sku_id: &str) -> String {
     format!("inventory-reservation-{order_id}-{sku_id}")
 }
-
 
 fn reservation_replay_matches_postgres(
     rows: &[sqlx::postgres::PgRow],

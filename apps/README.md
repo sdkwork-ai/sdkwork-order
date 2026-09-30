@@ -15,6 +15,8 @@ Runnable application roots live under `apps/<application-root>/`.
 | Directory | Surface role | Runnable | Purpose | Entry |
 | --- | --- | --- | --- | --- |
 | sdkwork-order-pc | pc | yes | SDKWork Order PC pc application root. | `sdkwork-order-pc/` |
+| sdkwork-order-common | composed services | no (library) | Composed order service facade shared by PC/H5 apps (UI -> service -> SDK). | `sdkwork-order-common/` |
+| sdkwork-order-h5 | h5 | yes | Mobile H5 surfaces (subscription, withdrawal wallet). | `sdkwork-order-h5/` |
 
 ## Allowed Content
 

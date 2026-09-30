@@ -7,14 +7,15 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{OrderRefundBounds, PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
+use sdkwork_order_repository_sqlx::{
+    OrderRefundBounds, PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
+};
 use sdkwork_order_service::{
-    AccountValueAssetCode,
-    CreateOrderRefundRequestCommand,
-    CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
-    OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
-    OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
-    OrderManagementListPage, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerSummary,
+    AccountValueAssetCode, CancelManagementOrderCommand, CloseManagementOrderCommand,
+    CreateOrderRefundRequestCommand, OrderCancellationListQuery, OrderCancellationPage,
+    OrderCancellationView, OrderManagementDetailQuery, OrderManagementEventListQuery,
+    OrderManagementEventPage, OrderManagementEventView, OrderManagementListPage,
+    OrderManagementListQuery, OrderOwnerDetail, OrderOwnerSummary,
     PhysicalInventoryReservationPort,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
@@ -23,9 +24,9 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::api_response::{
-    success_created_item,
     conflict as api_conflict, map_service_error, not_found as api_not_found,
-    offset_list_page_params_from_query, success_command, success_item, success_items, validation,
+    offset_list_page_params_from_query, success_command, success_created_item, success_item,
+    success_items, validation,
 };
 use crate::backend_acl::require_backend_operator;
 use crate::backend_command_headers::resolve_required_backend_write_command_headers;
@@ -241,7 +242,8 @@ impl BackendManagementOrderStore {
         query: OrderManagementListQuery,
     ) -> Result<OrderManagementListPage, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.list_management_orders(query).await,        }
+            Self::Postgres(store) => store.list_management_orders(query).await,
+        }
     }
 
     async fn retrieve_management_order(
@@ -249,7 +251,8 @@ impl BackendManagementOrderStore {
         query: OrderManagementDetailQuery,
     ) -> Result<Option<OrderOwnerDetail>, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.retrieve_management_order(query).await,        }
+            Self::Postgres(store) => store.retrieve_management_order(query).await,
+        }
     }
 
     async fn load_order_refund_bounds(
@@ -268,13 +271,13 @@ impl BackendManagementOrderStore {
         }
     }
 
-
     async fn list_management_order_events(
         &self,
         query: OrderManagementEventListQuery,
     ) -> Result<OrderManagementEventPage, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.list_management_order_events(query).await,        }
+            Self::Postgres(store) => store.list_management_order_events(query).await,
+        }
     }
 
     async fn list_order_cancellations(
@@ -282,7 +285,8 @@ impl BackendManagementOrderStore {
         query: OrderCancellationListQuery,
     ) -> Result<OrderCancellationPage, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.list_order_cancellations(query).await,        }
+            Self::Postgres(store) => store.list_order_cancellations(query).await,
+        }
     }
 }
 
@@ -450,10 +454,9 @@ async fn close_order(
     }
 }
 
-
-
 fn validate_admin_refund_amount(value: &str, field_name: &str) -> Result<CommerceMoney, String> {
-    let cents = admin_money_cents(value).map_err(|_| format!("{field_name} must be a decimal amount"))?;
+    let cents =
+        admin_money_cents(value).map_err(|_| format!("{field_name} must be a decimal amount"))?;
     if cents <= 0 {
         return Err(format!("{field_name} must be greater than zero"));
     }
@@ -538,19 +541,27 @@ async fn create_refund_request(
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
-    let currency_code = match validate_admin_currency_code(Some(body.currency_code.as_deref().unwrap_or("CNY"))) {
-        Ok(value) => value,
-        Err(message) => return validation(ctx, message),
-    };
-    let target_asset = match AccountValueAssetCode::parse(body.target_asset.as_deref().unwrap_or("token_bank")) {
-        Ok(value) => value,
-        Err(error) => return validation(ctx, error.message()),
-    };
-    let owner_user_id =
-        match resolve_management_order_owner_user_id(&state.orders, &subject.tenant_id, subject.organization_id.as_deref(), &order_id).await {
-            Ok(owner) => owner,
-            Err(error) => return map_service_error(ctx, error),
+    let currency_code =
+        match validate_admin_currency_code(Some(body.currency_code.as_deref().unwrap_or("CNY"))) {
+            Ok(value) => value,
+            Err(message) => return validation(ctx, message),
         };
+    let target_asset =
+        match AccountValueAssetCode::parse(body.target_asset.as_deref().unwrap_or("token_bank")) {
+            Ok(value) => value,
+            Err(error) => return validation(ctx, error.message()),
+        };
+    let owner_user_id = match resolve_management_order_owner_user_id(
+        &state.orders,
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &order_id,
+    )
+    .await
+    {
+        Ok(owner) => owner,
+        Err(error) => return map_service_error(ctx, error),
+    };
     // The refund request id is derived from the idempotency key so the same
     // admin action always resolves to the same request (duplicate-safe).
     let refund_request_id = format!(
@@ -678,16 +689,16 @@ fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {
         pay_time: value.pay_time,
         expire_time: value.expire_time,
         payment_method: value.payment_method,
-        partner_id: value.partner.as_ref().map(|partner| partner.partner_id.clone()),
+        partner_id: value
+            .partner
+            .as_ref()
+            .map(|partner| partner.partner_id.clone()),
         partner_name: value.partner.as_ref().map(|partner| partner.name.clone()),
         partner_level_no: value
             .partner
             .as_ref()
             .map(|partner| partner.level_no.clone()),
-        partner_status: value
-            .partner
-            .as_ref()
-            .map(|partner| partner.status.clone()),
+        partner_status: value.partner.as_ref().map(|partner| partner.status.clone()),
     }
 }
 

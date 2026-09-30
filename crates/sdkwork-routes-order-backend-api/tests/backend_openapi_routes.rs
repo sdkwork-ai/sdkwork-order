@@ -2,6 +2,8 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
+use sdkwork_database_config::{DatabaseConfig, DatabaseEngine};
+use sdkwork_database_sqlx::{DatabasePool, PoolContext};
 use sdkwork_iam_context_service::{AuthLevel, DeploymentMode, Environment, IamAppContext};
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_postgres_pool_from_env;
 use sdkwork_order_service::{
@@ -13,8 +15,6 @@ use sdkwork_order_service::{
     PointsRechargeCreditRequest, UnavailablePhysicalInventoryReservationPort,
 };
 use sdkwork_order_service_host::OrderServiceHost;
-use sdkwork_database_config::{DatabaseConfig, DatabaseEngine};
-use sdkwork_database_sqlx::{DatabasePool, PoolContext};
 use sdkwork_routes_order_backend_api::{
     backend_commerce_admin_router_with_postgres_pool,
     backend_order_admin_router_with_postgres_pool, openapi_contract::mount_backend_openapi,

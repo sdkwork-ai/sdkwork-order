@@ -4,9 +4,9 @@ repository-kind: application
 SDKWork commerce **order** capability building-block repository (domain `commerce`).
 
 - Standards: `../sdkwork-specs/README.md`
-- Composition consumer: `../sdkwork-cloudrouter/vendor/sdkwork-commerce (deleted)` (archived transitional platform snapshot)
+- Federated composition consumer: `@sdkwork/cloudrouter-app-sdk/domains` / `@sdkwork/cloudrouter-backend-sdk/domains` (federated domain surfaces)
 - Domain service: `crates/sdkwork-order-service/`
-- Repository SQL: `crates/sdkwork-commerce (deleted)-order-repository-sqlx/`
+- Repository SQL: `crates/sdkwork-order-repository-sqlx/`
 - HTTP API server: `crates/sdkwork-api-order-standalone-gateway/`
 
 ## Quick start

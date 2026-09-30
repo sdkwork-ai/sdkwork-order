@@ -151,7 +151,7 @@ withdrawal request
 - Repository implementations target PostgreSQL only on the server.
 - List/search paths must use SQL-level pagination.
 
-Existing order-owned or order-managed tables include `commerce_order`, `commerce_order_item`, `commerce_order_amount_breakdown`, `commerce_order_event`, `commerce_order_cancellation`, fulfillment, shipment, after-sales, and idempotency tables.
+The authoritative table inventory (23 tables) is `database/contract/table-registry.json` + `database/contract/schema.yaml`: `commerce_order`, `commerce_order_item`, `commerce_order_amount_breakdown`, `commerce_order_event`, `commerce_order_cancellation`, checkout session/line/quote, `commerce_fulfillment_order`, recharge/exchange catalogs, account-value package/plan, refund/withdrawal requests, after-sales request/item/event/return-shipment, shipment/package/tracking-event, and `commerce_inventory_reservation`. There are no idempotency tables — command idempotency is enforced by partial unique indexes on `commerce_order`, `commerce_checkout_session`, and `commerce_recharge_package`. All order-domain timestamp columns store the canonical RFC 3339 UTC format (millisecond precision, `sdkwork_order_service::clock`).
 
 Account value extension tables:
 
@@ -184,7 +184,7 @@ A successful payment that arrives after an Order is terminal does not reopen or 
 
 ### 6.1 Payment compensation worker (webhook-failure safety net)
 
-A lost provider notification is recovered by the in-process compensation worker (`sdkwork-order-service-host::spawn_payment_compensation_worker`, spawned by the standalone gateway; opt-in via `SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED=1`, default off). Every tick (default 30 s) it claims `commerce_payment_attempt` rows stuck in `pending`/`processing` and `commerce_refund` rows stuck in `submitted`/`processing` (`FOR UPDATE SKIP LOCKED` claim, scan window `min_age` 60 s to `max_age` 24 h), queries the PSP through the same account-scoped registry as the webhook path (`query_provider_payment_intent` / `query_provider_refund`), and re-enters **the same notify processing framework** with a synthetic event:
+A lost provider notification is recovered by the in-process compensation worker (`sdkwork-order-service-host::spawn_payment_compensation_worker`, spawned by the standalone gateway; opt-in via `SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED=1`, default off). Every tick (default 30 s) it claims `commerce_payment_attempt` rows stuck in `pending`/`processing` and `commerce_refund` rows stuck in `submitted`/`processing` (`FOR UPDATE SKIP LOCKED` claim, freshness window `min_age` default 60 s; the claim set is bounded by the attempt's own `expires_at`), queries the PSP through the same account-scoped registry as the webhook path (`query_provider_payment_intent` / `query_provider_refund`), and re-enters **the same notify processing framework** with a synthetic event:
 
 ```text
 query:{provider}:{out_trade_no}:{mapped_status}        (payment)
@@ -220,8 +220,13 @@ List/search endpoints reject invalid `page` or `page_size` with HTTP 400 (`Probl
 apps/sdkwork-order-pc/
   packages/sdkwork-order-pc-core/
   packages/sdkwork-order-pc-shell/
+  packages/sdkwork-order-pc-checkout/
   packages/sdkwork-order-pc-order/
+  packages/sdkwork-order-pc-recharge/
+  packages/sdkwork-order-pc-subscription/
+  packages/sdkwork-order-pc-admin-core/
   packages/sdkwork-order-pc-admin-orders/
+  packages/sdkwork-order-pc-admin-trade/
 ```
 
 Wallet recharge, refund, and withdrawal UI surfaces must delegate to order SDK resources or host navigation ports. They must not call payment or account mutation APIs directly.
@@ -241,7 +246,6 @@ Wallet recharge, refund, and withdrawal UI surfaces must delegate to order SDK r
 | `SDKWORK_ORDER_PAYMENT_COMPENSATION_BATCH_SIZE` | Max attempts + refunds claimed per pass | `50` (clamped 1..1000) |
 | `SDKWORK_ORDER_PAYMENT_COMPENSATION_INTERVAL_MILLIS` | Worker tick interval | `30000` (clamped 5000..3600000) |
 | `SDKWORK_ORDER_PAYMENT_COMPENSATION_MIN_AGE_SECONDS` | Attempts younger than this are not claimed | `60` |
-| `SDKWORK_ORDER_PAYMENT_COMPENSATION_MAX_AGE_SECONDS` | Attempts older than this are never claimed (bounds PSP query load) | `86400` |
 | `SDKWORK_DATABASE_TEST_POSTGRES_URL` | PostgreSQL URL for repository parity tests | unset |
 | `RUST_LOG` | Tracing filter (`order.bootstrap`, `order.runtime`, `order.readiness`, `order.security`) | `info` |
 

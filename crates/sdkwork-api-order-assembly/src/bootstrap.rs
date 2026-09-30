@@ -64,8 +64,59 @@ impl OrderAssemblyContract {
     }
 }
 
+/// Owns the in-process background workers (expiration scheduler, payment
+/// compensation worker) so the standalone gateway can stop them during
+/// graceful shutdown instead of letting the runtime drop cancel them at an
+/// arbitrary await point.
+#[derive(Default)]
+pub struct OrderRuntimeWorkers {
+    handles: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl OrderRuntimeWorkers {
+    /// Aborts every worker loop. Safe to call multiple times; each pass is
+    /// transactional in the database and PSP interactions are idempotent,
+    /// so an abort mid-pass is recovered by the next process run.
+    pub fn shutdown(&mut self) {
+        for handle in self.handles.drain(..) {
+            handle.abort();
+        }
+    }
+}
+
 pub async fn assemble_api_router(host: Arc<OrderServiceHost>) -> Result<ApiAssembly, String> {
     start_runtime_workers(&host);
+    let router = Router::new()
+        .merge(sdkwork_routes_order_app_api::gateway_mount(host.clone()).await)
+        .merge(sdkwork_routes_order_backend_api::gateway_mount(host.clone()).await);
+    let mut routes = Vec::new();
+    routes.extend_from_slice(sdkwork_routes_order_app_api::gateway_route_manifest().routes());
+    routes.extend_from_slice(sdkwork_routes_order_backend_api::gateway_route_manifest().routes());
+    ApiAssemblyContribution::from_manifest(
+        "sdkwork-order",
+        "SDKWork Order API",
+        router,
+        HttpRouteManifest::from_owned_routes(routes),
+        Vec::new(),
+        Arc::new(OrderReadiness {
+            pool: host.database_pool().clone(),
+        }),
+    )
+}
+
+/// Same as [`assemble_api_router`] but also hands back the background worker
+/// handles for lifecycle-controlled deployments (the standalone gateway).
+pub async fn assemble_api_router_with_runtime(
+    host: Arc<OrderServiceHost>,
+) -> Result<(ApiAssembly, OrderRuntimeWorkers), String> {
+    let workers = start_runtime_workers(&host);
+    let assembly = assemble_api_router_without_workers(host).await?;
+    Ok((assembly, workers))
+}
+
+async fn assemble_api_router_without_workers(
+    host: Arc<OrderServiceHost>,
+) -> Result<ApiAssembly, String> {
     let router = Router::new()
         .merge(sdkwork_routes_order_app_api::gateway_mount(host.clone()).await)
         .merge(sdkwork_routes_order_backend_api::gateway_mount(host.clone()).await);
@@ -112,9 +163,18 @@ pub async fn assemble_app_api_contribution_with_pool(
     assemble_app_api_contribution_with_host(host)
 }
 
-fn start_runtime_workers(host: &Arc<OrderServiceHost>) {
-    sdkwork_order_service_host::spawn_order_expiration_scheduler(host.clone());
-    sdkwork_order_service_host::spawn_payment_compensation_worker(host.clone());
+fn start_runtime_workers(host: &Arc<OrderServiceHost>) -> OrderRuntimeWorkers {
+    let mut workers = OrderRuntimeWorkers::default();
+    if let Some(handle) = sdkwork_order_service_host::spawn_order_expiration_scheduler(host.clone())
+    {
+        workers.handles.push(handle);
+    }
+    if let Some(handle) =
+        sdkwork_order_service_host::spawn_payment_compensation_worker(host.clone())
+    {
+        workers.handles.push(handle);
+    }
+    workers
 }
 
 fn assemble_app_api_contribution_with_host(
@@ -137,5 +197,7 @@ fn assemble_app_api_contribution_with_host(
 /// Same as [`web_module`] but composed on a process-shared database pool
 /// (platform gateways, API_ASSEMBLY_SPEC §4.1.1).
 pub async fn web_module_with_pool(pool: DatabasePool) -> Result<WebModule, String> {
-    Ok(WebModule::from_contribution(assemble_api_router_with_pool(pool).await?))
+    Ok(WebModule::from_contribution(
+        assemble_api_router_with_pool(pool).await?,
+    ))
 }

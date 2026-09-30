@@ -11,6 +11,7 @@ description = "Order to Payment executor integration adapters."
 [lints]
 workspace = true
 [lib]
+name = "sdkwork_order_integration_payment"
 path = "src/lib.rs"
 
 [dependencies]

@@ -12,7 +12,8 @@ use serde_json::{json, Value};
 #[tokio::test]
 async fn http_account_value_hold_posts_to_token_bank_hold_endpoint() {
     let server = OneShotHttpServer::spawn(201, hold_response("hold-token-bank-1", None));
-    let adapter = HttpAccountPointsCreditAdapter::new(server.origin(), Some("test-token".into())).expect("adapter builds");
+    let adapter = HttpAccountPointsCreditAdapter::new(server.origin(), Some("test-token".into()))
+        .expect("adapter builds");
 
     let outcome = adapter
         .apply_account_value_ledger_command(
@@ -59,7 +60,8 @@ async fn http_account_value_hold_posts_to_token_bank_hold_endpoint() {
 async fn http_account_value_hold_settle_posts_to_hold_settle_endpoint() {
     let server =
         OneShotHttpServer::spawn(200, hold_response("hold-token-bank-1", Some("ledger-1")));
-    let adapter = HttpAccountPointsCreditAdapter::new(server.origin(), Some("test-token".into())).expect("adapter builds");
+    let adapter = HttpAccountPointsCreditAdapter::new(server.origin(), Some("test-token".into()))
+        .expect("adapter builds");
 
     let outcome = adapter
         .apply_account_value_ledger_command(
@@ -107,7 +109,8 @@ async fn http_account_value_hold_settle_posts_to_hold_settle_endpoint() {
 #[tokio::test]
 async fn http_account_value_hold_release_posts_to_wallet_hold_release_endpoint() {
     let server = OneShotHttpServer::spawn(200, hold_response("cash-hold-1", None));
-    let adapter = HttpAccountPointsCreditAdapter::new(server.origin(), Some("test-token".into())).expect("adapter builds");
+    let adapter = HttpAccountPointsCreditAdapter::new(server.origin(), Some("test-token".into()))
+        .expect("adapter builds");
 
     let outcome = adapter
         .apply_account_value_ledger_command(

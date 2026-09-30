@@ -41,7 +41,7 @@ pub async fn list_due_expiring_orders(
         WHERE LOWER(COALESCE(status, '')) IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay')
           AND NULLIF(expired_at, '') IS NOT NULL
           AND NULLIF(expired_at, '')::timestamptz <= CURRENT_TIMESTAMP
-        ORDER BY expired_at, id
+        ORDER BY NULLIF(expired_at, '')::timestamptz, id
         LIMIT $1
         "#,
     )

@@ -18,6 +18,7 @@ export function createOrderAppServiceMock(
     memberships: {} as SdkworkOrderAppService["memberships"],
     orders: createMissingOrdersTree(),
     recharges: createMissingRechargesTree(),
+    shipments: {} as SdkworkOrderAppService["shipments"],
     withdrawals: {} as SdkworkOrderAppService["withdrawals"],
   };
   return mergeOrderAppService(base, overrides);

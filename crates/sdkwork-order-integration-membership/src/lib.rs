@@ -116,7 +116,8 @@ impl MembershipPurchaseFulfillmentPort for StoreMembershipFulfillmentAdapter {
                 quantity: request.quantity,
                 request_no: request.request_no,
                 idempotency_key: request.idempotency_key,
-                requested_at: sdkwork_membership_repository_sqlx::shared::current_timestamp_string(),
+                requested_at: sdkwork_membership_repository_sqlx::shared::current_timestamp_string(
+                ),
             };
             let outcome = self.store.recharge_subscription_quota(command).await?;
             Ok(MembershipQuotaRechargeFulfillmentOutcome {

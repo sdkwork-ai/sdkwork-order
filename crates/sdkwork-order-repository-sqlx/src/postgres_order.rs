@@ -806,18 +806,27 @@ impl PostgresCommerceOrderStore {
         )
         .bind(&order_id)
         .bind(&command.tenant_id)
-        .bind(normalize_organization_scope(command.organization_id.as_deref()))
+        .bind(normalize_organization_scope(
+            command.organization_id.as_deref(),
+        ))
         .bind(&command.owner_user_id)
         .bind(&order_sn)
         .bind(&subject)
         .bind(&currency_code)
         .bind(optional_string_cell(&session, "merchant_organization_id"))
         .bind(optional_string_cell(&session, "shop_id"))
-        .bind(optional_string_cell(&session, "shipping_address_snapshot_json"))
+        .bind(optional_string_cell(
+            &session,
+            "shipping_address_snapshot_json",
+        ))
         .bind(optional_string_cell(&session, "shop_snapshot_json"))
         .bind(&command.request_no)
         .bind(&command.idempotency_key)
-        .bind(partner_snapshot.as_ref().map(|snapshot| &snapshot.partner_id))
+        .bind(
+            partner_snapshot
+                .as_ref()
+                .map(|snapshot| &snapshot.partner_id),
+        )
         .bind(partner_snapshot_json.as_deref())
         .bind(&now)
         .bind(&expires_at)

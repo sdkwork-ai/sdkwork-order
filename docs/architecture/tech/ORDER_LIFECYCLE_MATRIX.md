@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 下单入口 | 充值（`recharge_router`）、会员（`membership_router`）、账户价值（account value / coupon recharge）领域路由 | 通用收银台 `POST /app/v3/api/checkout/sessions/{id}/orders`（`checkout_router`） |
 | subject | `points_recharge` / `token_bank_*` / `account_recharge_package` / `coupon_recharge` / `membership` / `virtual_goods` | `product` / `physical` / `physical_shipment`（SKU snapshot `fulfillment_type`） |
-| 库存预留 | 无 | 下单时 `reserve_physical_order_inventory`（`checkout_router.rs:450`），置 `fulfillment_status='inventory_reserved'` |
+| 库存预留 | 无 | 下单时 `reserve_physical_order_inventory`（`checkout_router.rs:456`），置 `fulfillment_status='inventory_reserved'` |
 | 支付倒计时 | 30 分钟（`expired_at`，`SDKWORK_ORDER_PAYMENT_EXPIRE_SECONDS` 可配） | 30 分钟（session 与订单同源，session 过期后不可下单） |
 
 ## 2. 操作差异矩阵
@@ -67,7 +67,6 @@ reserve ──► reserved ──► consumed（支付结算）──► restock
 
 - after_sales 审核触发真实资金退款（需与 `commerce_order_refund_request` 体系合并）
 - 售后多行部分退货的按行库存回补（当前按订单整体回补）
-- 独立 worker 进程部署（scheduler 内嵌 gateway）
 - 独立 worker 进程部署（scheduler 内嵌 gateway）
 
 ## 7. 关键文件索引

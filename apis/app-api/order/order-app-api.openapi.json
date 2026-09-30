@@ -47,6 +47,10 @@
       "x-sdk-nested-resource-surface": true
     },
     {
+      "name": "orderWithdrawals",
+      "description": "点值钱包提现申请。"
+    },
+    {
       "name": "orderMemberships",
       "description": "Memberships API resources.",
       "x-sdk-nested-resource-surface": true
@@ -3052,7 +3056,7 @@
     "/app/v3/api/recharges/packages": {
       "get": {
         "tags": [
-          "recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges packages list.",
         "operationId": "recharges.packages.list",
@@ -3164,7 +3168,7 @@
     "/app/v3/api/recharges/settings": {
       "get": {
         "tags": [
-          "recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges settings retrieve.",
         "operationId": "recharges.settings.retrieve",
@@ -3254,7 +3258,7 @@
     "/app/v3/api/recharges/orders": {
       "get": {
         "tags": [
-          "recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges orders list.",
         "operationId": "recharges.orders.list",
@@ -3384,7 +3388,7 @@
       },
       "post": {
         "tags": [
-          "recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges orders create.",
         "operationId": "recharges.orders.create",
@@ -3493,7 +3497,7 @@
     "/app/v3/api/recharges/orders/{orderId}": {
       "get": {
         "tags": [
-          "recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges orders retrieve.",
         "operationId": "recharges.orders.retrieve",
@@ -3596,7 +3600,7 @@
     "/app/v3/api/recharges/orders/{orderId}/cancel": {
       "post": {
         "tags": [
-          "recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges orders cancel.",
         "operationId": "recharges.orders.cancel",
@@ -3911,7 +3915,7 @@
     "/app/v3/api/recharges/plans": {
       "get": {
         "tags": [
-          "recharges"
+          "orderRecharges"
         ],
         "summary": "Token Bank plans list.",
         "operationId": "recharges.plans.list",
@@ -4031,7 +4035,7 @@
     "/app/v3/api/orders/refund_requests": {
       "get": {
         "tags": [
-          "orders"
+          "orderOrders"
         ],
         "summary": "Order refund requests list.",
         "operationId": "orders.refundRequests.list",
@@ -4153,7 +4157,7 @@
       },
       "post": {
         "tags": [
-          "orders"
+          "orderOrders"
         ],
         "summary": "Order refund requests create.",
         "operationId": "orders.refundRequests.create",
@@ -4262,7 +4266,7 @@
     "/app/v3/api/orders/refund_requests/{refundRequestId}": {
       "get": {
         "tags": [
-          "orders"
+          "orderOrders"
         ],
         "summary": "Order refund requests retrieve.",
         "operationId": "orders.refundRequests.retrieve",
@@ -4365,7 +4369,7 @@
     "/app/v3/api/withdrawals/requests": {
       "post": {
         "tags": [
-          "withdrawals"
+          "orderWithdrawals"
         ],
         "summary": "Withdrawal requests create.",
         "operationId": "withdrawals.requests.create",
@@ -4474,7 +4478,7 @@
     "/app/v3/api/withdrawals/requests/{withdrawalRequestId}": {
       "get": {
         "tags": [
-          "withdrawals"
+          "orderWithdrawals"
         ],
         "summary": "Withdrawal requests retrieve.",
         "operationId": "withdrawals.requests.retrieve",

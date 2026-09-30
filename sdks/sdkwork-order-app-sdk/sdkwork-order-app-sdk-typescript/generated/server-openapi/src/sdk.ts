@@ -8,10 +8,9 @@ import { OrderPaymentsApi, createOrderPaymentsApi } from './api/order-payments';
 import { OrderAfterSalesApi, createOrderAfterSalesApi } from './api/order-after-sales';
 import { OrderFulfillmentsApi, createOrderFulfillmentsApi } from './api/order-fulfillments';
 import { OrderShipmentsApi, createOrderShipmentsApi } from './api/order-shipments';
-import { RechargesApi, createRechargesApi } from './api/recharges';
+import { OrderRechargesApi, createOrderRechargesApi } from './api/order-recharges';
 import { OrderMembershipsApi, createOrderMembershipsApi } from './api/order-memberships';
-import { OrdersApi, createOrdersApi } from './api/orders';
-import { WithdrawalsApi, createWithdrawalsApi } from './api/withdrawals';
+import { OrderWithdrawalsApi, createOrderWithdrawalsApi } from './api/order-withdrawals';
 
 export class SdkworkAppClient {
   private httpClient: HttpClient;
@@ -22,10 +21,9 @@ export class SdkworkAppClient {
   public readonly orderAfterSales: OrderAfterSalesApi;
   public readonly orderFulfillments: OrderFulfillmentsApi;
   public readonly orderShipments: OrderShipmentsApi;
-  public readonly recharges: RechargesApi;
+  public readonly orderRecharges: OrderRechargesApi;
   public readonly orderMemberships: OrderMembershipsApi;
-  public readonly orders: OrdersApi;
-  public readonly withdrawals: WithdrawalsApi;
+  public readonly orderWithdrawals: OrderWithdrawalsApi;
 
   constructor(config: SdkworkAppConfig) {
     this.httpClient = createHttpClient(config);
@@ -41,13 +39,11 @@ export class SdkworkAppClient {
 
     this.orderShipments = createOrderShipmentsApi(this.httpClient);
 
-    this.recharges = createRechargesApi(this.httpClient);
+    this.orderRecharges = createOrderRechargesApi(this.httpClient);
 
     this.orderMemberships = createOrderMembershipsApi(this.httpClient);
 
-    this.orders = createOrdersApi(this.httpClient);
-
-    this.withdrawals = createWithdrawalsApi(this.httpClient);
+    this.orderWithdrawals = createOrderWithdrawalsApi(this.httpClient);
   }
   setAuthToken(token: string): this {
     this.httpClient.setAuthToken(token);

@@ -11,6 +11,7 @@ description = "SDKWork commerce order lifecycle domain rules for local/private R
 [lints]
 workspace = true
 [lib]
+name = "sdkwork_order_service"
 path = "src/lib.rs"
 
 [dependencies]

@@ -30,6 +30,7 @@ function createAppService(overrides: {
       orders: {
         couponRedemptions: { create },
       } as unknown as SdkworkOrderAppService["orders"],
+      shipments: {} as SdkworkOrderAppService["shipments"],
       recharges: {
         plans: { list: vi.fn() },
         packages: {

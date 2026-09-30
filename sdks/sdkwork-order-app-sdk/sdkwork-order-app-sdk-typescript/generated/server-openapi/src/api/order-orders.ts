@@ -1,31 +1,8 @@
 import { appApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, OrdersPaymentsWebhooksReceiveRequest, OrdersRefundsWebhooksReceiveRequest, SdkWorkCommandData, SdkWorkPageData } from '../types';
+import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
-
-export class OrderOrdersOrdersRefundsWebhooksApi {
-  private client: HttpClient;
-
-  constructor(client: HttpClient) {
-    this.client = client;
-  }
-
-
-/** Receive PSP refund webhook */
-  async receive(providerCode: string, body: OrdersRefundsWebhooksReceiveRequest, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
-    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/refunds/webhooks/${serializePathParameter(providerCode, { name: 'providerCode', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', skipAuth: true, sdkworkUnwrapKind: 'command' });
-  }
-}
-
-export class OrderOrdersOrdersRefundsApi {
-  public readonly webhooks: OrderOrdersOrdersRefundsWebhooksApi;
-
-  constructor(client: HttpClient) {
-    this.webhooks = new OrderOrdersOrdersRefundsWebhooksApi(client);
-  }
-
-}
 
 export interface OrderOrdersOrdersReceiptsCreateParams {
   idempotencyKey: string;
@@ -48,6 +25,51 @@ export class OrderOrdersOrdersReceiptsApi {
       {}
     );
     return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/receipt_confirmations`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(body !== undefined ? { body, contentType: 'application/json' } : {}), ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'command' });
+  }
+}
+
+export interface OrderOrdersOrdersRefundRequestsListParams {
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface OrderOrdersOrdersRefundRequestsCreateParams {
+  idempotencyKey: string;
+}
+
+export class OrderOrdersOrdersRefundRequestsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Order refund requests list. */
+  async list(params?: OrderOrdersOrdersRefundRequestsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
+    const query = buildQueryString([
+      { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/refund_requests`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+  }
+
+/** Order refund requests create. */
+  async create(body: RefundRequestCreateCommand, params: OrderOrdersOrdersRefundRequestsCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
+  }
+
+/** Order refund requests retrieve. */
+  async retrieve(refundRequestId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -164,31 +186,15 @@ export class OrderOrdersOrdersEventsApi {
   }
 }
 
-export class OrderOrdersOrdersPaymentsWebhooksApi {
-  private client: HttpClient;
-
-  constructor(client: HttpClient) {
-    this.client = client;
-  }
-
-
-/** Receive PSP payment webhook */
-  async receive(providerCode: string, body: OrdersPaymentsWebhooksReceiveRequest, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
-    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/payments/webhooks/${serializePathParameter(providerCode, { name: 'providerCode', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', skipAuth: true, sdkworkUnwrapKind: 'command' });
-  }
-}
-
 export interface OrderOrdersOrdersPaymentsCreateParams {
   idempotencyKey: string;
 }
 
 export class OrderOrdersOrdersPaymentsApi {
   private client: HttpClient;
-  public readonly webhooks: OrderOrdersOrdersPaymentsWebhooksApi;
 
   constructor(client: HttpClient) {
     this.client = client;
-    this.webhooks = new OrderOrdersOrdersPaymentsWebhooksApi(client);
   }
 
 
@@ -219,8 +225,8 @@ export class OrderOrdersOrdersApi {
   public readonly statistics: OrderOrdersOrdersStatisticsApi;
   public readonly status: OrderOrdersOrdersStatusApi;
   public readonly couponRedemptions: OrderOrdersOrdersCouponRedemptionsApi;
+  public readonly refundRequests: OrderOrdersOrdersRefundRequestsApi;
   public readonly receipts: OrderOrdersOrdersReceiptsApi;
-  public readonly refunds: OrderOrdersOrdersRefundsApi;
 
   constructor(client: HttpClient) {
     this.client = client;
@@ -231,8 +237,8 @@ export class OrderOrdersOrdersApi {
     this.statistics = new OrderOrdersOrdersStatisticsApi(client);
     this.status = new OrderOrdersOrdersStatusApi(client);
     this.couponRedemptions = new OrderOrdersOrdersCouponRedemptionsApi(client);
+    this.refundRequests = new OrderOrdersOrdersRefundRequestsApi(client);
     this.receipts = new OrderOrdersOrdersReceiptsApi(client);
-    this.refunds = new OrderOrdersOrdersRefundsApi(client);
   }
 
 

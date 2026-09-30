@@ -304,10 +304,12 @@ async fn sweep_releases_expired_reservations_back_to_stock() {
         .expect("reservation");
 
     // Age the reservation beyond its expiry window.
-    sqlx::query("UPDATE commerce_inventory_reservation SET expires_at = '1' WHERE order_id = 'order-5'")
-        .execute(&pool)
-        .await
-        .expect("age reservation");
+    sqlx::query(
+        "UPDATE commerce_inventory_reservation SET expires_at = '1' WHERE order_id = 'order-5'",
+    )
+    .execute(&pool)
+    .await
+    .expect("age reservation");
 
     let swept = adapter
         .sweep_expired_inventory_reservations(10)
@@ -321,7 +323,10 @@ async fn sweep_releases_expired_reservations_back_to_stock() {
     .fetch_one(&pool)
     .await
     .expect("swept stock state");
-    assert_eq!((available, reserved, status), (10, 0, "released".to_owned()));
+    assert_eq!(
+        (available, reserved, status),
+        (10, 0, "released".to_owned())
+    );
 
     // A second sweep is a no-op (idempotent).
     let replay = adapter

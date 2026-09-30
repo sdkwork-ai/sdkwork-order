@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     backend_commerce_admin_router_with_postgres_pool_and_ports,
-    backend_order_admin_router_with_postgres_pool,
-    openapi_contract::mount_backend_openapi,
+    backend_order_admin_router_with_postgres_pool, openapi_contract::mount_backend_openapi,
     payment_confirmation_router_with_postgres_pool_and_integrations,
 };
 

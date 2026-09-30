@@ -592,15 +592,17 @@ impl PostgresCommerceRechargeStore {
             )
             .await?;
         let organization_id = normalize_organization_scope(query.organization_id.as_deref());
-        let rows = sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LIST_RECHARGE_PACKAGES_PAGINATED)))
-            .bind(&query.tenant_id)
-            .bind(&organization_id)
-            .bind(current_query_timestamp())
-            .bind(query.limit())
-            .bind(query.offset())
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|error| store_error("failed to list recharge packages", error))?;
+        let rows = sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+            LIST_RECHARGE_PACKAGES_PAGINATED,
+        )))
+        .bind(&query.tenant_id)
+        .bind(&organization_id)
+        .bind(current_query_timestamp())
+        .bind(query.limit())
+        .bind(query.offset())
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| store_error("failed to list recharge packages", error))?;
 
         let total = rows
             .first()
@@ -1326,10 +1328,12 @@ async fn load_recharge_settings_from_pool(
     }
 
     let row = if tenant_id.trim().is_empty() {
-        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC)))
-            .bind(RECHARGE_RULE_NO)
-            .fetch_optional(pool)
-            .await
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+            LOAD_RECHARGE_SETTINGS_PUBLIC,
+        )))
+        .bind(RECHARGE_RULE_NO)
+        .fetch_optional(pool)
+        .await
     } else {
         let scoped_row = sqlx::query(LOAD_RECHARGE_SETTINGS_SCOPED)
             .bind(tenant_id)
@@ -1341,10 +1345,12 @@ async fn load_recharge_settings_from_pool(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC)))
-                .bind(RECHARGE_RULE_NO)
-                .fetch_optional(pool)
-                .await
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+                LOAD_RECHARGE_SETTINGS_PUBLIC,
+            )))
+            .bind(RECHARGE_RULE_NO)
+            .fetch_optional(pool)
+            .await
         }
     }
     .map_err(|error| store_error("failed to load recharge settings", error))?;
@@ -1362,10 +1368,12 @@ async fn load_recharge_settings_for_transaction(
     }
 
     let row = if tenant_id.trim().is_empty() {
-        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC)))
-            .bind(RECHARGE_RULE_NO)
-            .fetch_optional(&mut **tx)
-            .await
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+            LOAD_RECHARGE_SETTINGS_PUBLIC,
+        )))
+        .bind(RECHARGE_RULE_NO)
+        .fetch_optional(&mut **tx)
+        .await
     } else {
         let scoped_row = sqlx::query(LOAD_RECHARGE_SETTINGS_SCOPED)
             .bind(tenant_id)
@@ -1377,10 +1385,12 @@ async fn load_recharge_settings_for_transaction(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC)))
-                .bind(RECHARGE_RULE_NO)
-                .fetch_optional(&mut **tx)
-                .await
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+                LOAD_RECHARGE_SETTINGS_PUBLIC,
+            )))
+            .bind(RECHARGE_RULE_NO)
+            .fetch_optional(&mut **tx)
+            .await
         }
     }
     .map_err(|error| store_error("failed to load recharge settings", error))?;
@@ -1520,11 +1530,13 @@ async fn load_recharge_pack(
 ) -> Result<Option<RechargePack>, CommerceServiceError> {
     if let Some(package_id) = command.package_id.as_deref() {
         let row = if command.tenant_id.trim().is_empty() {
-            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PACK_BY_ID_PUBLIC)))
-                .bind(package_id)
-                .bind(&command.requested_at)
-                .fetch_optional(&mut **tx)
-                .await
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+                LOAD_RECHARGE_PACK_BY_ID_PUBLIC,
+            )))
+            .bind(package_id)
+            .bind(&command.requested_at)
+            .fetch_optional(&mut **tx)
+            .await
         } else {
             let scoped_row = sqlx::query(LOAD_RECHARGE_PACK_BY_ID)
                 .bind(&command.tenant_id)
@@ -1537,11 +1549,13 @@ async fn load_recharge_pack(
             if scoped_row.is_some() {
                 Ok(scoped_row)
             } else {
-                sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PACK_BY_ID_PUBLIC)))
-                    .bind(package_id)
-                    .bind(&command.requested_at)
-                    .fetch_optional(&mut **tx)
-                    .await
+                sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+                    LOAD_RECHARGE_PACK_BY_ID_PUBLIC,
+                )))
+                .bind(package_id)
+                .bind(&command.requested_at)
+                .fetch_optional(&mut **tx)
+                .await
             }
         }
         .map_err(|error| store_error("failed to load recharge package by id", error))?;
@@ -1557,15 +1571,17 @@ async fn load_recharge_pack(
 
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC)))
-            .bind(&command.currency_code)
-            .bind(command.amount.as_str())
-            .bind(&amount_match.compact)
-            .bind(&amount_match.one_decimal)
-            .bind(&amount_match.two_decimal)
-            .bind(&command.requested_at)
-            .fetch_optional(&mut **tx)
-            .await
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+            LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC,
+        )))
+        .bind(&command.currency_code)
+        .bind(command.amount.as_str())
+        .bind(&amount_match.compact)
+        .bind(&amount_match.one_decimal)
+        .bind(&amount_match.two_decimal)
+        .bind(&command.requested_at)
+        .fetch_optional(&mut **tx)
+        .await
     } else {
         let scoped_row = sqlx::query(LOAD_RECHARGE_PACK_FOR_AMOUNT)
             .bind(&command.tenant_id)
@@ -1582,15 +1598,17 @@ async fn load_recharge_pack(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC)))
-                .bind(&command.currency_code)
-                .bind(command.amount.as_str())
-                .bind(&amount_match.compact)
-                .bind(&amount_match.one_decimal)
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+                LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC,
+            )))
+            .bind(&command.currency_code)
+            .bind(command.amount.as_str())
+            .bind(&amount_match.compact)
+            .bind(&amount_match.one_decimal)
             .bind(&amount_match.two_decimal)
-                .bind(&command.requested_at)
-                .fetch_optional(&mut **tx)
-                .await
+            .bind(&command.requested_at)
+            .fetch_optional(&mut **tx)
+            .await
         }
     }
     .map_err(|error| store_error("failed to load recharge package", error))?;
@@ -1649,14 +1667,16 @@ async fn load_recharge_product_sku(
 
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC)))
-            .bind(&command.currency_code)
-            .bind(command.amount.as_str())
-            .bind(&amount_match.compact)
-            .bind(&amount_match.one_decimal)
-            .bind(&amount_match.two_decimal)
-            .fetch_optional(&mut **tx)
-            .await
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+            LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC,
+        )))
+        .bind(&command.currency_code)
+        .bind(command.amount.as_str())
+        .bind(&amount_match.compact)
+        .bind(&amount_match.one_decimal)
+        .bind(&amount_match.two_decimal)
+        .fetch_optional(&mut **tx)
+        .await
     } else {
         let scoped_row = sqlx::query(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT)
             .bind(&command.tenant_id)
@@ -1672,14 +1692,16 @@ async fn load_recharge_product_sku(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC)))
-                .bind(&command.currency_code)
-                .bind(command.amount.as_str())
-                .bind(&amount_match.compact)
-                .bind(&amount_match.one_decimal)
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+                LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC,
+            )))
+            .bind(&command.currency_code)
+            .bind(command.amount.as_str())
+            .bind(&amount_match.compact)
+            .bind(&amount_match.one_decimal)
             .bind(&amount_match.two_decimal)
-                .fetch_optional(&mut **tx)
-                .await
+            .fetch_optional(&mut **tx)
+            .await
         }
     }
     .map_err(|error| store_error("failed to load recharge product sku", error))?
@@ -2381,31 +2403,6 @@ fn recharge_payment_product(method: &str) -> Result<&'static str, CommerceServic
 
 fn current_query_timestamp() -> String {
     crate::store_clock::now_canonical()
-}
-
-fn format_unix_timestamp(seconds: i64) -> String {
-    let days = seconds.div_euclid(86_400);
-    let seconds_of_day = seconds.rem_euclid(86_400);
-    let (year, month, day) = civil_from_days(days);
-    let hour = seconds_of_day / 3_600;
-    let minute = (seconds_of_day % 3_600) / 60;
-    let second = seconds_of_day % 60;
-    format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}")
-}
-
-fn civil_from_days(days: i64) -> (i64, i64, i64) {
-    let days = days + 719_468;
-    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
-    let day_of_era = days - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_prime = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
-    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    let year = year + if month <= 2 { 1 } else { 0 };
-    (year, month, day)
 }
 
 fn map_points_recharge_fulfillment_context(

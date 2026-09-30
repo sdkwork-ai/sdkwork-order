@@ -10,6 +10,7 @@ publish.workspace = true
 [lints]
 workspace = true
 [lib]
+name = "sdkwork_order_database_host"
 path = "src/lib.rs"
 
 [dependencies]

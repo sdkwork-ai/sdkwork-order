@@ -91,8 +91,9 @@ pub use refund_notify::{
 
 /// 仓储端口标识符，用于 `CommerceServiceContract` 能力注册。
 ///
-/// 实际仓储抽象由 `SqliteCommerceOrderStore` / `PostgresCommerceOrderStore` 通过
-/// 路由层枚举适配器（`BackendOrderAdminStore` / `AppAfterSalesState`）提供，
+/// 服务端权威仓储唯一实现为 `PostgresCommerceOrderStore`（DATABASE_SPEC：
+/// L1+ 权威服务端表必须运行在 PostgreSQL；SQLite 仅为客户端本地引擎），
+/// 由路由层枚举适配器（`BackendManagementOrderStore` 等）装配，
 /// 无需额外的同步 trait 抽象层。
 pub const ORDER_REPOSITORY_PORT: &str = "order.repository";
 pub const IDEMPOTENCY_REPOSITORY_PORT: &str = "idempotency.repository";

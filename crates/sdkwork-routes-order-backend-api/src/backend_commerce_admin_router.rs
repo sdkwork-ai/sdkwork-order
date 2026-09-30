@@ -9,9 +9,7 @@ use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
-};
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
 use sdkwork_order_service::{
     execute_account_value_request_review, physical_inventory_release_idempotency_key,
     AccountValueAssetCode, AccountValueCatalogListQuery, AccountValueLedgerPort,
@@ -1733,7 +1731,9 @@ fn map_token_bank_plan(value: TokenBankPlanItem) -> TokenBankPlanResponse {
     }
 }
 
-pub(crate) fn map_account_value_request(value: AccountValueRequestView) -> AccountValueRequestResponse {
+pub(crate) fn map_account_value_request(
+    value: AccountValueRequestView,
+) -> AccountValueRequestResponse {
     AccountValueRequestResponse {
         account_value_request_id: value.request_id,
         request_no: value.request_no,

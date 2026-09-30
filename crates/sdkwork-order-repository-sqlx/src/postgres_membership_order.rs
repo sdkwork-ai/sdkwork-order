@@ -376,10 +376,12 @@ async fn load_membership_package(
 ) -> Result<MembershipPackageCatalog, CommerceServiceError> {
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC)))
-            .bind(&command.package_id)
-            .fetch_optional(&mut **tx)
-            .await
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+            LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC,
+        )))
+        .bind(&command.package_id)
+        .fetch_optional(&mut **tx)
+        .await
     } else {
         let scoped_row = sqlx::query(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID)
             .bind(&command.tenant_id)
@@ -391,10 +393,12 @@ async fn load_membership_package(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC)))
-                .bind(&command.package_id)
-                .fetch_optional(&mut **tx)
-                .await
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+                LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC,
+            )))
+            .bind(&command.package_id)
+            .fetch_optional(&mut **tx)
+            .await
         }
     }
     .map_err(|error| store_error("failed to load membership package", error))?

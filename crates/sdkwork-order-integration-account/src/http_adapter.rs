@@ -131,7 +131,8 @@ impl HttpAccountPointsCreditAdapter {
             ));
         }
 
-        let mut builder = self.http
+        let mut builder = self
+            .http
             .post(&url)
             .header(CONTENT_TYPE, "application/json")
             .json(&body);
@@ -204,7 +205,8 @@ impl HttpAccountPointsCreditAdapter {
             ));
         }
 
-        let mut builder = self.http
+        let mut builder = self
+            .http
             .post(&url)
             .header(CONTENT_TYPE, "application/json")
             .json(&body);
@@ -318,7 +320,8 @@ impl HttpAccountPointsCreditAdapter {
             ));
         }
 
-        let mut builder = self.http
+        let mut builder = self
+            .http
             .post(&url)
             .header(CONTENT_TYPE, "application/json")
             .json(&body);
@@ -473,9 +476,9 @@ fn account_value_hold_mutation_path(
         }
     };
     match asset {
-        AccountValueAssetCode::TokenBank => {
-            Ok(format!("/backend/v3/api/token_bank/holds/{hold_id}/{suffix}"))
-        }
+        AccountValueAssetCode::TokenBank => Ok(format!(
+            "/backend/v3/api/token_bank/holds/{hold_id}/{suffix}"
+        )),
         AccountValueAssetCode::Cash | AccountValueAssetCode::Points => {
             Ok(format!("/backend/v3/api/wallet/holds/{hold_id}/{suffix}"))
         }

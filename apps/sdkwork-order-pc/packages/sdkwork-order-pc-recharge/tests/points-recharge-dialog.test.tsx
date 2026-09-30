@@ -16,20 +16,20 @@ describe("SDKWork points recharge surfaces", () => {
     const createOrder = vi.fn().mockResolvedValue({
       amountCny: 75,
       orderId: "recharge-order-750",
-      points: 750,
+      points: 750_000_000,
       qrCode: "weixin://pay/recharge-order-750",
       status: "pending" as const,
     });
     const service: SdkworkPointsRechargeService = {
       listPackages: vi.fn().mockResolvedValue([
-        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500, priceAmount: 50 },
-        { id: "recharge-750", bonusPoints: 0, currencyCode: "CNY", grantAmount: 750, points: 750, priceAmount: 75 },
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
+        { id: "recharge-750", bonusPoints: 0, currencyCode: "CNY", grantAmount: 750, points: 750_000_000, priceAmount: 75 },
       ]),
       createOrder,
       getOrderStatus: vi.fn().mockResolvedValue({
         amountCny: 75,
         orderId: "recharge-order-750",
-        points: 750,
+        points: 750_000_000,
         status: "pending" as const,
       }),
     };
@@ -88,14 +88,14 @@ describe("SDKWork points recharge surfaces", () => {
       .mockResolvedValueOnce({
         amountCny: 50,
         orderId: "recharge-order-500",
-        points: 500,
+        points: 500_000_000,
         qrCode: "weixin://pay/recharge-order-500",
         status: "pending" as const,
       });
     const service: SdkworkPointsRechargeService = {
       listPackages: vi.fn().mockResolvedValue([
-        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500, priceAmount: 50 },
-        { id: "recharge-750", bonusPoints: 0, currencyCode: "CNY", grantAmount: 750, points: 750, priceAmount: 75 },
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
+        { id: "recharge-750", bonusPoints: 0, currencyCode: "CNY", grantAmount: 750, points: 750_000_000, priceAmount: 75 },
       ]),
       createOrder,
       getOrderStatus: vi.fn().mockImplementation(async (orderId: string) => ({
@@ -133,7 +133,7 @@ describe("SDKWork points recharge surfaces", () => {
       resolveFirstOrder({
         amountCny: 75,
         orderId: "recharge-order-750",
-        points: 750,
+        points: 750_000_000,
         qrCode: "weixin://pay/recharge-order-750",
         status: "pending",
       });
@@ -163,7 +163,7 @@ describe("SDKWork points recharge surfaces", () => {
         amountCny: 50,
         expiresAt: "2026-07-27T04:00:02.000Z",
         orderId: "recharge-order-expiring",
-        points: 500,
+        points: 500_000_000,
         qrCode: "data:image/png;base64,recharge-expiring",
         status: "pending" as const,
       })
@@ -171,7 +171,7 @@ describe("SDKWork points recharge surfaces", () => {
         amountCny: 50,
         expiresAt: "2026-07-27T04:05:00.000Z",
         orderId: "recharge-order-replacement",
-        points: 500,
+        points: 500_000_000,
         qrCode: "data:image/png;base64,recharge-replacement",
         status: "pending" as const,
       });
@@ -181,12 +181,12 @@ describe("SDKWork points recharge surfaces", () => {
         ? "2026-07-27T04:00:02.000Z"
         : "2026-07-27T04:05:00.000Z",
       orderId,
-      points: 500,
+      points: 500_000_000,
       status: "pending" as const,
     }));
     const service: SdkworkPointsRechargeService = {
       listPackages: vi.fn().mockResolvedValue([
-        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500, priceAmount: 50 },
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
       ]),
       createOrder,
       getOrderStatus,
@@ -263,19 +263,19 @@ describe("SDKWork points recharge surfaces", () => {
     const createOrder = vi.fn().mockResolvedValue({
       amountCny: 50,
       orderId: "recharge-order-500",
-      points: 500,
+      points: 500_000_000,
       qrCode: "weixin://pay/recharge-order-500",
       status: "pending" as const,
     });
     const service: SdkworkPointsRechargeService = {
       listPackages: vi.fn().mockResolvedValue([
-        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500, priceAmount: 50 },
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
       ]),
       createOrder,
       getOrderStatus: vi.fn().mockResolvedValue({
         amountCny: 50,
         orderId: "recharge-order-500",
-        points: 500,
+        points: 500_000_000,
         status: "pending" as const,
       }),
     };
@@ -315,21 +315,21 @@ describe("SDKWork points recharge surfaces", () => {
     const onCompleted = vi.fn();
     const service: SdkworkPointsRechargeService = {
       listPackages: vi.fn().mockResolvedValue([
-        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500, priceAmount: 50 },
-        { id: "recharge-750", bonusPoints: 0, currencyCode: "CNY", grantAmount: 750, points: 750, priceAmount: 75 },
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
+        { id: "recharge-750", bonusPoints: 0, currencyCode: "CNY", grantAmount: 750, points: 750_000_000, priceAmount: 75 },
       ]),
       createOrder: vi.fn()
         .mockResolvedValueOnce({
           amountCny: 75,
           orderId: "recharge-order-750",
-          points: 750,
+          points: 750_000_000,
           qrCode: "weixin://pay/recharge-order-750",
           status: "pending" as const,
         })
         .mockResolvedValueOnce({
           amountCny: 50,
           orderId: "recharge-order-500",
-          points: 500,
+          points: 500_000_000,
           qrCode: "weixin://pay/recharge-order-500",
           status: "pending" as const,
         }),
@@ -338,7 +338,7 @@ describe("SDKWork points recharge surfaces", () => {
         : Promise.resolve({
             amountCny: 50,
             orderId,
-            points: 500,
+            points: 500_000_000,
             status: "pending" as const,
           })),
     };
@@ -368,7 +368,7 @@ describe("SDKWork points recharge surfaces", () => {
       resolveStatus({
         amountCny: 75,
         orderId: "recharge-order-750",
-        points: 750,
+        points: 750_000_000,
         status: "completed",
       });
       await statusResult;
@@ -384,19 +384,19 @@ describe("SDKWork points recharge surfaces", () => {
   it("provides the dialog checkout flow as an inline surface", async () => {
     const service: SdkworkPointsRechargeService = {
       listPackages: vi.fn().mockResolvedValue([
-        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500, priceAmount: 50 },
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
       ]),
       createOrder: vi.fn().mockResolvedValue({
         amountCny: 50,
         orderId: "recharge-order-inline",
-        points: 500,
+        points: 500_000_000,
         qrCode: "weixin://pay/recharge-order-inline",
         status: "pending" as const,
       }),
       getOrderStatus: vi.fn().mockResolvedValue({
         amountCny: 50,
         orderId: "recharge-order-inline",
-        points: 500,
+        points: 500_000_000,
         status: "pending" as const,
       }),
     };

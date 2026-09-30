@@ -22,8 +22,6 @@
 //!   clamped 5_000..3_600_000)
 //! - `SDKWORK_ORDER_PAYMENT_COMPENSATION_MIN_AGE_SECONDS` (default 60:
 //!   fresh attempts keep their webhook window)
-//! - `SDKWORK_ORDER_PAYMENT_COMPENSATION_MAX_AGE_SECONDS` (default 86_400:
-//!   bound PSP query load)
 
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
@@ -47,7 +45,10 @@ const MAX_INTERVAL_MILLIS: u64 = 3_600_000;
 const DEFAULT_BATCH_SIZE: i64 = 50;
 const MAX_BATCH_SIZE: i64 = 1_000;
 const DEFAULT_MIN_AGE_SECONDS: i64 = 60;
-const DEFAULT_MAX_AGE_SECONDS: i64 = 24 * 60 * 60;
+/// Upper clamp for the freshness window: attempts older than this are still
+/// claimed (the payment store bounds claims by their own `expires_at`), the
+/// window only keeps brand-new attempts out of the sweep.
+const MAX_MIN_AGE_SECONDS: i64 = 30 * 24 * 60 * 60;
 
 static WORKER_STARTED: AtomicBool = AtomicBool::new(false);
 
@@ -85,13 +86,7 @@ pub fn spawn_payment_compensation_worker(
             "SDKWORK_ORDER_PAYMENT_COMPENSATION_MIN_AGE_SECONDS",
             DEFAULT_MIN_AGE_SECONDS,
             0,
-            DEFAULT_MAX_AGE_SECONDS,
-        ),
-        max_age_seconds: env_i64_clamped(
-            "SDKWORK_ORDER_PAYMENT_COMPENSATION_MAX_AGE_SECONDS",
-            DEFAULT_MAX_AGE_SECONDS,
-            DEFAULT_MIN_AGE_SECONDS,
-            30 * 24 * 60 * 60,
+            MAX_MIN_AGE_SECONDS,
         ),
     };
     let interval_millis = env_u64_clamped(
@@ -107,7 +102,6 @@ pub fn spawn_payment_compensation_worker(
         tenant_id = config.tenant_id.as_deref(),
         organization_id = config.organization_id.as_deref(),
         min_age_seconds = config.min_age_seconds,
-        max_age_seconds = config.max_age_seconds,
         "payment compensation worker started"
     );
     Some(tokio::spawn(async move {

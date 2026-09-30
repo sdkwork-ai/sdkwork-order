@@ -437,9 +437,8 @@ fn build_create_membership_command(
     // command constructor validates RFC 3339 inputs, so unix-seconds text
     // here made every membership creation fail validation.
     let requested_at = sdkwork_order_service::canonical_now_timestamp();
-    let expire_at = sdkwork_order_service::canonical_timestamp_after_seconds(
-        payment_expire_seconds(),
-    );
+    let expire_at =
+        sdkwork_order_service::canonical_timestamp_after_seconds(payment_expire_seconds());
     let order_id = Uuid::new_v4().to_string();
     let order_item_id = Uuid::new_v4().to_string();
     let token = stable_hex_token(&format!(

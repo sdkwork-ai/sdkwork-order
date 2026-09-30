@@ -11,6 +11,7 @@ description = "Order → Account ledger integration adapters for points recharge
 [lints]
 workspace = true
 [lib]
+name = "sdkwork_order_integration_account"
 path = "src/lib.rs"
 
 [dependencies]

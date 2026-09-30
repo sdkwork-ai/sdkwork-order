@@ -3,19 +3,31 @@
   "kind": "sdkwork.database.table-registry",
   "tables": [
     {
-      "table_name": "commerce_order",
+      "table_name": "commerce_account_value_package",
       "owner": "sdkwork-order",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "commerce_order_item",
+      "table_name": "commerce_after_sales_event",
       "owner": "sdkwork-order",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "commerce_checkout_session",
+      "table_name": "commerce_after_sales_request",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_after_sales_request_item",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_after_sales_return_shipment",
       "owner": "sdkwork-order",
       "compliance_level": "L2",
       "lifecycle_status": "active"
@@ -33,7 +45,31 @@
       "lifecycle_status": "active"
     },
     {
+      "table_name": "commerce_checkout_session",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_exchange_currency_rate",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_exchange_rule",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
       "table_name": "commerce_fulfillment_order",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_order",
       "owner": "sdkwork-order",
       "compliance_level": "L2",
       "lifecycle_status": "active"
@@ -45,19 +81,19 @@
       "lifecycle_status": "active"
     },
     {
-      "table_name": "commerce_recharge_package",
+      "table_name": "commerce_order_cancellation",
       "owner": "sdkwork-order",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "commerce_account_value_package",
+      "table_name": "commerce_order_event",
       "owner": "sdkwork-order",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "commerce_token_bank_plan",
+      "table_name": "commerce_order_item",
       "owner": "sdkwork-order",
       "compliance_level": "L2",
       "lifecycle_status": "active"
@@ -70,6 +106,36 @@
     },
     {
       "table_name": "commerce_order_withdrawal_request",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_recharge_package",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_shipment",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_shipment_package",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_shipment_tracking_event",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_token_bank_plan",
       "owner": "sdkwork-order",
       "compliance_level": "L2",
       "lifecycle_status": "active"
