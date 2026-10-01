@@ -171,6 +171,8 @@ function normalizeCouponRedemptionResult(response: unknown): CouponRedemptionRes
   const rawStatus = String(source.status ?? source.orderStatus ?? "pending");
   const completed = rawStatus === "completed" || rawStatus === "succeeded";
   return {
+    ...source,
+    // 归一化字段放在展开之后:原始 status("succeeded")等不得覆盖契约字段。
     orderId: String(source.orderId ?? source.id ?? ""),
     orderNo: source.orderNo != null ? String(source.orderNo) : undefined,
     replayed: source.replayed === true,
@@ -180,7 +182,6 @@ function normalizeCouponRedemptionResult(response: unknown): CouponRedemptionRes
       ? String(benefit.grantAmount ?? benefit.grantPoints)
       : undefined,
     durationDays: benefit.durationDays != null ? Number(benefit.durationDays) : undefined,
-    ...source,
   };
 }
 
