@@ -288,16 +288,7 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
         .await
         .unwrap();
 
-    assert_eq!(
-        response.status(),
-        StatusCode::OK,
-        "approve body: {}",
-        String::from_utf8_lossy(
-            &axum::body::to_bytes(response.into_body(), 1_048_576)
-                .await
-                .unwrap_or_default()
-        )
-    );
+    assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
         ledger.operations(),
         vec![

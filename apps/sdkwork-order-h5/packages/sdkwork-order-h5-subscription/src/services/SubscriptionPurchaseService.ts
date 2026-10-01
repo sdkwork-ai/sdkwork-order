@@ -2,6 +2,7 @@ import { createClient as createOrderAppClient, type SdkworkAppClient as SdkworkO
 import {
   createSdkworkIdempotencyParams,
   createSdkworkOrderAppService,
+  unwrapSdkworkOrderResource,
   type SdkworkMembershipCheckoutPayment,
   type SdkworkOrderAppService,
 } from "@sdkwork/order-service";
@@ -157,30 +158,38 @@ export function createSubscriptionPurchaseService(
 }
 
 function normalizeCouponRedemptionResult(response: unknown): CouponRedemptionResult {
-  const data = (response as { data?: Record<string, unknown> })?.data ?? response;
-  const record = (data ?? {}) as Record<string, unknown>;
-  const benefit = record.benefit && typeof record.benefit === "object"
-    ? (record.benefit as Record<string, unknown>)
+  // 共享信封解包:data.item 与已解包载荷二者兼容(与 withdraw 服务同因,
+  // 裸读 {item} 包装层会把订单号/状态静默归空)。
+  const record = unwrapSdkworkOrderResource<Record<string, unknown>>(
+    response,
+    "Coupon redemption response is invalid.",
+  );
+  const source = (record ?? {}) as Record<string, unknown>;
+  const benefit = source.benefit && typeof source.benefit === "object"
+    ? (source.benefit as Record<string, unknown>)
     : {};
-  const rawStatus = String(record.status ?? record.orderStatus ?? "pending");
+  const rawStatus = String(source.status ?? source.orderStatus ?? "pending");
   const completed = rawStatus === "completed" || rawStatus === "succeeded";
   return {
-    orderId: String(record.orderId ?? record.id ?? ""),
-    orderNo: record.orderNo != null ? String(record.orderNo) : undefined,
-    replayed: record.replayed === true,
+    orderId: String(source.orderId ?? source.id ?? ""),
+    orderNo: source.orderNo != null ? String(source.orderNo) : undefined,
+    replayed: source.replayed === true,
     status: completed ? "completed" : "pending",
     benefitKind: benefit.kind != null ? String(benefit.kind) : undefined,
     grantAmount: benefit.grantAmount != null || benefit.grantPoints != null
       ? String(benefit.grantAmount ?? benefit.grantPoints)
       : undefined,
     durationDays: benefit.durationDays != null ? Number(benefit.durationDays) : undefined,
-    ...record,
+    ...source,
   };
 }
 
+
 function normalizeMembershipCheckoutPayment(response: unknown): SdkworkMembershipCheckoutPayment {
-  const data = (response as { data?: Record<string, unknown> })?.data ?? response;
-  const record = (data ?? {}) as Record<string, unknown>;
+  const record = unwrapSdkworkOrderResource<Record<string, unknown>>(
+    response,
+    "Membership checkout response is invalid.",
+  );
   const paid = record.paid === true;
   const rawStatus = String(record.status ?? "pending");
   return {
@@ -201,8 +210,10 @@ function normalizeMembershipCheckoutPayment(response: unknown): SdkworkMembershi
 }
 
 function normalizeTokenBankPayment(response: unknown): TokenBankPayment {
-  const data = (response as { data?: Record<string, unknown> })?.data ?? response;
-  const record = (data ?? {}) as Record<string, unknown>;
+  const record = unwrapSdkworkOrderResource<Record<string, unknown>>(
+    response,
+    "Token Bank payment response is invalid.",
+  );
   return {
     orderId: String(record.orderId ?? record.id ?? ""),
     orderNo: record.orderNo != null ? String(record.orderNo) : undefined,

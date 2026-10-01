@@ -17,24 +17,9 @@ pub(crate) fn now_canonical() -> String {
     sdkwork_order_service::canonical_now_timestamp()
 }
 
-/// Canonical store format for an instant `seconds` in the future (a negative
-/// value reaches into the past) — used to derive payment-window deadlines
-/// such as `expired_at`.
-#[allow(dead_code)]
-pub(crate) fn canonical_after_seconds(seconds: i64) -> String {
-    sdkwork_order_service::canonical_timestamp_after_seconds(seconds)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{canonical_after_seconds, now_canonical};
-
-    #[test]
-    fn canonical_timestamps_are_lexicographically_ordered() {
-        let now = now_canonical();
-        let later = canonical_after_seconds(60);
-        assert!(later > now, "{later} must sort after {now}");
-    }
+    use super::now_canonical;
 
     #[test]
     fn canonical_format_has_fixed_precision_and_utc_suffix() {
