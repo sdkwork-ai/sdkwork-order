@@ -4,13 +4,14 @@ use sdkwork_order_service_host::OrderServiceHost;
 use std::sync::Arc;
 
 use crate::openapi_contract::mount_app_openapi;
+use crate::refund_webhook_router::app_refund_webhook_router_with_postgres_pool_and_handlers;
 use crate::web_bootstrap::wrap_router_with_web_framework_from_env;
 use crate::{
     app_after_sales_router_with_postgres_pool, app_fulfillment_router_with_postgres_pool,
     app_membership_order_router_with_postgres_pool_and_payments,
     app_order_router_with_postgres_pool_and_inventory,
     app_payment_webhook_router_with_postgres_pool_and_integrations,
-    app_refund_webhook_router_with_postgres_pool, app_shipment_router_with_postgres_pool,
+    app_shipment_router_with_postgres_pool,
     build_app_checkout_router_with_integrations,
     build_app_recharge_checkout_router_with_integrations,
 };
@@ -71,13 +72,18 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
             app_payment_webhook_router_with_postgres_pool_and_integrations(
                 pool.clone(),
                 credit_port,
-                account_value_ledger_port,
+                account_value_ledger_port.clone(),
                 coupon_redemption_port,
                 membership_port,
                 physical_goods,
             ),
         )
-        .merge(app_refund_webhook_router_with_postgres_pool(pool))
+        .merge(app_refund_webhook_router_with_postgres_pool_and_handlers(
+            pool,
+            Some(account_value_ledger_port.clone()),
+            Some(physical_inventory),
+            None,
+        ))
 }
 
 fn build_recharge_router_postgres(

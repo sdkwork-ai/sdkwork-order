@@ -44,13 +44,39 @@ pub fn app_refund_webhook_router_with_postgres_pool_and_registries(
     pool: PgPool,
     refund_notify_handler_registry: Option<Arc<dyn RefundNotifyHandlerRegistry>>,
 ) -> Router {
+    app_refund_webhook_router_with_postgres_pool_and_handlers(pool, None, None, refund_notify_handler_registry)
+}
+
+/// Full post-processing mount: the default refund registry settles
+/// request-backed refunds (account hold settle/release + request
+/// terminalization) from the webhook outcome, using the deployment's ledger
+/// and physical inventory ports. A custom registry replaces the default
+/// wholesale.
+pub fn app_refund_webhook_router_with_postgres_pool_and_handlers(
+    pool: PgPool,
+    account_value_ledger_port: Option<Arc<dyn sdkwork_order_service::AccountValueLedgerPort>>,
+    physical_inventory_port: Option<Arc<dyn sdkwork_order_service::PhysicalInventoryReservationPort>>,
+    refund_notify_handler_registry: Option<Arc<dyn RefundNotifyHandlerRegistry>>,
+) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
     let deployment_registry = Arc::new(
         sdkwork_payment_providers::PaymentProviderRegistry::from_credentials(credentials.clone()),
     );
+    let default_registry = match account_value_ledger_port {
+        Some(ledger) => sdkwork_order_service::refund_notify_handler_registry_with(
+            Arc::new(sdkwork_order_repository_sqlx::PostgresRefundRequestSettlementStore::new(
+                pool.clone(),
+            )),
+            ledger,
+            physical_inventory_port,
+            Some(Arc::new(sdkwork_order_repository_sqlx::PostgresCommerceRechargeStore::new(pool.clone()))
+                as Arc<dyn sdkwork_order_service::AccountValueRequestExecutionStore>),
+        ),
+        None => default_refund_notify_handler_registry(),
+    };
     let framework = Arc::new(ProviderWebhookFramework::new_refund_only(
         pool.clone(),
-        refund_notify_handler_registry.unwrap_or_else(default_refund_notify_handler_registry),
+        refund_notify_handler_registry.unwrap_or(default_registry),
     ));
     Router::new()
         .route(
