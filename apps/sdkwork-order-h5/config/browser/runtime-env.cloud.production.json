@@ -1,0 +1,46 @@
+{
+  "environment": "production",
+  "deploymentProfile": "cloud",
+  "profileId": "cloud.production",
+  "runtimeTarget": "browser",
+  "browserOriginMode": "cross-origin",
+  "configProfile": "prod",
+  "buildMode": "production",
+  "deploymentMode": "web",
+  "appKey": "sdkwork-order-h5",
+  "auth": {
+    "tokenManagerMode": "appbase-global",
+    "tokenStorage": "browser-session",
+    "accessTokenHeader": "Access-Token",
+    "authTokenHeader": "Authorization",
+    "refreshEnabled": true
+  },
+  "i18n": {
+    "defaultLocale": "zh-CN",
+    "supportedLocales": [
+      "zh-CN",
+      "en-US"
+    ],
+    "fallbackLocale": "en-US"
+  },
+  "sdkBaseUrls": {
+    "sdkBaseUrl": "https://api.sdkwork.com",
+    "appApiBaseUrl": "https://api.sdkwork.com/app/v3/api",
+    "backendApiBaseUrl": "https://api.sdkwork.com/backend/v3/api"
+  },
+  "publicRuntime": {
+    "runtimeEnvFile": "/runtime-env.json",
+    "appApiBaseUrl": "https://api.sdkwork.com/app/v3/api",
+    "backendApiBaseUrl": "https://api.sdkwork.com/backend/v3/api"
+  },
+  "cloudApiBaseUrls": [
+    "https://api.sdkwork.com"
+  ],
+  "appApiBaseUrl": "https://api.sdkwork.com",
+  "backendApiBaseUrl": "https://api.sdkwork.com",
+  "driveAppApiBaseUrl": "https://api.sdkwork.com",
+  "appbaseAppApiBaseUrl": "https://api.sdkwork.com",
+  "deployAppApiBaseUrl": "https://api.sdkwork.com",
+  "openApiBaseUrl": "https://api.sdkwork.com",
+  "sdkBaseUrl": "https://api.sdkwork.com"
+}

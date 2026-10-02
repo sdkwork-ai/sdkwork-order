@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-order-h5",
+    "displayName": "SDKWork Order H5",
+    "version": "0.1.0",
+    "type": "h5-app",
+    "root": "sdkwork-order/apps/sdkwork-order-h5",
+    "domain": "commerce",
+    "capability": "order",
+    "surface": "app",
+    "languages": ["typescript", "react"],
+    "generated": false,
+    "manifests": ["package.json", "sdkwork.app.config.json", "etc/sdkwork.deployment.config.json"]
+  },
+  "canonicalSpecs": [
+    { "file": "APP_H5_ARCHITECTURE_SPEC.md", "path": "../../../../sdkwork-specs/APP_H5_ARCHITECTURE_SPEC.md", "purpose": "H5 application root architecture." },
+    { "file": "APP_CLIENT_ARCHITECTURE_ALIGNMENT_SPEC.md", "path": "../../../../sdkwork-specs/APP_CLIENT_ARCHITECTURE_ALIGNMENT_SPEC.md", "purpose": "Cross-client route identity and dist layout." },
+    { "file": "APP_SDK_INTEGRATION_SPEC.md", "path": "../../../../sdkwork-specs/APP_SDK_INTEGRATION_SPEC.md", "purpose": "SDK consumer composition." },
+    { "file": "FRONTEND_CODE_SPEC.md", "path": "../../../../sdkwork-specs/FRONTEND_CODE_SPEC.md", "purpose": "Frontend code standard." },
+    { "file": "APP_MOBILE_REACT_UI_SPEC.md", "path": "../../../../sdkwork-specs/APP_MOBILE_REACT_UI_SPEC.md", "purpose": "Mobile React UI packages." },
+    { "file": "TEST_SPEC.md", "path": "../../../../sdkwork-specs/TEST_SPEC.md", "purpose": "Verification." }
+  ],
+  "contracts": {
+    "layerRole": "runtime-composition",
+    "publicExports": ["."],
+    "providedPorts": [
+      { "name": "sdkworkOrderH5App", "export": "." }
+    ],
+    "requiredPorts": [
+      { "name": "orderAppSdk", "package": "@sdkwork/order-app-sdk", "export": "." },
+      { "name": "orderMobileReactOrders", "package": "@sdkwork/order-mobile-react-orders", "export": "." },
+      { "name": "orderH5Subscription", "package": "@sdkwork/order-h5-subscription", "export": "." },
+      { "name": "orderH5Withdraw", "package": "@sdkwork/order-h5-withdraw", "export": "." },
+      { "name": "orderH5Shell", "package": "@sdkwork/order-h5-shell", "export": "." },
+      { "name": "authPcReact", "package": "@sdkwork/auth-pc-react", "export": "." },
+      { "name": "authRuntimePcReact", "package": "@sdkwork/auth-runtime-pc-react", "export": "." },
+      { "name": "iamAppSdk", "package": "@sdkwork/iam-app-sdk", "export": "." }
+    ],
+    "runtimeEntrypoints": [
+      "src/main.tsx",
+      "src/App.tsx",
+      "src/AuthGate.tsx",
+      "src/bootstrap/runtime.ts",
+      "src/bootstrap/orderRuntime.ts"
+    ],
+    "routeManifest": "src/bootstrap/routes.ts",
+    "sdkClients": ["SdkworkAppClient"],
+    "sdkDependencies": [
+      { "workspace": "sdkwork-order-app-sdk", "role": "order-app-capability", "required": true },
+      { "workspace": "sdkwork-iam-app-sdk", "role": "appbase-iam", "required": true }
+    ],
+    "dependencyApiExports": [],
+    "events": [],
+    "configKeys": ["SDKWORK_API_BASE_URL", "VITE_SDKWORK_ORDER_H5_SDK_BASE_URL"]
+  },
+  "verification": {
+    "commands": [
+      "pnpm --dir apps/sdkwork-order-h5 run typecheck",
+      "pnpm --dir apps/sdkwork-order-h5 run build:dev",
+      "pnpm --dir apps/sdkwork-order-h5 run build:dev:cloud",
+      "pnpm test:vitest"
+    ]
+  }
+}

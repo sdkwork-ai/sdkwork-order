@@ -1,0 +1,34 @@
+{
+  "name": "@sdkwork/order-h5-shell",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Mobile shell (top bar + bottom tab bar, value hub, i18n init) for the order H5 root.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "i18next": "catalog:"
+  },
+  "peerDependencies": {
+    "lucide-react": ">=1.0.0",
+    "react": ">=18.2.0 <20.0.0",
+    "react-dom": ">=18.2.0 <20.0.0",
+    "react-i18next": ">=15.0.0",
+    "react-router-dom": ">=7.0.0"
+  },
+  "sdkwork": {
+    "workspace": "sdkwork-order",
+    "architecture": "h5-react",
+    "domain": "commerce",
+    "capability": "shell",
+    "status": "ready"
+  }
+}

@@ -14,7 +14,7 @@
     }
   },
   "dependencies": {
-    "@sdkwork/order-app-sdk": "workspace:*",
+    "@sdkwork/order-h5-core": "workspace:*",
     "@sdkwork/order-service": "workspace:*",
     "@sdkwork/ui-mobile-react": "workspace:*",
     "lucide-react": "catalog:",

@@ -1,0 +1,56 @@
+{
+  "name": "@sdkwork/order-h5-core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Core runtime for the order H5 root: composed domain SDK clients and subscription/withdraw service implementations consumed through core public exports.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./sdk": {
+      "types": "./src/sdk/index.ts",
+      "import": "./src/sdk/index.ts",
+      "default": "./src/sdk/index.ts"
+    },
+    "./modules": {
+      "types": "./src/modules/index.ts",
+      "import": "./src/modules/index.ts",
+      "default": "./src/modules/index.ts"
+    },
+    "./host": {
+      "types": "./src/host/index.ts",
+      "import": "./src/host/index.ts",
+      "default": "./src/host/index.ts"
+    },
+    "./session": {
+      "types": "./src/session/index.ts",
+      "import": "./src/session/index.ts",
+      "default": "./src/session/index.ts"
+    },
+    "./composition": {
+      "types": "./src/composition/index.ts",
+      "import": "./src/composition/index.ts",
+      "default": "./src/composition/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@sdkwork/membership-app-sdk": "workspace:*",
+    "@sdkwork/order-app-sdk": "workspace:*",
+    "@sdkwork/order-service": "workspace:*",
+    "@sdkwork/utils": "workspace:*"
+  },
+  "sdkwork": {
+    "workspace": "sdkwork-order",
+    "architecture": "h5-react",
+    "domain": "commerce",
+    "capability": "core",
+    "surface": "shared-h5-runtime",
+    "status": "ready"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "environment": "staging",
+  "deploymentProfile": "cloud",
+  "profileId": "cloud.staging",
+  "runtimeTarget": "browser",
+  "browserOriginMode": "cross-origin",
+  "configProfile": "staging",
+  "buildMode": "staging",
+  "deploymentMode": "web",
+  "appKey": "sdkwork-order-h5",
+  "auth": {
+    "tokenManagerMode": "appbase-global",
+    "tokenStorage": "browser-session",
+    "accessTokenHeader": "Access-Token",
+    "authTokenHeader": "Authorization",
+    "refreshEnabled": true
+  },
+  "i18n": {
+    "defaultLocale": "zh-CN",
+    "supportedLocales": [
+      "zh-CN",
+      "en-US"
+    ],
+    "fallbackLocale": "en-US"
+  },
+  "sdkBaseUrls": {
+    "sdkBaseUrl": "https://api-staging.sdkwork.com",
+    "appApiBaseUrl": "https://api-staging.sdkwork.com/app/v3/api",
+    "backendApiBaseUrl": "https://api-staging.sdkwork.com/backend/v3/api"
+  },
+  "publicRuntime": {
+    "runtimeEnvFile": "/runtime-env.json",
+    "appApiBaseUrl": "https://api-staging.sdkwork.com/app/v3/api",
+    "backendApiBaseUrl": "https://api-staging.sdkwork.com/backend/v3/api"
+  },
+  "cloudApiBaseUrls": [
+    "https://api-staging.sdkwork.com"
+  ],
+  "appApiBaseUrl": "https://api-staging.sdkwork.com",
+  "backendApiBaseUrl": "https://api-staging.sdkwork.com",
+  "driveAppApiBaseUrl": "https://api-staging.sdkwork.com",
+  "appbaseAppApiBaseUrl": "https://api-staging.sdkwork.com",
+  "deployAppApiBaseUrl": "https://api-staging.sdkwork.com",
+  "openApiBaseUrl": "https://api-staging.sdkwork.com",
+  "sdkBaseUrl": "https://api-staging.sdkwork.com"
+}

@@ -24,6 +24,9 @@ catalogs:
     '@vitejs/plugin-react':
       specifier: ^6.0.5
       version: 6.1.1
+    i18next:
+      specifier: ^26.3.6
+      version: 26.4.2
     jsdom:
       specifier: 29.1.1
       version: 29.1.1
@@ -42,6 +45,9 @@ catalogs:
     react-i18next:
       specifier: ^17.0.11
       version: 17.0.15
+    react-router-dom:
+      specifier: ^7.18.2
+      version: 7.18.4
     typescript:
       specifier: ^6.0.2
       version: 6.0.3
@@ -802,7 +808,7 @@ importers:
         version: 19.2.4
       react-i18next:
         specifier: '>=17.0.0'
-        version: 17.0.8(i18next@26.3.4(typescript@6.0.3))(react-dom@19.3.0(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
+        version: 17.0.8(i18next@26.4.2(typescript@6.0.3))(react-dom@19.3.0(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
       react-router:
         specifier: '>=7.0.0'
         version: 7.18.2(react-dom@19.3.0(react@19.2.4))(react@19.2.4)
@@ -828,7 +834,89 @@ importers:
         specifier: workspace:*
         version: link:../../../../../sdkwork-utils/packages/sdkwork-utils-typescript
 
-  apps/sdkwork-order-h5/packages/sdkwork-order-h5-subscription:
+  apps/sdkwork-order-h5:
+    dependencies:
+      '@sdkwork/auth-pc-react':
+        specifier: workspace:*
+        version: link:../../../sdkwork-iam/apps/sdkwork-iam-pc/packages/sdkwork-auth-pc-react
+      '@sdkwork/auth-runtime-pc-react':
+        specifier: workspace:*
+        version: link:../../../sdkwork-iam/apps/sdkwork-iam-pc/packages/sdkwork-auth-runtime-pc-react
+      '@sdkwork/iam-app-sdk':
+        specifier: workspace:*
+        version: link:../../../sdkwork-iam/sdks/sdkwork-iam-app-sdk/sdkwork-iam-app-sdk-typescript
+      '@sdkwork/iam-contracts':
+        specifier: workspace:*
+        version: link:../../../sdkwork-iam/apps/sdkwork-iam-common/packages/sdkwork-iam-contracts
+      '@sdkwork/iam-credential-entry':
+        specifier: workspace:*
+        version: link:../../../sdkwork-iam/apps/sdkwork-iam-common/packages/sdkwork-iam-credential-entry
+      '@sdkwork/iam-runtime':
+        specifier: workspace:*
+        version: link:../../../sdkwork-iam/apps/sdkwork-iam-common/packages/sdkwork-iam-runtime
+      '@sdkwork/order-app-sdk':
+        specifier: workspace:*
+        version: link:../../sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript
+      '@sdkwork/order-h5-shell':
+        specifier: workspace:*
+        version: link:packages/sdkwork-order-h5-shell
+      '@sdkwork/order-h5-subscription':
+        specifier: workspace:*
+        version: link:packages/sdkwork-order-h5-subscription
+      '@sdkwork/order-h5-withdraw':
+        specifier: workspace:*
+        version: link:packages/sdkwork-order-h5-withdraw
+      '@sdkwork/order-mobile-react-orders':
+        specifier: workspace:*
+        version: link:../sdkwork-order-common/packages/sdkwork-order-mobile-react-orders
+      '@sdkwork/runtime-bootstrap':
+        specifier: workspace:*
+        version: link:../../../sdkwork-appbase/packages/common/foundation/sdkwork-runtime-bootstrap
+      '@sdkwork/sdk-common':
+        specifier: workspace:*
+        version: link:../../../sdkwork-sdk-commons/sdkwork-sdk-common-typescript
+      '@tailwindcss/vite':
+        specifier: ^4.2.2
+        version: 4.2.2(vite@8.1.0(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0))
+      i18next:
+        specifier: 'catalog:'
+        version: 26.4.2(typescript@6.0.3)
+      lucide-react:
+        specifier: 'catalog:'
+        version: 1.49.0(@types/react@19.2.14)(react@19.3.0)
+      react:
+        specifier: 'catalog:'
+        version: 19.3.0
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.0(react@19.3.0)
+      react-i18next:
+        specifier: 'catalog:'
+        version: 17.0.15(i18next@26.4.2(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+      react-router-dom:
+        specifier: 'catalog:'
+        version: 7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: 'catalog:'
+        version: 6.1.1(vite@8.1.0(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0))
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.1.0(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)
+
+  apps/sdkwork-order-h5/packages/sdkwork-order-h5-core:
     dependencies:
       '@sdkwork/membership-app-sdk':
         specifier: workspace:*
@@ -836,6 +924,39 @@ importers:
       '@sdkwork/order-app-sdk':
         specifier: workspace:*
         version: link:../../../../sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript
+      '@sdkwork/order-service':
+        specifier: workspace:*
+        version: link:../../../sdkwork-order-common/packages/sdkwork-order-service
+      '@sdkwork/utils':
+        specifier: workspace:*
+        version: link:../../../../../sdkwork-utils/packages/sdkwork-utils-typescript
+
+  apps/sdkwork-order-h5/packages/sdkwork-order-h5-shell:
+    dependencies:
+      i18next:
+        specifier: 'catalog:'
+        version: 26.4.2(typescript@6.0.3)
+      lucide-react:
+        specifier: '>=1.0.0'
+        version: 1.7.0(react@19.2.4)
+      react:
+        specifier: '>=18.2.0 <20.0.0'
+        version: 19.2.4
+      react-dom:
+        specifier: '>=18.2.0 <20.0.0'
+        version: 19.2.4(react@19.2.4)
+      react-i18next:
+        specifier: '>=15.0.0'
+        version: 17.0.8(i18next@26.4.2(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
+      react-router-dom:
+        specifier: '>=7.0.0'
+        version: 7.18.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+
+  apps/sdkwork-order-h5/packages/sdkwork-order-h5-subscription:
+    dependencies:
+      '@sdkwork/order-h5-core':
+        specifier: workspace:*
+        version: link:../sdkwork-order-h5-core
       '@sdkwork/order-mobile-react-orders':
         specifier: workspace:*
         version: link:../../../sdkwork-order-common/packages/sdkwork-order-mobile-react-orders
@@ -848,9 +969,6 @@ importers:
       '@sdkwork/ui-mobile-react':
         specifier: workspace:*
         version: link:../../../../../sdkwork-ui/sdkwork-ui-mobile-react
-      '@sdkwork/utils':
-        specifier: workspace:*
-        version: link:../../../../../sdkwork-utils/packages/sdkwork-utils-typescript
       lucide-react:
         specifier: 'catalog:'
         version: 1.49.0(@types/react@19.2.14)(react@19.3.0)
@@ -862,7 +980,7 @@ importers:
         version: 19.3.0
       react-i18next:
         specifier: 'catalog:'
-        version: 17.0.15(i18next@26.3.4(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+        version: 17.0.15(i18next@26.4.2(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
       react-router:
         specifier: '>=7.0.0'
         version: 7.18.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -876,9 +994,9 @@ importers:
 
   apps/sdkwork-order-h5/packages/sdkwork-order-h5-withdraw:
     dependencies:
-      '@sdkwork/order-app-sdk':
+      '@sdkwork/order-h5-core':
         specifier: workspace:*
-        version: link:../../../../sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript
+        version: link:../sdkwork-order-h5-core
       '@sdkwork/order-service':
         specifier: workspace:*
         version: link:../../../sdkwork-order-common/packages/sdkwork-order-service
@@ -893,7 +1011,7 @@ importers:
         version: 19.3.0
       react-i18next:
         specifier: 'catalog:'
-        version: 17.0.15(i18next@26.3.4(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+        version: 17.0.15(i18next@26.4.2(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
       react-router:
         specifier: '>=7.0.0'
         version: 7.18.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -1212,7 +1330,7 @@ importers:
         version: 19.3.0
       react-i18next:
         specifier: 'catalog:'
-        version: 17.0.15(i18next@26.3.4(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.3.0)(typescript@6.0.3)
+        version: 17.0.15(i18next@26.4.2(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.3.0)(typescript@6.0.3)
     devDependencies:
       '@types/react':
         specifier: 'catalog:'
@@ -3830,6 +3948,14 @@ packages:
       typescript:
         optional: true
 
+  i18next@26.4.2:
+    resolution: {integrity: sha512-RX+R0VLg13IbvRuJSxnqykUFS9vQZTl8wYpWPCIUDWVrSGjsQywB5Y+pjzrkboxGAuYfJZVH1InFTdgBdxq6ug==}
+    peerDependencies:
+      typescript: ^5 || ^6 || ^7
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
@@ -4318,6 +4444,13 @@ packages:
       react: '>=18'
       react-dom: '>=18'
 
+  react-router-dom@7.18.4:
+    resolution: {integrity: sha512-yrfmJHIpDG7taCpqKjT1G5B6q3O2K+RN8/fgNf0lTjCwiPbQ0ei6vXX9ZjQR+7ld8Tr7Z5xmyMnZ8YJrphWQUw==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      react: '>=18'
+      react-dom: '>=18'
+
   react-router@7.18.1:
     resolution: {integrity: sha512-GDLgg3i3uM0aeJO3Fm+TCS+sDQ7gu12T6x0qdTEzcwqEfleci7JwugVNIF3U//0FWKnJT7ptG+20B2jfDqnZAg==}
     engines: {node: '>=20.0.0'}
@@ -4330,6 +4463,16 @@ packages:
 
   react-router@7.18.2:
     resolution: {integrity: sha512-aUVMjFm3GAPTTZL7oYr5E7ETiqfQCHRLH+B+5afnICvf0r7kkK4eR6SMuwbSTJw/7t+12khT/Kahij49fqOCIg==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      react: '>=18'
+      react-dom: '>=18'
+    peerDependenciesMeta:
+      react-dom:
+        optional: true
+
+  react-router@7.18.4:
+    resolution: {integrity: sha512-PUPQcMhMGRAslLcvtlPz/kmzBEWPhLdgLFrL7pLNepBL6dX0lWj4WD2cUYVgYCuT3jxvghYFg81cDTj44DhetQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       react: '>=18'
@@ -4523,6 +4666,9 @@ packages:
 
   tailwindcss@4.2.2:
     resolution: {integrity: sha512-KWBIxs1Xb6NoLdMVqhbhgwZf2PGBpPEiwOqgI4pFIYbNTfBXiKYyWoTsXgBQ9WFg/OlhnvHaY+AEpW7wSmFo2Q==}
+
+  tailwindcss@4.3.3:
+    resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
 
   tapable@2.3.3:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
@@ -6465,6 +6611,13 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.2.2
       '@tailwindcss/oxide-win32-x64-msvc': 4.2.2
 
+  '@tailwindcss/vite@4.2.2(vite@8.1.0(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0))':
+    dependencies:
+      '@tailwindcss/node': 4.2.2
+      '@tailwindcss/oxide': 4.2.2
+      tailwindcss: 4.2.2
+      vite: 8.1.0(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)
+
   '@tailwindcss/vite@4.2.2(vite@8.1.5(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0))':
     dependencies:
       '@tailwindcss/node': 4.2.2
@@ -7411,7 +7564,7 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.2
 
-  i18next@26.3.4(typescript@6.0.3):
+  i18next@26.4.2(typescript@6.0.3):
     optionalDependencies:
       typescript: 6.0.3
 
@@ -7810,22 +7963,22 @@ snapshots:
     dependencies:
       react: 19.2.4
 
-  react-i18next@17.0.15(i18next@26.3.4(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.3.0)(typescript@6.0.3):
+  react-i18next@17.0.15(i18next@26.4.2(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.3.0)(typescript@6.0.3):
     dependencies:
       '@babel/runtime': 7.29.7
       html-parse-stringify: 4.0.1
-      i18next: 26.3.4(typescript@6.0.3)
+      i18next: 26.4.2(typescript@6.0.3)
       react: 19.3.0
       use-sync-external-store: 1.6.0(react@19.3.0)
     optionalDependencies:
       react-dom: 19.2.4(react@19.2.4)
       typescript: 6.0.3
 
-  react-i18next@17.0.15(i18next@26.3.4(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3):
+  react-i18next@17.0.15(i18next@26.4.2(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3):
     dependencies:
       '@babel/runtime': 7.29.7
       html-parse-stringify: 4.0.1
-      i18next: 26.3.4(typescript@6.0.3)
+      i18next: 26.4.2(typescript@6.0.3)
       react: 19.3.0
       use-sync-external-store: 1.6.0(react@19.3.0)
     optionalDependencies:
@@ -7854,11 +8007,22 @@ snapshots:
       react-dom: 19.2.4(react@19.2.4)
       typescript: 6.0.2
 
-  react-i18next@17.0.8(i18next@26.3.4(typescript@6.0.3))(react-dom@19.3.0(react@19.2.4))(react@19.2.4)(typescript@6.0.3):
+  react-i18next@17.0.8(i18next@26.4.2(typescript@6.0.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3):
     dependencies:
       '@babel/runtime': 7.29.7
       html-parse-stringify: 3.0.1
-      i18next: 26.3.4(typescript@6.0.3)
+      i18next: 26.4.2(typescript@6.0.3)
+      react: 19.2.4
+      use-sync-external-store: 1.6.0(react@19.2.4)
+    optionalDependencies:
+      react-dom: 19.2.4(react@19.2.4)
+      typescript: 6.0.3
+
+  react-i18next@17.0.8(i18next@26.4.2(typescript@6.0.3))(react-dom@19.3.0(react@19.2.4))(react@19.2.4)(typescript@6.0.3):
+    dependencies:
+      '@babel/runtime': 7.29.7
+      html-parse-stringify: 3.0.1
+      i18next: 26.4.2(typescript@6.0.3)
       react: 19.2.4
       use-sync-external-store: 1.6.0(react@19.2.4)
     optionalDependencies:
@@ -7897,6 +8061,12 @@ snapshots:
       react-dom: 19.2.4(react@19.2.4)
       react-router: 7.18.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
 
+  react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+    dependencies:
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+      react-router: 7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+
   react-router@7.18.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       cookie: 1.1.1
@@ -7922,6 +8092,14 @@ snapshots:
       react-dom: 19.3.0(react@19.2.4)
 
   react-router@7.18.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+    dependencies:
+      cookie: 1.1.1
+      react: 19.3.0
+      set-cookie-parser: 2.7.2
+    optionalDependencies:
+      react-dom: 19.3.0(react@19.3.0)
+
+  react-router@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
       cookie: 1.1.1
       react: 19.3.0
@@ -8170,6 +8348,8 @@ snapshots:
   tailwind-merge@3.6.0: {}
 
   tailwindcss@4.2.2: {}
+
+  tailwindcss@4.3.3: {}
 
   tapable@2.3.3: {}
 

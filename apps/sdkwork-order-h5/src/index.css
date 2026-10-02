@@ -1,0 +1,215 @@
+@import "tailwindcss";
+
+/* Tailwind v4 scans app-root files only; the mobile surface composes pages
+   from workspace packages, so their sources are declared explicitly. */
+@source "../../sdkwork-order-common/packages/sdkwork-order-mobile-react-orders/src";
+@source "../packages/sdkwork-order-h5-shell/src";
+@source "../packages/sdkwork-order-h5-subscription/src";
+@source "../packages/sdkwork-order-h5-withdraw/src";
+@source "../../../sdkwork-ui/sdkwork-ui-mobile-react/src";
+
+:root {
+  --sdk-h5-primary: #2563eb;
+  --sdk-h5-text: #111827;
+  --sdk-h5-text-muted: #6b7280;
+  --sdk-h5-surface: #f5f6f8;
+  --sdk-h5-panel: #ffffff;
+  --sdk-h5-border: #e5e7eb;
+  --sdk-h5-danger: #dc2626;
+  /* Single source of truth for tab-bar clearance: fixed bars on tab surfaces
+     and main's gutter must match the rendered tab-bar height exactly. */
+  --sdk-h5-tabbar-height: 3.5rem;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--sdk-h5-surface);
+  color: var(--sdk-h5-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sdk-h5-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.sdk-h5-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--sdk-h5-primary);
+  color: #fff;
+}
+
+.sdk-h5-topbar-brand {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 0;
+}
+
+.sdk-h5-topbar-title {
+  font-size: 0.82rem;
+  opacity: 0.85;
+}
+
+.sdk-h5-main {
+  flex: 1;
+  padding-bottom: calc(var(--sdk-h5-tabbar-height) + env(safe-area-inset-bottom));
+}
+
+.sdk-h5-tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--sdk-h5-panel);
+  border-top: 1px solid var(--sdk-h5-border);
+  height: calc(var(--sdk-h5-tabbar-height) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
+}
+
+.sdk-h5-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--sdk-h5-text-muted);
+  font-size: 0.68rem;
+}
+
+.sdk-h5-tab-active {
+  color: var(--sdk-h5-primary);
+}
+
+.sdk-h5-tab-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.sdk-h5-page {
+  padding: 0.9rem;
+}
+
+.sdk-h5-page-title {
+  font-size: 1.15rem;
+  margin: 0 0 0.8rem;
+}
+
+.sdk-h5-section {
+  background: var(--sdk-h5-panel);
+  border-radius: 0.85rem;
+  padding: 0.85rem;
+  margin-bottom: 0.8rem;
+}
+
+.sdk-h5-section h2 {
+  font-size: 0.92rem;
+  margin: 0 0 0.6rem;
+}
+
+.sdk-h5-loading,
+.sdk-h5-empty {
+  text-align: center;
+  color: var(--sdk-h5-text-muted);
+  padding: 2.2rem 0;
+  font-size: 0.88rem;
+}
+
+.sdk-h5-center {
+  text-align: center;
+  margin-top: 0.8rem;
+}
+
+.sdk-h5-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+  cursor: pointer;
+  background: var(--sdk-h5-panel);
+  color: var(--sdk-h5-text);
+}
+
+.sdk-h5-button-primary {
+  background: var(--sdk-h5-primary);
+  color: #fff;
+}
+
+.sdk-h5-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
+  margin-bottom: 0.8rem;
+}
+
+.sdk-h5-entry-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--sdk-h5-panel);
+  border-radius: 0.75rem;
+  padding: 0.85rem 0.3rem;
+  font-size: 0.78rem;
+  color: var(--sdk-h5-text);
+  text-decoration: none;
+  border: 1px solid var(--sdk-h5-border);
+}
+
+.sdk-h5-entry-item svg {
+  color: var(--sdk-h5-primary);
+}
+
+.sdk-h5-entry-desc {
+  color: var(--sdk-h5-text-muted);
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+/* Mobile-style H5: hide scrollbars (content stays scrollable) so the page
+   gutter stays clean next to fixed bars. */
+html {
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
+  width: 0;
+}
+
+.sdk-h5-main {
+  scrollbar-width: none;
+}
+
+.sdk-h5-main::-webkit-scrollbar {
+  display: none;
+  width: 0;
+}

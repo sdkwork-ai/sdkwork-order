@@ -1,0 +1,43 @@
+{
+  "environment": "demo",
+  "deploymentProfile": "standalone",
+  "profileId": "standalone.demo",
+  "runtimeTarget": "browser",
+  "browserOriginMode": "same-origin",
+  "configProfile": "demo",
+  "buildMode": "demo",
+  "deploymentMode": "web",
+  "appKey": "sdkwork-order-h5",
+  "auth": {
+    "tokenManagerMode": "appbase-global",
+    "tokenStorage": "browser-session",
+    "accessTokenHeader": "Access-Token",
+    "authTokenHeader": "Authorization",
+    "refreshEnabled": true
+  },
+  "i18n": {
+    "defaultLocale": "zh-CN",
+    "supportedLocales": [
+      "zh-CN",
+      "en-US"
+    ],
+    "fallbackLocale": "en-US"
+  },
+  "sdkBaseUrls": {
+    "sdkBaseUrl": "/",
+    "appApiBaseUrl": "/app/v3/api",
+    "backendApiBaseUrl": "/backend/v3/api"
+  },
+  "publicRuntime": {
+    "runtimeEnvFile": "/runtime-env.json",
+    "appApiBaseUrl": "/app/v3/api",
+    "backendApiBaseUrl": "/backend/v3/api"
+  },
+  "appApiBaseUrl": "/",
+  "backendApiBaseUrl": "/",
+  "driveAppApiBaseUrl": "/",
+  "appbaseAppApiBaseUrl": "/",
+  "deployAppApiBaseUrl": "/",
+  "openApiBaseUrl": "/",
+  "sdkBaseUrl": "/"
+}

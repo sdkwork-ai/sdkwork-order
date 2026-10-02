@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 3,
+  "kind": "sdkwork.app",
+  "app": {
+    "key": "sdkwork-order-h5",
+    "name": "SDKWork Order H5",
+    "displayName": "SDKWork 订单 H5",
+    "description": "Order capability H5 surface for buyer order, cashier, voucher, account value and withdraw workflows.",
+    "vendor": "SDKWork",
+    "appType": "APP_REACT",
+    "versionSource": "package.json",
+    "identifiers": {
+      "packageName": null,
+      "bundleId": null,
+      "desktopAppId": null,
+      "containerImage": "registry.sdkwork.com/apps/sdkwork-order-h5"
+    },
+    "officialWebsiteUrl": "https://sdkwork.com/apps/sdkwork-order-h5"
+  },
+  "backend": {
+    "profileKey": "backend-root-admin",
+    "ownerMode": "tenant",
+    "grantMode": "current",
+    "platform": "WEB",
+    "appId": null,
+    "organizationId": "0",
+    "tenantId": "100001"
+  },
+  "runtime": {
+    "family": "web",
+    "framework": "react",
+    "runtimes": [
+      "WEB",
+      "BROWSER"
+    ],
+    "deliveryModes": [
+      "WEB_URL"
+    ],
+    "supportedDeploymentProfiles": [
+      "standalone",
+      "cloud"
+    ],
+    "defaultDeploymentProfile": "standalone"
+  },
+  "media": {
+    "icons": {
+      "primary": {
+        "id": "sdkwork-order-h5-primary-icon",
+        "type": "ICON",
+        "purpose": "PRIMARY",
+        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-h5/assets/icon-1024.png",
+        "platform": "APP",
+        "locale": "en-US",
+        "width": 1024,
+        "height": 1024,
+        "format": "PNG",
+        "fileSizeBytes": 524288,
+        "alphaChannel": false,
+        "sortOrder": 0,
+        "enabled": true,
+        "metadata": {
+          "generatedPlaceholder": true
+        }
+      },
+      "platform": [],
+      "metadata": {
+        "generatedPlaceholder": true
+      }
+    },
+    "screenshots": [
+      {
+        "id": "sdkwork-order-h5-web-screenshot",
+        "type": "SCREENSHOT",
+        "purpose": "CATALOG_SCREENSHOT",
+        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-h5/media/web-screenshot.png",
+        "platform": "WEB",
+        "locale": "en-US",
+        "deviceClass": "BROWSER",
+        "displayType": "WEB_MOBILE",
+        "width": 1920,
+        "height": 1080,
+        "format": "PNG",
+        "fileSizeBytes": 1048576,
+        "alphaChannel": false,
+        "caption": "SDKWork Order H5 mobile screenshot.",
+        "sortOrder": 0,
+        "enabled": true,
+        "metadata": {
+          "generatedPlaceholder": true,
+          "altText": "SDKWork Order H5 app screenshot."
+        }
+      }
+    ],
+    "previews": [
+      {
+        "id": "sdkwork-order-h5-catalog-preview",
+        "type": "PREVIEW_IMAGE",
+        "purpose": "CATALOG_PREVIEW",
+        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-h5/media/preview-cover.png",
+        "platform": "WEB",
+        "locale": "en-US",
+        "width": 1600,
+        "height": 900,
+        "format": "PNG",
+        "fileSizeBytes": 786432,
+        "alphaChannel": false,
+        "caption": "SDKWork Order H5 preview.",
+        "sortOrder": 0,
+        "enabled": true,
+        "metadata": {
+          "generatedPlaceholder": true,
+          "altText": "SDKWork Order H5 preview cover."
+        }
+      }
+    ],
+    "metadata": {
+      "assetVersion": "0.1.0",
+      "defaultLocale": "en-US"
+    }
+  },
+  "publish": {
+    "config": {
+      "workspaceRoot": "sdkwork-order",
+      "managedBy": "sdkwork-order-workspace"
+    },
+    "status": "ACTIVE",
+    "platforms": [
+      "H5"
+    ],
+    "installPlatforms": [
+      "H5"
+    ],
+    "defaultPackageId": "web-universal-cloud-browser-zip",
+    "installSkill": {
+      "name": "sdkwork-skills-app"
+    },
+    "stores": [],
+    "storeUrl": "https://sdkwork.com/apps/sdkwork-order-h5"
+  },
+  "artifacts": {
+    "installConfig": {
+      "defaultPackageId": "web-universal-cloud-browser-zip",
+      "installCommand": "sdkwork install sdkwork-order-h5",
+      "launchCommand": "sdkwork open sdkwork-order-h5",
+      "uninstallCommand": "sdkwork uninstall sdkwork-order-h5",
+      "packages": [
+        {
+          "id": "web-universal-cloud-browser-zip",
+          "name": "SDKWork Order H5 Web Bundle",
+          "sourceType": "WEB_URL",
+          "packageFormat": "ZIP",
+          "platform": "WEB",
+          "url": "https://cdn.sdkwork.com/apps/sdkwork-order-h5/STABLE/0.1.0/web.zip",
+          "enabled": true,
+          "metadata": {},
+          "checksumAlgorithm": "SHA-256",
+          "checksum": "8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a",
+          "architecture": "universal",
+          "deploymentProfile": "cloud",
+          "runtimeTarget": "browser",
+          "profileBinding": "fixed",
+          "targetPlatform": "web",
+          "clientArchitecture": "h5"
+        }
+      ],
+      "metadata": {
+        "workspaceRoot": "apps/sdkwork-order-h5",
+        "framework": "react",
+        "packageManager": "pnpm@10.33.0"
+      }
+    }
+  },
+  "release": {
+    "currentVersion": "0.1.0",
+    "defaultChannel": "STABLE",
+    "latest": {
+      "STABLE": "0.1.0"
+    },
+    "notes": [
+      {
+        "version": "0.1.0",
+        "releaseChannel": "STABLE",
+        "title": "SDKWork Order H5 0.1.0",
+        "summary": "SDKWork Order H5 initialized standard release.",
+        "content": "Initial SDKWork App Standard v3 manifest for SDKWork Order H5.",
+        "highlights": [
+          "SDKWork App Standard v3 configuration initialized",
+          "platform_app projection metadata standardized",
+          "Download package matrix normalized"
+        ],
+        "packageIds": [
+          "web-universal-cloud-browser-zip"
+        ],
+        "publishedAt": "2026-10-03T00:00:00Z",
+        "current": true,
+        "forceUpdate": false,
+        "minSupportedVersion": "0.1.0",
+        "metadata": {}
+      }
+    ]
+  },
+  "security": {
+    "checksumRequired": false,
+    "signatureRequired": false,
+    "sbomRequired": false
+  },
+  "devApp": {
+    "build": {
+      "targets": []
+    },
+    "sourceRoot": "apps/sdkwork-order-h5"
+  },
+  "metadata": {
+    "standardOwner": "sdkwork-order",
+    "initializedAt": "2026-10-03T00:00:00.000Z",
+    "deploymentConfig": "etc/sdkwork.deployment.config.json"
+  }
+}
