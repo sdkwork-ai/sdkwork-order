@@ -1,0 +1,81 @@
+.orders-tabs {
+  background: #fff;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.orders-tab {
+  display: inline-block;
+  padding: 24rpx 30rpx;
+  font-size: 28rpx;
+  color: #6b7280;
+}
+
+.orders-tab-active {
+  color: #2f54eb;
+  font-weight: 600;
+  border-bottom: 4rpx solid #2f54eb;
+}
+
+.orders-stats {
+  display: flex;
+  justify-content: space-between;
+}
+
+.orders-stat {
+  flex: 1;
+  text-align: center;
+}
+
+.orders-stat-num {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.orders-list {
+  padding: 4rpx 20rpx 20rpx;
+}
+
+.orders-item {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.orders-subject {
+  font-size: 28rpx;
+  font-weight: 600;
+  flex: 1;
+  margin-right: 16rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orders-status {
+  color: #2f54eb;
+  font-size: 26rpx;
+  flex-shrink: 0;
+}
+
+.orders-meta {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+}
+
+.orders-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.orders-action {
+  font-size: 24rpx;
+  padding: 8rpx 26rpx;
+}

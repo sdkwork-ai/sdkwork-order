@@ -1,0 +1,84 @@
+<view class="page-recharge">
+  <view class="mp-segment">
+    <view
+      class="mp-segment-item {{segment === 'plans' ? 'mp-segment-item-active' : ''}}"
+      bindtap="switchSegment"
+      data-segment="plans"
+    >Token Bank 计划</view>
+    <view
+      class="mp-segment-item {{segment === 'packages' ? 'mp-segment-item-active' : ''}}"
+      bindtap="switchSegment"
+      data-segment="packages"
+    >充值套餐</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="mp-loading">加载充值目录...</view>
+  <view wx:if="{{error}}" class="mp-error">{{error}}</view>
+
+  <block wx:if="{{segment === 'plans' && !loading}}">
+    <view wx:if="{{plans.length === 0 && !error}}" class="mp-empty">暂无可用的 Token Bank 计划</view>
+    <view class="recharge-card" wx:for="{{plans}}" wx:key="planCode">
+      <view class="mp-flex-between">
+        <view class="recharge-name">{{item.displayName}}</view>
+        <text class="recharge-tag">{{item.periodText}}</text>
+      </view>
+      <view class="recharge-grant">额度 {{item.grantText}}</view>
+      <view class="mp-flex-between recharge-meta">
+        <text class="mp-price">{{item.priceText}}</text>
+        <button
+          class="mp-btn mp-btn-primary recharge-buy"
+          disabled="{{submittingId === 'plan:' + item.planCode}}"
+          bindtap="buyPlan"
+          data-code="{{item.planCode}}"
+          data-period="{{item.planPeriod}}"
+          data-price="{{item.priceAmount}}"
+          data-currency="{{item.currencyCode}}"
+          data-grant="{{item.grantAmount}}"
+        >{{submittingId === 'plan:' + item.planCode ? '下单中...' : '立即订阅'}}</button>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{segment === 'packages' && !loading}}">
+    <view wx:if="{{packages.length === 0 && !error}}" class="mp-empty">暂无可用的充值套餐</view>
+    <view class="recharge-card" wx:for="{{packages}}" wx:key="id">
+      <view class="mp-flex-between">
+        <view class="recharge-name">积分充值 {{item.pointsText}}</view>
+      </view>
+      <view class="recharge-grant">到账积分 {{item.pointsText}}</view>
+      <view class="mp-flex-between recharge-meta">
+        <text class="mp-price">{{item.priceText}}</text>
+        <button
+          class="mp-btn mp-btn-primary recharge-buy"
+          disabled="{{submittingId === 'package:' + item.id}}"
+          bindtap="buyPackage"
+          data-id="{{item.id}}"
+          data-price="{{item.priceAmount}}"
+          data-currency="{{item.currencyCode}}"
+        >{{submittingId === 'package:' + item.id ? '下单中...' : '立即充值'}}</button>
+      </view>
+    </view>
+  </block>
+
+  <view class="mp-card">
+    <view class="mp-card-title">充值记录</view>
+    <view wx:if="{{recentOrders.length === 0}}" class="mp-muted">暂无充值记录</view>
+    <view class="recharge-order" wx:for="{{recentOrders}}" wx:key="orderId" bindtap="goOrderResult" data-id="{{item.orderId}}">
+      <view class="mp-flex-between">
+        <view class="recharge-order-subject">{{item.subject}}</view>
+        <text class="mp-price">{{item.amountText}}</text>
+      </view>
+      <view class="mp-flex-between recharge-meta">
+        <text class="mp-muted">{{item.timeText}}</text>
+        <button
+          wx:if="{{item.status === 'pending_payment' || item.status === 'pending'}}"
+          class="mp-btn mp-btn-ghost recharge-order-cancel"
+          catchtap="cancelOrder"
+          data-id="{{item.orderId}}"
+        >取消</button>
+      </view>
+    </view>
+    <view wx:if="{{loadingMore}}" class="mp-loading">加载更多...</view>
+    <view wx:if="{{recentOrders.length > 0 && !hasMore}}" class="mp-loading">已展示全部</view>
+  </view>
+</view>

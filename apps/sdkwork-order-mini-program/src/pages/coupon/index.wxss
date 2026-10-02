@@ -1,0 +1,14 @@
+.coupon-hint {
+  margin-bottom: 24rpx;
+}
+
+.coupon-btn {
+  width: 100%;
+}
+
+.coupon-result {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #2f54eb;
+  margin-bottom: 12rpx;
+}

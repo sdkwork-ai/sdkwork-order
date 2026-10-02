@@ -1,0 +1,93 @@
+<view class="page-order-detail">
+  <view wx:if="{{loading}}" class="mp-loading">加载订单...</view>
+  <view wx:elif="{{error}}" class="mp-error">{{error}}</view>
+
+  <block wx:else>
+    <view class="mp-card">
+      <view class="mp-flex-between">
+        <view class="detail-status">{{detail.statusText}}</view>
+        <text class="mp-price">{{detail.totalText}}</text>
+      </view>
+      <view class="mp-muted detail-meta">下单时间：{{detail.timeText}}</view>
+      <view class="mp-muted detail-meta" wx:if="{{detail.expireText}}">付款截止：{{detail.expireText}}</view>
+      <view class="mp-muted detail-meta" wx:if="{{detail.discountText}}">优惠金额：{{detail.discountText}}</view>
+      <view class="mp-muted detail-meta">实付金额：{{detail.paidText}}</view>
+    </view>
+
+    <view class="mp-card">
+      <view class="mp-card-title">订单信息</view>
+      <view class="mp-flex-between detail-row">
+        <text class="mp-muted">订单号</text>
+        <view class="mp-flex" bindtap="copyOrderSn">
+          <text class="detail-sn">{{detail.orderSn}}</text>
+          <text class="detail-copy">复制</text>
+        </view>
+      </view>
+      <view class="mp-flex-between detail-row" wx:if="{{detail.outTradeNo}}">
+        <text class="mp-muted">交易单号</text>
+        <text>{{detail.outTradeNo}}</text>
+      </view>
+      <view class="mp-flex-between detail-row" wx:if="{{detail.paymentMethod}}">
+        <text class="mp-muted">支付方式</text>
+        <text>{{detail.paymentMethod}}</text>
+      </view>
+    </view>
+
+    <view class="mp-card">
+      <view class="mp-card-title">商品明细</view>
+      <view class="detail-item" wx:for="{{detail.items}}" wx:key="id">
+        <view class="mp-flex-between">
+          <view class="detail-item-name">{{item.productName}}</view>
+          <text class="detail-item-price">{{item.priceText}}</text>
+        </view>
+        <view class="mp-flex-between">
+          <text class="mp-muted">x{{item.quantity}}</text>
+          <text class="mp-muted">{{item.lineTotalText}}</text>
+        </view>
+      </view>
+      <view wx:if="{{detail.items.length === 0}}" class="mp-muted">无商品明细</view>
+    </view>
+
+    <view class="detail-actions">
+      <button
+        wx:if="{{detail.status === 'pending_payment'}}"
+        class="mp-btn mp-btn-primary detail-action"
+        bindtap="goPay"
+      >去支付</button>
+      <button
+        wx:if="{{detail.status === 'pending_payment'}}"
+        class="mp-btn mp-btn-ghost detail-action"
+        bindtap="cancel"
+      >取消订单</button>
+      <button
+        wx:if="{{detail.status === 'paid' || detail.status === 'fulfilled' || detail.status === 'completed'}}"
+        class="mp-btn mp-btn-plain detail-action"
+        bindtap="goRefund"
+      >申请退款</button>
+      <button
+        wx:if="{{detail.status === 'fulfilled'}}"
+        class="mp-btn mp-btn-primary detail-action"
+        bindtap="confirmReceipt"
+      >确认收货</button>
+      <button class="mp-btn mp-btn-ghost detail-action" bindtap="goOrders">返回订单</button>
+    </view>
+
+    <view class="mp-card">
+      <view class="mp-card-title">订单事件</view>
+      <view wx:if="{{loadingEvents}}" class="mp-loading">加载事件...</view>
+      <block wx:else>
+        <view class="detail-event" wx:for="{{events}}" wx:key="eventId">
+          <view class="detail-event-dot"></view>
+          <view class="detail-event-body">
+            <view class="mp-flex-between">
+              <text class="detail-event-title">{{item.title}}</text>
+              <text class="mp-muted">{{item.statusText}}</text>
+            </view>
+            <view class="mp-muted">{{item.timeText}} <text wx:if="{{item.actorText}}">· {{item.actorText}}</text></view>
+          </view>
+        </view>
+        <view wx:if="{{events.length === 0}}" class="mp-muted">暂无事件</view>
+      </block>
+    </view>
+  </block>
+</view>

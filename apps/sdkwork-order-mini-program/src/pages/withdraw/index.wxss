@@ -1,0 +1,27 @@
+.withdraw-picker {
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+}
+
+.withdraw-submit {
+  width: 100%;
+}
+
+.withdraw-item {
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f3f4f6;
+}
+
+.withdraw-item:last-child {
+  border-bottom: none;
+}
+
+.withdraw-item-title {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.withdraw-status {
+  color: #2f54eb;
+  font-size: 24rpx;
+}

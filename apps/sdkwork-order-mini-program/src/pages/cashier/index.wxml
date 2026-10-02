@@ -1,0 +1,37 @@
+<view class="page-cashier">
+  <view wx:if="{{phase === 'loading'}}" class="mp-loading">加载收银台...</view>
+  <view wx:elif="{{phase === 'failed'}}" class="mp-error">{{error}}</view>
+
+  <block wx:else>
+    <view class="mp-card cashier-amount-card">
+      <view class="mp-muted">应付金额</view>
+      <view class="cashier-amount">{{amountText}}</view>
+      <view class="mp-muted">{{subject}}</view>
+      <view class="mp-muted cashier-order">订单号：{{orderId}}</view>
+      <view class="cashier-countdown" wx:if="{{phase === 'polling'}}">支付确认中 {{countdownText}}</view>
+    </view>
+
+    <view class="mp-card">
+      <view class="mp-card-title">选择支付方式</view>
+      <view
+        class="cashier-method {{selectedCode === item.code ? 'cashier-method-active' : ''}}"
+        wx:for="{{methods}}"
+        wx:key="code"
+        bindtap="selectMethod"
+        data-code="{{item.code}}"
+      >
+        <text>{{item.label}}</text>
+        <view class="cashier-method-check {{selectedCode === item.code ? 'cashier-method-check-on' : ''}}"></view>
+      </view>
+    </view>
+
+    <view wx:if="{{error}}" class="mp-error">{{error}}</view>
+
+    <view class="cashier-actions">
+      <button class="mp-btn mp-btn-primary cashier-pay" disabled="{{paying || phase === 'polling'}}" bindtap="pay">
+        {{paying ? '支付中...' : phase === 'polling' ? '等待支付结果' : '立即支付'}}
+      </button>
+      <button class="mp-btn mp-btn-ghost cashier-cancel" bindtap="cancel">稍后支付</button>
+    </view>
+  </block>
+</view>

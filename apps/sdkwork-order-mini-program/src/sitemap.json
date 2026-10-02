@@ -1,0 +1,4 @@
+{
+  "desc": "SDKWork Order mini-program sitemap",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

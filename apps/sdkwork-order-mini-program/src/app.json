@@ -1,0 +1,30 @@
+{
+  "pages": [
+    "pages/orders/index",
+    "pages/recharge/index",
+    "pages/profile/index",
+    "pages/order-detail/index",
+    "pages/cashier/index",
+    "pages/payment-result/index",
+    "pages/coupon/index",
+    "pages/withdraw/index",
+    "pages/refund/index",
+    "pages/login/index"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#2f54eb",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "SDKWork 订单",
+    "backgroundColor": "#f4f5f7"
+  },
+  "tabBar": {
+    "color": "#6b7280",
+    "selectedColor": "#2f54eb",
+    "list": [
+      { "pagePath": "pages/orders/index", "text": "订单" },
+      { "pagePath": "pages/recharge/index", "text": "充值" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

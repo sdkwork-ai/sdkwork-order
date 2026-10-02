@@ -1,0 +1,49 @@
+.profile-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 0 40rpx;
+}
+
+.profile-avatar {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: #2f54eb;
+  color: #fff;
+  font-size: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-name {
+  margin-top: 20rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.profile-env {
+  margin-top: 8rpx;
+  color: #6b7280;
+  font-size: 24rpx;
+}
+
+.profile-menu {
+  padding: 26rpx 4rpx;
+  font-size: 28rpx;
+  border-bottom: 1rpx solid #f3f4f6;
+}
+
+.profile-menu:last-of-type {
+  border-bottom: none;
+}
+
+.profile-arrow {
+  color: #9ca3af;
+  font-size: 32rpx;
+}
+
+.profile-meta {
+  margin-top: 16rpx;
+}

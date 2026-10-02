@@ -1,0 +1,8 @@
+.login-hint {
+  margin-bottom: 24rpx;
+}
+
+.login-btn {
+  width: 100%;
+  margin-top: 16rpx;
+}

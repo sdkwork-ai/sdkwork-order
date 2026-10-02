@@ -1,0 +1,16 @@
+{
+  "description": "WeChat mini-program host profile template. Copy to mp-weixin.json (host-local) for real values. Platform ids here are placeholders; this file must never carry private keys, upload credentials, or tokens.",
+  "platform": "MP_WEIXIN",
+  "appid": "wx0000000000000000",
+  "projectName": "sdkwork-order-mini-program",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "urlCheck": false
+  },
+  "upload": {
+    "environment": "dev",
+    "version": "0.1.0",
+    "desc": "SDKWork Order mini-program dev upload"
+  }
+}

@@ -1,0 +1,77 @@
+<view class="page-orders">
+  <scroll-view class="orders-tabs" scroll-x>
+    <view
+      class="orders-tab {{activeTab === item.code ? 'orders-tab-active' : ''}}"
+      wx:for="{{tabs}}"
+      wx:key="code"
+      bindtap="selectTab"
+      data-code="{{item.code}}"
+    >{{item.label}}</view>
+  </scroll-view>
+
+  <view class="orders-stats mp-card" wx:if="{{statistics}}">
+    <view class="orders-stat">
+      <view class="orders-stat-num">{{statistics.pendingPayment}}</view>
+      <view class="mp-muted">待付款</view>
+    </view>
+    <view class="orders-stat">
+      <view class="orders-stat-num">{{statistics.pendingShipment}}</view>
+      <view class="mp-muted">待发货</view>
+    </view>
+    <view class="orders-stat">
+      <view class="orders-stat-num">{{statistics.pendingReceipt}}</view>
+      <view class="mp-muted">待收货</view>
+    </view>
+    <view class="orders-stat">
+      <view class="orders-stat-num">{{statistics.completed}}</view>
+      <view class="mp-muted">已完成</view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="mp-loading">加载订单...</view>
+  <view wx:if="{{error}}" class="mp-error">{{error}}</view>
+  <view wx:if="{{!loading && orders.length === 0 && !error}}" class="mp-empty">暂无订单</view>
+
+  <view class="orders-list">
+    <view class="orders-item" wx:for="{{orders}}" wx:key="orderId" bindtap="goDetail" data-id="{{item.orderId}}">
+      <view class="mp-flex-between">
+        <view class="orders-subject">{{item.subject}}</view>
+        <text class="orders-status">{{item.statusText}}</text>
+      </view>
+      <view class="mp-flex-between orders-meta">
+        <text class="mp-muted">{{item.timeText}}</text>
+        <text class="mp-price">{{item.totalText}}</text>
+      </view>
+      <view class="orders-actions">
+        <button
+          wx:if="{{item.status === 'pending_payment'}}"
+          class="mp-btn mp-btn-primary orders-action"
+          catchtap="goPay"
+          data-id="{{item.orderId}}"
+        >去支付</button>
+        <button
+          wx:if="{{item.status === 'pending_payment'}}"
+          class="mp-btn mp-btn-ghost orders-action"
+          catchtap="cancelOrder"
+          data-id="{{item.orderId}}"
+        >取消订单</button>
+        <button
+          wx:if="{{item.status === 'paid'}}"
+          class="mp-btn mp-btn-plain orders-action"
+          catchtap="goRefund"
+          data-id="{{item.orderId}}"
+        >申请退款</button>
+        <button
+          wx:if="{{item.status === 'fulfilled'}}"
+          class="mp-btn mp-btn-primary orders-action"
+          catchtap="confirmReceipt"
+          data-id="{{item.orderId}}"
+        >确认收货</button>
+        <button class="mp-btn mp-btn-ghost orders-action">订单详情</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{loadingMore}}" class="mp-loading">加载更多...</view>
+  <view wx:if="{{!loading && orders.length > 0 && !hasMore}}" class="mp-loading">已展示全部</view>
+</view>

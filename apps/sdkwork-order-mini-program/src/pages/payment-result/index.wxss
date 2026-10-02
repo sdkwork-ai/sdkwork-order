@@ -1,0 +1,60 @@
+.page-payment-result {
+  padding-top: 60rpx;
+}
+
+.result-hero {
+  text-align: center;
+  padding: 60rpx 40rpx;
+}
+
+.result-icon {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  margin: 0 auto 32rpx;
+}
+
+.result-icon-success {
+  background: #e6f9ec;
+  border: 6rpx solid #34c77b;
+}
+
+.result-icon-danger {
+  background: #fdecec;
+  border: 6rpx solid #e5484d;
+}
+
+.result-icon-warning {
+  background: #fff4e5;
+  border: 6rpx solid #f5a623;
+}
+
+.result-title {
+  font-size: 38rpx;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.result-desc {
+  margin-top: 16rpx;
+  color: #6b7280;
+  font-size: 26rpx;
+}
+
+.result-meta {
+  margin-top: 12rpx;
+  color: #9ca3af;
+  font-size: 24rpx;
+  word-break: break-all;
+}
+
+.result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 40rpx;
+}
+
+.result-action {
+  width: 100%;
+}

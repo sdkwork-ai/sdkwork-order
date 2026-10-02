@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 3,
+  "kind": "sdkwork.app",
+  "app": {
+    "key": "sdkwork-order-mini-program",
+    "name": "SDKWork Order Mini Program",
+    "displayName": "SDKWork 订单小程序",
+    "description": "SDKWork Order (domain commerce, capability order) native WeChat mini-program client: orders, cashier, recharge, coupon redemption, refunds and withdrawals.",
+    "vendor": "SDKWork",
+    "appType": "APP_REACT",
+    "versionSource": "package.json",
+    "identifiers": {
+      "packageName": "sdkwork-order-mini-program",
+      "bundleId": null,
+      "desktopAppId": null,
+      "containerImage": null
+    }
+  },
+  "backend": {
+    "profileKey": "backend-root-admin",
+    "ownerMode": "tenant",
+    "grantMode": "current",
+    "platform": "MP_WEIXIN",
+    "appId": null,
+    "organizationId": "0",
+    "tenantId": "100001"
+  },
+  "runtime": {
+    "family": "mini-program",
+    "framework": "weixin-mini-program",
+    "runtimes": ["MINI_PROGRAM"],
+    "deliveryModes": ["MINI_PROGRAM_PACKAGE"],
+    "defaultPlatform": "MP_WEIXIN",
+    "defaultArchitecture": "universal",
+    "supportedDeploymentProfiles": ["standalone", "cloud"],
+    "defaultDeploymentProfile": "standalone"
+  },
+  "publish": {
+    "status": "DRAFT",
+    "platforms": ["MP_WEIXIN"],
+    "installPlatforms": ["MP_WEIXIN"],
+    "config": {
+      "workspaceRoot": "apps/sdkwork-order-mini-program",
+      "managedBy": "sdkwork-order"
+    }
+  },
+  "environments": {
+    "development": {
+      "accessUrl": "https://api-dev.sdkwork.com/apps/sdkwork-order-mini-program",
+      "deployUrl": "https://api-dev.sdkwork.com/apps/sdkwork-order-mini-program",
+      "deployEnv": "dev"
+    },
+    "test": {
+      "accessUrl": "https://api-test.sdkwork.com/apps/sdkwork-order-mini-program",
+      "deployUrl": "https://api-test.sdkwork.com/apps/sdkwork-order-mini-program",
+      "deployEnv": "test"
+    },
+    "staging": {
+      "accessUrl": "https://api-staging.sdkwork.com/apps/sdkwork-order-mini-program",
+      "deployUrl": "https://api-staging.sdkwork.com/apps/sdkwork-order-mini-program",
+      "deployEnv": "staging"
+    },
+    "production": {
+      "accessUrl": "https://api.sdkwork.com/apps/sdkwork-order-mini-program",
+      "deployUrl": "https://api.sdkwork.com/apps/sdkwork-order-mini-program",
+      "deployEnv": "production"
+    }
+  },
+  "metadata": {
+    "standardOwner": "sdkwork-order",
+    "domain": "commerce",
+    "capability": "order",
+    "initializedAt": "2026-10-03T00:00:00Z"
+  }
+}

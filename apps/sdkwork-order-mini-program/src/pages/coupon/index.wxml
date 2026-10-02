@@ -1,0 +1,21 @@
+<view class="page-coupon">
+  <view class="mp-card">
+    <view class="mp-card-title">兑换券码</view>
+    <view class="mp-muted coupon-hint">输入券码立即兑换 Token Bank 额度或会员权益。</view>
+    <view class="mp-field">
+      <text class="mp-field-label">券码</text>
+      <input value="{{code}}" placeholder="请输入券码" bindinput="onCodeInput" />
+    </view>
+    <view wx:if="{{error}}" class="mp-error">{{error}}</view>
+    <button class="mp-btn mp-btn-primary coupon-btn" disabled="{{submitting}}" bindtap="redeem">
+      {{submitting ? '核销中...' : '立即兑换'}}
+    </button>
+  </view>
+
+  <view class="mp-card" wx:if="{{result}}">
+    <view class="mp-card-title">{{result.success ? '兑换成功' : '兑换未完成'}}</view>
+    <view class="coupon-result">{{result.benefitText}}</view>
+    <view class="mp-muted" wx:if="{{result.replayed}}">该券码此前已核销，本次为幂等重放。</view>
+    <view class="mp-muted" wx:if="{{result.orderNo}}">兑换单号：{{result.orderNo}}</view>
+  </view>
+</view>

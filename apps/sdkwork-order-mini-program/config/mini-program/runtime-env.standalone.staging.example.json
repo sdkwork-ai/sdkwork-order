@@ -1,0 +1,7 @@
+{
+  "SDKWORK_ENVIRONMENT": "staging",
+  "SDKWORK_DEPLOYMENT_PROFILE": "standalone",
+  "SDKWORK_PROFILE_ID": "standalone.staging",
+  "SDKWORK_RUNTIME_TARGET": "mini-program",
+  "appApiBaseUrl": "https://api-staging.sdkwork.com/app/v3/api"
+}

@@ -1,0 +1,46 @@
+<view class="page-refund">
+  <view class="mp-card">
+    <view class="mp-card-title">退款申请</view>
+    <view class="mp-field">
+      <text class="mp-field-label">原订单 ID</text>
+      <input value="{{orderId}}" placeholder="从订单详情复制" bindinput="onOrderIdInput" />
+    </view>
+    <view class="mp-field">
+      <text class="mp-field-label">退款金额（元）</text>
+      <input type="digit" value="{{amountText}}" placeholder="例如 69.90" bindinput="onAmountInput" />
+    </view>
+    <view class="mp-field">
+      <text class="mp-field-label">退款目标资产</text>
+      <picker range="{{assetLabels}}" value="{{assetIndex}}" bindchange="selectAsset">
+        <view class="refund-picker">{{assetLabels[assetIndex]}}</view>
+      </picker>
+    </view>
+    <view class="mp-field">
+      <text class="mp-field-label">原因代码</text>
+      <input value="{{reasonCode}}" placeholder="选填，如 quality_issue" bindinput="onReasonCodeInput" />
+    </view>
+    <view class="mp-field">
+      <text class="mp-field-label">原因说明</text>
+      <textarea value="{{reasonDetail}}" placeholder="选填" bindinput="onReasonDetailInput" maxlength="200" />
+    </view>
+    <view wx:if="{{error}}" class="mp-error">{{error}}</view>
+    <button class="mp-btn mp-btn-primary refund-submit" disabled="{{submitting}}" bindtap="submit">
+      {{submitting ? '提交中...' : '提交退款申请'}}
+    </button>
+  </view>
+
+  <view class="mp-card">
+    <view class="mp-card-title">退款记录</view>
+    <view wx:if="{{loadingHistory}}" class="mp-loading">加载记录...</view>
+    <view wx:elif="{{history.length === 0}}" class="mp-muted">暂无退款记录</view>
+    <block wx:else>
+      <view class="refund-item" wx:for="{{history}}" wx:key="accountValueRequestId">
+        <view class="mp-flex-between">
+          <view class="refund-item-title">{{item.title}}</view>
+          <text class="refund-status">{{item.statusText}}</text>
+        </view>
+        <view class="mp-muted">{{item.timeText}}</view>
+      </view>
+    </block>
+  </view>
+</view>

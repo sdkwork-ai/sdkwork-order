@@ -1,0 +1,17 @@
+<view class="page-login">
+  <view class="mp-card">
+    <view class="mp-card-title">登录 SDKWork 订单</view>
+    <view class="mp-muted login-hint">
+      小程序端 IAM（wx.login code2session）合约落地前，使用平台签发的访问令牌登录。
+    </view>
+    <view class="mp-field">
+      <text class="mp-field-label">访问令牌</text>
+      <input password value="{{token}}" placeholder="粘贴平台访问令牌" bindinput="onTokenInput" />
+    </view>
+    <view wx:if="{{error}}" class="mp-error">{{error}}</view>
+    <button class="mp-btn mp-btn-primary login-btn" disabled="{{busy}}" bindtap="login">
+      {{busy ? '登录中...' : '登录'}}
+    </button>
+    <button wx:if="{{token}}" class="mp-btn mp-btn-ghost login-btn" bindtap="logout">清除令牌</button>
+  </view>
+</view>

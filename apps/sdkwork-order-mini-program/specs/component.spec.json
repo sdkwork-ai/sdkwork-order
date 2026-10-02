@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-order-mini-program",
+    "displayName": "SDKWork Order Mini Program",
+    "version": "0.1.0",
+    "type": "mini-program-app",
+    "root": "apps/sdkwork-order-mini-program",
+    "domain": "commerce",
+    "declaredDomain": "commerce",
+    "capability": "order",
+    "status": "ready",
+    "languages": [
+      "typescript",
+      "javascript"
+    ],
+    "generated": false,
+    "private": true,
+    "manifests": [
+      "package.json",
+      "project.config.json",
+      "sdkwork.app.config.json"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "MINI_PROGRAM_APP_ARCHITECTURE_SPEC.md",
+      "path": "../../../../sdkwork-specs/MINI_PROGRAM_APP_ARCHITECTURE_SPEC.md",
+      "purpose": "Mini program application root layout, package taxonomy, page/subpackage projection, config, and release rules."
+    },
+    {
+      "file": "APP_MINI_PROGRAM_UI_SPEC.md",
+      "path": "../../../../sdkwork-specs/APP_MINI_PROGRAM_UI_SPEC.md",
+      "purpose": "Mini program UI package shape, route contribution, host adapter, interaction, and security rules."
+    },
+    {
+      "file": "API_SPEC.md",
+      "path": "../../../../sdkwork-specs/API_SPEC.md",
+      "purpose": "HTTP response envelope, list/search pagination input/output, int64-as-string, and error ProblemDetail rules."
+    },
+    {
+      "file": "PAGINATION_SPEC.md",
+      "path": "../../../../sdkwork-specs/PAGINATION_SPEC.md",
+      "purpose": "Interactive lists request one server page at a time with no client-side full-download pagination."
+    },
+    {
+      "file": "APPLICATION_SPEC.md",
+      "path": "../../../../sdkwork-specs/APPLICATION_SPEC.md",
+      "purpose": "Application shell and module composition rules."
+    },
+    {
+      "file": "APP_MANIFEST_SPEC.md",
+      "path": "../../../../sdkwork-specs/APP_MANIFEST_SPEC.md",
+      "purpose": "SDKWork app manifest and release metadata rules."
+    },
+    {
+      "file": "COMPONENT_SPEC.md",
+      "path": "../../../../sdkwork-specs/COMPONENT_SPEC.md",
+      "purpose": "Local component specs directory and manifest rules."
+    },
+    {
+      "file": "CONFIG_SPEC.md",
+      "path": "../../../../sdkwork-specs/CONFIG_SPEC.md",
+      "purpose": "Runtime configuration, environment, SDK bootstrap, and feature flag rules."
+    },
+    {
+      "file": "DEPLOYMENT_SPEC.md",
+      "path": "../../../../sdkwork-specs/DEPLOYMENT_SPEC.md",
+      "purpose": "Deployment profile and environment parity rules."
+    },
+    {
+      "file": "I18N_SPEC.md",
+      "path": "../../../../sdkwork-specs/I18N_SPEC.md",
+      "purpose": "User-facing language and locale fragment rules."
+    },
+    {
+      "file": "SECURITY_SPEC.md",
+      "path": "../../../../sdkwork-specs/SECURITY_SPEC.md",
+      "purpose": "Token storage, secret-free config, and transport security rules."
+    },
+    {
+      "file": "TEST_SPEC.md",
+      "path": "../../../../sdkwork-specs/TEST_SPEC.md",
+      "purpose": "Contract and architecture verification rules."
+    },
+    {
+      "file": "TYPESCRIPT_CODE_SPEC.md",
+      "path": "../../../../sdkwork-specs/TYPESCRIPT_CODE_SPEC.md",
+      "purpose": "TypeScript contract sources under src/bootstrap."
+    }
+  ],
+  "contracts": {
+    "publicExports": [
+      "src/app.json",
+      "src/bootstrap/routes.ts"
+    ],
+    "runtimeEntrypoints": [
+      "src/app.js",
+      "package.json#scripts.build"
+    ],
+    "sdkClients": [
+      "src/services/transport.js",
+      "src/services/order-service.js",
+      "src/services/recharge-service.js",
+      "src/services/withdrawal-service.js"
+    ],
+    "events": [],
+    "configKeys": [
+      "config/mini-program/runtime-env.<deploymentProfile>.<environment>.json#SDKWORK_ENVIRONMENT",
+      "config/mini-program/runtime-env.<deploymentProfile>.<environment>.json#SDKWORK_DEPLOYMENT_PROFILE",
+      "config/mini-program/runtime-env.<deploymentProfile>.<environment>.json#SDKWORK_PROFILE_ID",
+      "config/mini-program/runtime-env.<deploymentProfile>.<environment>.json#SDKWORK_RUNTIME_TARGET",
+      "config/mini-program/runtime-env.<deploymentProfile>.<environment>.json#appApiBaseUrl"
+    ],
+    "routeManifest": "src/bootstrap/routes.ts"
+  },
+  "integration": {
+    "authority": "Root SDKWork specs remain authoritative. Local specs may extend but must not contradict them.",
+    "dependencyPolicy": "No npm dependencies: pages consume the domain services directly; the single transport seam in src/services/transport.js is the only wx.request call site.",
+    "sdkPolicy": "Hand-written spec-shaped services mirror the generated order app-sdk contract per API_SPEC; they swap for the generated WeChat MP SDK family without page changes.",
+    "languagePolicy": "Native WeChat mini-program source tree (weixin-mini-program); TypeScript contract modules under src/bootstrap are type-only surfaces."
+  },
+  "verification": {
+    "commands": [
+      "node scripts/build-runtime.mjs",
+      "node --test \"tests/**/*.test.mjs\"",
+      "node scripts/typecheck.mjs",
+      "node scripts/lint.mjs"
+    ]
+  },
+  "metadata": {
+    "managedBy": "sdkwork-order",
+    "standardVersion": "2026-10-03"
+  }
+}

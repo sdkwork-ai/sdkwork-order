@@ -1,0 +1,11 @@
+{
+  "miniprogramRoot": "src/",
+  "compileType": "miniprogram",
+  "appid": "wx0000000000000000",
+  "projectname": "sdkwork-order-mini-program",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "urlCheck": false
+  }
+}

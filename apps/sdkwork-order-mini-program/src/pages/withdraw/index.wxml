@@ -1,0 +1,45 @@
+<view class="page-withdraw">
+  <view class="mp-card">
+    <view class="mp-card-title">提现申请</view>
+    <view class="mp-field">
+      <text class="mp-field-label">提现金额（元）</text>
+      <input type="digit" value="{{amountText}}" placeholder="例如 12.50" bindinput="onAmountInput" />
+    </view>
+    <view class="mp-field">
+      <text class="mp-field-label">到账方式</text>
+      <picker range="{{payoutMethodLabels}}" value="{{payoutMethodIndex}}" bindchange="selectPayoutMethod">
+        <view class="withdraw-picker">{{payoutMethodLabels[payoutMethodIndex]}}</view>
+      </picker>
+    </view>
+    <view class="mp-field">
+      <text class="mp-field-label">收款账号备注</text>
+      <input value="{{payoutAccountRef}}" placeholder="选填：账号说明" bindinput="onAccountInput" />
+    </view>
+    <view class="mp-field">
+      <text class="mp-field-label">原因代码</text>
+      <input value="{{reasonCode}}" placeholder="选填" bindinput="onReasonInput" />
+    </view>
+    <view wx:if="{{error}}" class="mp-error">{{error}}</view>
+    <button class="mp-btn mp-btn-primary withdraw-submit" disabled="{{submitting}}" bindtap="submit">
+      {{submitting ? '提交中...' : '提交提现申请'}}
+    </button>
+  </view>
+
+  <view class="mp-card">
+    <view class="mp-card-title">提现记录</view>
+    <view wx:if="{{loadingHistory}}" class="mp-loading">加载记录...</view>
+    <view wx:elif="{{history.length === 0}}" class="mp-muted">暂无提现记录</view>
+    <block wx:else>
+      <view class="withdraw-item" wx:for="{{history}}" wx:key="accountValueRequestId">
+        <view class="mp-flex-between">
+          <view class="withdraw-item-title">提现 {{item.amountText}}</view>
+          <text class="withdraw-status">{{item.statusText}}</text>
+        </view>
+        <view class="mp-flex-between">
+          <text class="mp-muted">{{item.timeText}}</text>
+          <text class="mp-muted" wx:if="{{item.requestNo}}">{{item.requestNo}}</text>
+        </view>
+      </view>
+    </block>
+  </view>
+</view>

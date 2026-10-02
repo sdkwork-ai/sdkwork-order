@@ -1,0 +1,37 @@
+<view class="page-profile">
+  <view class="profile-hero">
+    <view class="profile-avatar">{{loggedIn ? '用' : '客'}}</view>
+    <view class="profile-name">{{loggedIn ? '已登录用户' : '游客'}}</view>
+    <view class="profile-env">{{environmentText}}</view>
+  </view>
+
+  <view class="mp-card">
+    <view class="mp-card-title">交易</view>
+    <view class="mp-flex-between profile-menu" bindtap="goOrders">
+      <text>我的订单</text><text class="profile-arrow">›</text>
+    </view>
+    <view class="mp-flex-between profile-menu" bindtap="goRecharge">
+      <text>充值中心</text><text class="profile-arrow">›</text>
+    </view>
+    <view class="mp-flex-between profile-menu" bindtap="goRefund">
+      <text>退款记录</text><text class="profile-arrow">›</text>
+    </view>
+    <view class="mp-flex-between profile-menu" bindtap="goWithdraw">
+      <text>提现</text><text class="profile-arrow">›</text>
+    </view>
+    <view class="mp-flex-between profile-menu" bindtap="goCoupon">
+      <text>券码兑换</text><text class="profile-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="mp-card">
+    <view class="mp-card-title">账号</view>
+    <view wx:if="{{loggedIn}}" class="mp-flex-between profile-menu" bindtap="logout">
+      <text>退出登录</text><text class="profile-arrow">›</text>
+    </view>
+    <view wx:else class="mp-flex-between profile-menu" bindtap="goLogin">
+      <text>登录</text><text class="profile-arrow">›</text>
+    </view>
+    <view class="mp-muted profile-meta">运行环境：{{profileIdText}}</view>
+  </view>
+</view>

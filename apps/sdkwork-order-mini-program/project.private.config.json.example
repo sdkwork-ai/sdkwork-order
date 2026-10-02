@@ -1,0 +1,10 @@
+{
+  "description": "Host-local WeChat DevTools private settings. Copy to project.private.config.json (git-ignored) and fill in the real appid and developer settings. Never commit project.private.config.json.",
+  "projectname": "sdkwork-order-mini-program",
+  "appid": "wx0000000000000000",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "minified": true
+  }
+}

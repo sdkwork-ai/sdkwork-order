@@ -1,0 +1,87 @@
+.detail-status {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #2f54eb;
+}
+
+.detail-meta {
+  margin-top: 10rpx;
+}
+
+.detail-row {
+  padding: 14rpx 0;
+  font-size: 26rpx;
+}
+
+.detail-sn {
+  max-width: 420rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-copy {
+  margin-left: 12rpx;
+  color: #2f54eb;
+  font-size: 24rpx;
+}
+
+.detail-item {
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid #f3f4f6;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-item-name {
+  font-size: 26rpx;
+  flex: 1;
+  margin-right: 16rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-item-price {
+  color: #2f54eb;
+  font-weight: 600;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 16rpx;
+  padding: 0 20rpx 20rpx;
+}
+
+.detail-action {
+  font-size: 24rpx;
+  padding: 8rpx 26rpx;
+}
+
+.detail-event {
+  display: flex;
+  align-items: flex-start;
+  padding: 16rpx 0;
+}
+
+.detail-event-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #2f54eb;
+  margin: 12rpx 20rpx 0 0;
+  flex-shrink: 0;
+}
+
+.detail-event-body {
+  flex: 1;
+}
+
+.detail-event-title {
+  font-size: 26rpx;
+  color: #1f2937;
+}

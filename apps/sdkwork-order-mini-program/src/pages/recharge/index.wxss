@@ -1,0 +1,57 @@
+.recharge-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin: 0 20rpx 20rpx;
+}
+
+.recharge-name {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.recharge-tag {
+  font-size: 22rpx;
+  color: #2f54eb;
+  background: #eef2ff;
+  border-radius: 8rpx;
+  padding: 4rpx 12rpx;
+}
+
+.recharge-grant {
+  margin-top: 12rpx;
+  color: #6b7280;
+  font-size: 24rpx;
+}
+
+.recharge-meta {
+  margin-top: 20rpx;
+}
+
+.recharge-buy {
+  font-size: 24rpx;
+  padding: 8rpx 28rpx;
+}
+
+.recharge-order {
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f3f4f6;
+}
+
+.recharge-order:last-child {
+  border-bottom: none;
+}
+
+.recharge-order-subject {
+  font-size: 26rpx;
+  flex: 1;
+  margin-right: 16rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recharge-order-cancel {
+  font-size: 22rpx;
+  padding: 4rpx 22rpx;
+}

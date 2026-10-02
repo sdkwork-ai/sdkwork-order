@@ -1,0 +1,7 @@
+{
+  "SDKWORK_ENVIRONMENT": "test",
+  "SDKWORK_DEPLOYMENT_PROFILE": "standalone",
+  "SDKWORK_PROFILE_ID": "standalone.test",
+  "SDKWORK_RUNTIME_TARGET": "mini-program",
+  "appApiBaseUrl": "https://api-test.sdkwork.com/app/v3/api"
+}

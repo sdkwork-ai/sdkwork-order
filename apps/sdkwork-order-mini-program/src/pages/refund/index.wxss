@@ -1,0 +1,27 @@
+.refund-picker {
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+}
+
+.refund-submit {
+  width: 100%;
+}
+
+.refund-item {
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f3f4f6;
+}
+
+.refund-item:last-child {
+  border-bottom: none;
+}
+
+.refund-item-title {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.refund-status {
+  color: #2f54eb;
+  font-size: 24rpx;
+}
