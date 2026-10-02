@@ -160,6 +160,18 @@ export default defineConfig({
         find: "lucide-react",
         replacement: path.join(root, "node_modules/lucide-react"),
       },
+      {
+        // PageLayout and the order pages must share one react-router
+        // instance or useNavigate loses the MemoryRouter context in tests.
+        // The root workspace does not declare react-router; the composed
+        // mobile orders package owns the resolved copy every consumer
+        // already peer-resolves to.
+        find: /^react-router$/,
+        replacement: path.resolve(
+          root,
+          "apps/sdkwork-order-common/packages/sdkwork-order-mobile-react-orders/node_modules/react-router",
+        ),
+      },
     ],
   },
   server: {
@@ -184,6 +196,7 @@ export default defineConfig({
           /react-dom/,
           /@radix-ui\/.*/,
           /@sdkwork\/ui-pc-react/,
+          /@sdkwork\/ui-mobile-react/,
           /@testing-library\/react/,
         ],
       },
@@ -192,6 +205,7 @@ export default defineConfig({
       "apps/sdkwork-order-pc/packages/**/*.test.ts",
       "apps/sdkwork-order-pc/packages/**/*.test.tsx",
       "apps/sdkwork-order-common/packages/**/*.test.ts",
+      "apps/sdkwork-order-common/packages/**/*.test.tsx",
       "apps/sdkwork-order-h5/packages/**/*.test.ts",
       "apps/sdkwork-order-h5/packages/**/*.test.tsx",
     ],
