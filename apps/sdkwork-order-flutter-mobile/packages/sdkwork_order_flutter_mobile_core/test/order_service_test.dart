@@ -149,6 +149,18 @@ void main() {
     expect(transport.lastIdempotencyKey, isNotEmpty);
   });
 
+  test('confirmReceipt posts an empty command with an idempotency key',
+      () async {
+    final transport = FakeOrderApiTransport({
+      'POST /orders/o-1/receipt_confirmations': <String, dynamic>{},
+    });
+    await OrderService(transport).confirmReceipt('o-1');
+    expect(transport.calls.single.method, 'POST');
+    expect(transport.calls.single.path, '/orders/o-1/receipt_confirmations');
+    expect(transport.calls.single.body, <String, dynamic>{});
+    expect(transport.lastIdempotencyKey, isNotEmpty);
+  });
+
   test('redeemCoupon uppercases the code and unwraps the benefit', () async {
     final transport = FakeOrderApiTransport({
       'POST /orders/coupon_redemptions': {

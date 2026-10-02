@@ -149,6 +149,7 @@ test("order facade composes the domain services", () => {
   const facade = read("src/bootstrap/sdkClients.ts");
   for (const serviceType of [
     "SdkworkOrderMpOrderService",
+    "SdkworkOrderMpShipmentService",
     "SdkworkOrderMpRechargeService",
     "SdkworkOrderMpWithdrawalService",
     "SdkworkOrderMpSessionStore",
@@ -156,8 +157,10 @@ test("order facade composes the domain services", () => {
   ]) {
     assert.match(facade, new RegExp(serviceType, "u"), `facade must type ${serviceType}`);
   }
+  assert.match(facade, /shipments:\s*SdkworkOrderMpShipmentService/u, "facade must compose the shipment service");
   for (const [file, exports] of [
     ["src/services/order-service.js", ["listOrders", "getOrderDetail", "createPayment", "pollPaymentSuccess", "redeemCoupon", "createRefundRequest"]],
+    ["src/services/shipment-service.js", ["listFulfillments", "retrieveShipment", "listTrackingEvents", "getOrderShipment"]],
     ["src/services/recharge-service.js", ["listPlans", "listPackages", "createRechargeOrder", "cancelRechargeOrder"]],
     ["src/services/withdrawal-service.js", ["createWithdrawalRequest", "getWithdrawalRequest", "listLocalHistory"]],
     ["src/services/session.js", ["getToken", "setToken", "clearToken", "isLoggedIn"]],

@@ -7,8 +7,8 @@ import '../transport/order_transport.dart';
 
 /// Order-center domain service: list/detail/events/status/statistics, the
 /// cashier write path (payments, payment-success terminal check),
-/// cancellation, and coupon redemption. Calls go through the injected
-/// [OrderApiTransport] seam only.
+/// cancellation, receipt confirmation, and coupon redemption. Calls go
+/// through the injected [OrderApiTransport] seam only.
 class OrderService {
   OrderService(this._transport);
 
@@ -111,6 +111,20 @@ class OrderService {
         if (cancelReason != null && cancelReason.isNotEmpty)
           'cancelReason': cancelReason,
       },
+      idempotencyKey: newIdempotencyKey(),
+    );
+  }
+
+  /// `POST /orders/{orderId}/receipt_confirmations` (201, no body) — buyer
+  /// confirms receipt of a fulfilled order. Empty JSON body `{}` keeps the
+  /// command well-formed while carrying no fields (same rationale as
+  /// [cancelOrder] and the mini-program `confirmReceipt` precedent); the
+  /// fresh `Idempotency-Key` dedupes transport-level retries of one attempt.
+  Future<void> confirmReceipt(String orderId) async {
+    await _transport.request(
+      '/orders/$orderId/receipt_confirmations',
+      method: 'POST',
+      body: <String, dynamic>{},
       idempotencyKey: newIdempotencyKey(),
     );
   }

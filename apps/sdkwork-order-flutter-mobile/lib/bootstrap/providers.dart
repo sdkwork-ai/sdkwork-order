@@ -11,6 +11,7 @@ class OrderMobileProviders {
     this.environment,
     this.transport,
   )   : orders = OrderService(transport),
+        shipments = ShipmentService(transport),
         recharge = RechargeService(transport),
         withdrawals = WithdrawalService(transport),
         refunds = RefundService(transport);
@@ -20,6 +21,7 @@ class OrderMobileProviders {
   final AppEnvironment environment;
   final OrderApiTransport transport;
   final OrderService orders;
+  final ShipmentService shipments;
   final RechargeService recharge;
   final WithdrawalService withdrawals;
   final RefundService refunds;

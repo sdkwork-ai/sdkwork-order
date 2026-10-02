@@ -11,6 +11,7 @@ Map<String, WidgetBuilder> buildOrderMobileRoutes() => <String, WidgetBuilder>{
       '/login': (context) => const LoginScreen(),
       '/order-detail': (context) => OrderDetailScreen(
             orderService: _orders,
+            shipmentService: _shipments,
             orderId: '${_routeArguments(context)}',
           ),
       '/cashier': (context) => CashierScreen(
@@ -28,6 +29,7 @@ Map<String, WidgetBuilder> buildOrderMobileRoutes() => <String, WidgetBuilder>{
     };
 
 OrderService get _orders => OrderMobileProviders.instance.orders;
+ShipmentService get _shipments => OrderMobileProviders.instance.shipments;
 RechargeService get _recharge => OrderMobileProviders.instance.recharge;
 WithdrawalService get _withdrawals => OrderMobileProviders.instance.withdrawals;
 

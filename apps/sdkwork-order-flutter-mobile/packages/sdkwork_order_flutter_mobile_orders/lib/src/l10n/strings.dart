@@ -70,6 +70,20 @@ Color statusColor(BuildContext context, String status) {
   return Theme.of(context).colorScheme.primary;
 }
 
+/// 确认收货（买家流；按钮仅出现在 `status == fulfilled` 的订单详情）.
+const String confirmReceiptButton = '确认收货';
+const String confirmReceiptInProgress = '确认中...';
+const String confirmReceiptDialogTitle = '确认收货';
+const String confirmReceiptDialogContent = '确认已收到全部商品吗？确认后订单将完成。';
+const String confirmReceiptDialogCancel = '再想想';
+const String confirmReceiptSuccessToast = '已确认收货';
+
+/// 物流追踪卡片（fulfilled/completed 且有履约运单时展示）.
+const String logisticsCardTitle = '物流追踪';
+const String logisticsCarrierLabel = '承运方';
+const String logisticsTrackingNoLabel = '运单号';
+const String logisticsStatusLabel = '物流状态';
+
 /// 账户价值请求（提现/退款）状态标签.
 const Map<String, String> requestStatusLabels = <String, String>{
   'requested': '已受理',

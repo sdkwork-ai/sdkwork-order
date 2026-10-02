@@ -128,6 +128,47 @@ export interface SdkworkOrderMpCouponRedemptionResult {
     | Record<string, unknown>;
 }
 
+/** GET /fulfillments item (buyer order fulfillment row). */
+export interface SdkworkOrderMpFulfillment {
+  fulfillmentId: string;
+  fulfillmentNo: string;
+  fulfillmentType: string;
+  orderId: string;
+  status: string;
+}
+
+/** GET /shipments/{shipmentId} item (carrier leg header). */
+export interface SdkworkOrderMpShipment {
+  shipmentId: string;
+  shipmentNo: string;
+  fulfillmentId: string;
+  carrierCode: string;
+  status: string;
+  trackingNo?: string;
+}
+
+/** GET /shipments/{shipmentId}/tracking_events item. */
+export interface SdkworkOrderMpTrackingEvent {
+  eventId: string;
+  trackingEventNo: string;
+  shipmentId: string;
+  eventType: string;
+  eventStatus?: string;
+  eventTime: string;
+  locationText?: string;
+}
+
+/**
+ * Assembled logistics view for one buyer order
+ * (shipment-service.getOrderShipment). Null when the order has no
+ * fulfillment yet; `shipment` is null when the carrier leg has not opened.
+ */
+export interface SdkworkOrderMpOrderShipment {
+  fulfillment: SdkworkOrderMpFulfillment;
+  shipment: SdkworkOrderMpShipment | null;
+  events: SdkworkOrderMpTrackingEvent[];
+}
+
 /** Refund/withdrawal read model (backend AccountValueRequestResponse). */
 export interface SdkworkOrderMpAccountValueRequest {
   accountValueRequestId: string;
@@ -326,6 +367,26 @@ export interface SdkworkOrderMpWithdrawalService {
   listLocalHistory(): Promise<SdkworkOrderMpAccountValueRequest[]>;
 }
 
+/**
+ * Logistics domain service (src/services/shipment-service.js). Read-only
+ * buyer surface over GET /fulfillments (snake_case `order_id` query),
+ * GET /shipments/{shipmentId}, and
+ * GET /shipments/{shipmentId}/tracking_events; `getOrderShipment` composes
+ * the three reads and resolves null on "no fulfillment".
+ */
+export interface SdkworkOrderMpShipmentService {
+  listFulfillments(
+    orderId: string,
+    input?: { page?: number; pageSize?: number },
+  ): Promise<SdkworkOrderMpListResult<SdkworkOrderMpFulfillment>>;
+  retrieveShipment(shipmentId: string): Promise<SdkworkOrderMpShipment>;
+  listTrackingEvents(
+    shipmentId: string,
+    input?: { page?: number; pageSize?: number },
+  ): Promise<SdkworkOrderMpListResult<SdkworkOrderMpTrackingEvent>>;
+  getOrderShipment(orderId: string): Promise<SdkworkOrderMpOrderShipment | null>;
+}
+
 export interface SdkworkOrderMpSessionStore {
   getToken(): string;
   setToken(token: string): void;
@@ -337,6 +398,7 @@ export interface SdkworkOrderMpSessionStore {
 export interface SdkworkOrderMpClient {
   session: SdkworkOrderMpSessionStore;
   orders: SdkworkOrderMpOrderService;
+  shipments: SdkworkOrderMpShipmentService;
   recharges: SdkworkOrderMpRechargeService;
   withdrawals: SdkworkOrderMpWithdrawalService;
 }

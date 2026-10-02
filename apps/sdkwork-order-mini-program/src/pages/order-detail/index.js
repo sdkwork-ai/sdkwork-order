@@ -1,10 +1,12 @@
 const ordersService = require("../../services/order-service");
+const shipmentService = require("../../services/shipment-service");
 const { formatMinor, formatTime, orderStatusLabel, assetLabel } = require("../../utils/format");
 
 Page({
   data: {
     detail: null,
     events: [],
+    shipment: null,
     loading: true,
     loadingEvents: false,
     error: "",
@@ -40,11 +42,40 @@ Page({
         },
         loading: false,
       });
+      // 物流追踪：仅待收货/已完成拉取；其余状态清空入口。
+      const status = String(detail.status || "").trim().toLowerCase();
+      if (status === "fulfilled" || status === "completed") {
+        this.loadShipment();
+      } else {
+        this.setData({ shipment: null });
+      }
     } catch (cause) {
       this.setData({
         loading: false,
         error: cause && cause.message ? cause.message : "订单加载失败",
       });
+    }
+  },
+
+  /** 物流追踪组装：无履约返回 null（卡片隐藏）；读取失败降级为不渲染。 */
+  async loadShipment() {
+    try {
+      const assembled = await shipmentService.getOrderShipment(this.orderId);
+      if (!assembled || !assembled.shipment) {
+        this.setData({ shipment: null });
+        return;
+      }
+      this.setData({
+        shipment: {
+          shipment: assembled.shipment,
+          events: assembled.events.map((event) => ({
+            ...event,
+            timeText: formatTime(event.eventTime),
+          })),
+        },
+      });
+    } catch (cause) {
+      this.setData({ shipment: null });
     }
   },
 

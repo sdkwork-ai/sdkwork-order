@@ -48,6 +48,31 @@
       <view wx:if="{{detail.items.length === 0}}" class="mp-muted">无商品明细</view>
     </view>
 
+    <view class="mp-card" wx:if="{{shipment && shipment.shipment}}">
+      <view class="mp-card-title">物流追踪</view>
+      <view class="mp-flex-between detail-row">
+        <text class="mp-muted">承运方</text>
+        <text>{{shipment.shipment.carrierCode}}</text>
+      </view>
+      <view class="mp-flex-between detail-row" wx:if="{{shipment.shipment.trackingNo}}">
+        <text class="mp-muted">运单号</text>
+        <text>{{shipment.shipment.trackingNo}}</text>
+      </view>
+      <view class="mp-flex-between detail-row">
+        <text class="mp-muted">物流状态</text>
+        <text>{{shipment.shipment.status}}</text>
+      </view>
+      <block wx:if="{{shipment.events.length > 0}}">
+        <view class="detail-event" wx:for="{{shipment.events}}" wx:key="eventId">
+          <view class="detail-event-dot"></view>
+          <view class="detail-event-body">
+            <view class="detail-event-title">{{item.eventType}}</view>
+            <view class="mp-muted">{{item.timeText}} <text wx:if="{{item.locationText}}">· {{item.locationText}}</text></view>
+          </view>
+        </view>
+      </block>
+    </view>
+
     <view class="detail-actions">
       <button
         wx:if="{{detail.status === 'pending_payment'}}"

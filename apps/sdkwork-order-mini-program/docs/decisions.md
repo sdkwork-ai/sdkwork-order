@@ -74,3 +74,21 @@
   end to end; amounts are minor-unit integer strings converted to display
   text via string math in `utils/format.js` (`formatMinor`), so values beyond
   `Number.MAX_SAFE_INTEGER` never round.
+- Logistics tracking (buyer flow, aligned with the H5 物流追踪 surface): the
+  order app-api exposes three read endpoints —
+  `GET /fulfillments?order_id={orderId}&page=1&page_size=10` (snake_case
+  `order_id` query per the OpenAPI parameter), `GET /shipments/{shipmentId}`,
+  and `GET /shipments/{shipmentId}/tracking_events?page=1&page_size=50`.
+  `shipment-service.getOrderShipment` composes them in that order: the
+  fulfillment page first, then the first fulfillment row's shipment header,
+  then its events; a missing/failed shipment or events read degrades to the
+  preceding layer instead of failing the card. "无履约即隐藏": when the list
+  resolves zero fulfillments the assembler resolves null and the order-detail
+  page renders no 物流追踪 card (该订单暂无物流) — there is no empty-state
+  card for logistics, matching the H5/Flutter alignment baseline. The page
+  fetches logistics only while the order status is `fulfilled`/`completed`;
+  after 确认收货 flips the status to `completed` the card re-renders from the
+  fresh data while the receipt-confirmation button (fulfilled-only) follows
+  the existing status-driven rendering. All reads stay on the single
+  `services/transport.js` seam; the typed contract lives in
+  `bootstrap/sdkClients.ts` (`SdkworkOrderMpShipmentService`).
