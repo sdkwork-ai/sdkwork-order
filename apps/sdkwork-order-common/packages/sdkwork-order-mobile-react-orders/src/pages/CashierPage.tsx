@@ -144,7 +144,8 @@ export function CashierPage({
   const [launchNotice, setLaunchNotice] = useState<string | null>(null);
 
   const paymentCreatedAtRef = useRef(0);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollFailuresRef = useRef(0);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const phaseRef = useRef<CashierPhase>("loading");
   phaseRef.current = phase;
@@ -160,7 +161,7 @@ export function CashierPage({
 
   const clearTimers = useCallback(() => {
     if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
+      clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
     }
     if (countdownTimerRef.current) {
@@ -178,6 +179,10 @@ export function CashierPage({
     try {
       const status = await OrderService.getPaymentStatus(targetOrderId);
       const currentOrder = await OrderService.getOrderById(targetOrderId);
+      if (pollFailuresRef.current > 0) {
+        pollFailuresRef.current = 0;
+        setLaunchNotice(null);
+      }
       const resolved = resolveCashierPhaseFromPaymentStatus(
         status,
         currentOrder?.status ?? status.status,
@@ -189,16 +194,33 @@ export function CashierPage({
         }
       }
     } catch {
-      // Transient network errors keep the cashier pending; the next poll
-      // retries. Permanent failures surface through the countdown expiry.
+      // Transient network errors keep the cashier pending and back the poll
+      // off; a sustained outage surfaces a notice instead of failing the
+      // cashier (permanent failures end through the countdown expiry).
+      pollFailuresRef.current += 1;
+      if (pollFailuresRef.current === 3) {
+        setLaunchNotice(t("orders.cashier_poll_unstable", "网络不稳定，正在自动重试…"));
+      }
     }
-  }, [stopCashier]);
+  }, [stopCashier, t]);
 
   const startPolling = useCallback((targetOrderId: string) => {
     clearTimers();
-    pollTimerRef.current = setInterval(() => {
-      void pollPaymentStatus(targetOrderId);
-    }, CASHIER_POLL_INTERVAL_MS);
+    const schedulePoll = (delayMs: number) => {
+      pollTimerRef.current = setTimeout(() => {
+        void pollPaymentStatus(targetOrderId).finally(() => {
+          if (phaseRef.current === "pending") {
+            // Back off while the network is unstable; normal cadence otherwise.
+            schedulePoll(
+              pollFailuresRef.current >= 3
+                ? CASHIER_POLL_INTERVAL_MS * 2
+                : CASHIER_POLL_INTERVAL_MS,
+            );
+          }
+        });
+      }, delayMs);
+    };
+    schedulePoll(0);
     countdownTimerRef.current = setInterval(() => {
       const now = Date.now();
       setRemainingSeconds((previous) => {
