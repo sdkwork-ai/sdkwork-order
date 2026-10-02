@@ -360,6 +360,44 @@ export function SdkworkOrderCheckoutDialog({
     };
   }, [isExpired, isOpen, notifyPaymentCompleted, payment?.expiresAt, payment?.orderId, payment?.status]);
 
+  // One final authoritative check when the countdown expires: a payment
+  // confirmed at the last second must not be presented as expired. Runs
+  // once per payment attempt (keyed by the attempt's expiresAt).
+  const finalCheckForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !isOpen
+      || !isExpired
+      || payment?.status !== "pending"
+      || !payment.orderId
+      || !getPaymentStatusRef.current
+    ) {
+      return;
+    }
+    if (finalCheckForRef.current === (payment.expiresAt ?? null)) {
+      return;
+    }
+    finalCheckForRef.current = payment.expiresAt ?? null;
+    const getPaymentStatus = getPaymentStatusRef.current;
+    const currentPayment = payment;
+    void (async () => {
+      try {
+        const update = await getPaymentStatus(currentPayment);
+        const nextPayment = {
+          ...currentPayment,
+          ...update,
+          orderId: update.orderId ?? currentPayment.orderId,
+        };
+        setPayment(nextPayment);
+        if (nextPayment.status === "completed") {
+          notifyPaymentCompleted(nextPayment);
+        }
+      } catch {
+        // Keep the expired presentation when the final check also fails.
+      }
+    })();
+  }, [isExpired, isOpen, notifyPaymentCompleted, payment?.expiresAt, payment?.orderId, payment?.status]);
+
   useEffect(() => {
     if (!payment?.qrCode) {
       setQrImageUrl(null);
