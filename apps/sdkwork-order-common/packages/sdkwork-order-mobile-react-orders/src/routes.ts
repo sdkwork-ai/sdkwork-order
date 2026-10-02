@@ -38,6 +38,12 @@ export const ORDER_MOBILE_ROUTE_DEFINITIONS = {
     screen: "voucher",
     titleKey: "orders.voucher_title",
   },
+  refundRequests: {
+    id: "app.commerce.orders.refunds",
+    path: "/orders/refunds",
+    screen: "refunds",
+    titleKey: "orders.refund_title",
+  },
 } as const satisfies Readonly<Record<string, OrderMobileRouteDefinition>>;
 
 export type OrderMobileRouteId = keyof typeof ORDER_MOBILE_ROUTE_DEFINITIONS;

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Crown, Coins, Ticket, ClipboardList, Wallet, type LucideIcon } from "lucide-react";
+import { Crown, Coins, Ticket, ClipboardList, Wallet, Undo2, type LucideIcon } from "lucide-react";
 
 import "./i18n";
 
@@ -143,12 +143,20 @@ const VALUE_ENTRIES: readonly [
     "shell.value_coupon_desc",
     "兑换优惠券到账户",
   ],
+  [
+    Undo2,
+    "/orders/refunds",
+    "shell.value_refunds",
+    "我的退款",
+    "shell.value_refunds_desc",
+    "退款申请与进度",
+  ],
 ];
 
 /**
- * Account value hub (`/value`): the three entry tiles into the subscription,
- * Token Bank and coupon redemption surfaces. Pure navigation composition —
- * no business services live in the shell.
+ * Account value hub (`/value`): the entry tiles into the subscription,
+ * Token Bank, coupon redemption and refund surfaces. Pure navigation
+ * composition — no business services live in the shell.
  */
 export function SdkworkOrderH5ValueHomePage() {
   const navigate = useNavigate();

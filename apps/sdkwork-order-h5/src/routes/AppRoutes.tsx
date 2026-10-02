@@ -6,7 +6,12 @@ import { ORDER_MOBILE_ROUTE_DEFINITIONS } from "@sdkwork/order-mobile-react-orde
 import type { SdkworkOrderH5Runtime } from "../bootstrap/runtime";
 import { SDKWORK_ORDER_H5_HOST_ROUTES } from "../bootstrap/routes";
 
-type OrderComponentName = "OrderCenter" | "OrderDetail" | "CashierPage" | "VoucherCodePage";
+type OrderComponentName =
+  | "OrderCenter"
+  | "OrderDetail"
+  | "CashierPage"
+  | "VoucherCodePage"
+  | "RefundRequestsPage";
 
 /**
  * Lazy-loads an order page while preserving its exact props type. Named
@@ -24,6 +29,7 @@ const OrderCenter = lazyOrderComponent("OrderCenter");
 const OrderDetail = lazyOrderComponent("OrderDetail");
 const CashierPage = lazyOrderComponent("CashierPage");
 const VoucherCodePage = lazyOrderComponent("VoucherCodePage");
+const RefundRequestsPage = lazyOrderComponent("RefundRequestsPage");
 
 const VipSubscriptionPage = lazy(async () => {
   const module = await import("@sdkwork/order-h5-subscription");
@@ -85,6 +91,10 @@ export function AppRoutes({ runtime }: { runtime: SdkworkOrderH5Runtime }) {
         <Route
           element={<OrderDetail />}
           path={ORDER_MOBILE_ROUTE_DEFINITIONS.orderDetail.path}
+        />
+        <Route
+          element={<RefundRequestsPage />}
+          path={ORDER_MOBILE_ROUTE_DEFINITIONS.refundRequests.path}
         />
         <Route
           element={<ValueHomePage />}

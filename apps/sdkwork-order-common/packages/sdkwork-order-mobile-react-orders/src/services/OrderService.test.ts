@@ -24,6 +24,15 @@ function createMockClient() {
         paymentSuccess: { retrieve: vi.fn() },
         cancellations: { create: vi.fn() },
         couponRedemptions: { create: vi.fn() },
+        receipts: { create: vi.fn() },
+        refundRequests: { list: vi.fn(), create: vi.fn() },
+      },
+    },
+    orderFulfillments: { fulfillments: { list: vi.fn() } },
+    orderShipments: {
+      shipments: {
+        retrieve: vi.fn(),
+        trackingEvents: { list: vi.fn() },
       },
     },
     orderCheckout: {
@@ -59,6 +68,15 @@ describe("fail-closed runtime", () => {
       () => OrderService.getPaymentStatus("order-id"),
       () => OrderService.cancelOrder("order-id"),
       () => OrderService.redeemVoucher("voucher-code"),
+      () => OrderService.confirmReceipt("order-id"),
+      () => OrderService.listRefundRequests(),
+      () =>
+        OrderService.createRefundRequest({
+          orderId: "order-id",
+          targetAsset: "cash",
+          amount: "10.00",
+        }),
+      () => OrderService.getOrderShipment("order-id"),
       () =>
         OrderService.createOrder({
           items: [{ quantity: 1, skuId: "sku-1" }],
@@ -364,6 +382,316 @@ describe("voucher redemption", () => {
     const result = await OrderService.redeemVoucher("invalid");
     expect(result.success).toBe(false);
     expect(result.message).toContain("coupon code is invalid");
+  });
+});
+
+describe("receipt confirmation", () => {
+  it("confirms receipt through the idempotent receipts port with an empty command body", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderOrders.orders.receipts.create.mockResolvedValue({
+      accepted: true,
+      resourceId: "order-1",
+    });
+    await OrderService.confirmReceipt("order-1");
+    expect(client.orderOrders.orders.receipts.create).toHaveBeenCalledWith(
+      "order-1",
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+      // Empty command body keeps the request well-formed (40002 avoidance).
+      {},
+    );
+  });
+
+  it("propagates backend rejections (e.g. already confirmed)", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderOrders.orders.receipts.create.mockRejectedValue(
+      new Error("order is not fulfilled"),
+    );
+    await expect(OrderService.confirmReceipt("order-1")).rejects.toThrow(
+      "order is not fulfilled",
+    );
+  });
+});
+
+describe("refund requests", () => {
+  it("lists refund requests and reads pageInfo.hasMore", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderOrders.orders.refundRequests.list.mockResolvedValue({
+      items: [
+        {
+          accountValueRequestId: "req-1",
+          requestNo: "RR20261001001",
+          originalOrderId: "order-1",
+          subject: "退款申请",
+          targetAsset: "cash",
+          amount: "1050",
+          currencyCode: "CNY",
+          status: "requested",
+          createdAt: "2026-10-01T10:00:00Z",
+          updatedAt: "2026-10-01T10:00:00Z",
+        },
+      ],
+      pageInfo: { mode: "offset", page: 1, pageSize: 20, hasMore: true },
+    });
+
+    const result = await OrderService.listRefundRequests({ status: "requested" });
+    expect(client.orderOrders.orders.refundRequests.list).toHaveBeenCalledWith({
+      status: "requested",
+      page: 1,
+      pageSize: 20,
+    });
+    expect(result.hasMore).toBe(true);
+    expect(result.items[0]).toMatchObject({
+      requestId: "req-1",
+      requestNo: "RR20261001001",
+      originalOrderId: "order-1",
+      targetAsset: "cash",
+      amount: "1050",
+      status: "requested",
+    });
+  });
+
+  it("normalizes cash amounts from major units to minor-unit integers", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderOrders.orders.refundRequests.create.mockResolvedValue({
+      accountValueRequestId: "req-2",
+      requestNo: "RR2",
+      originalOrderId: "order-2",
+      targetAsset: "cash",
+      amount: "1050",
+      currencyCode: "CNY",
+      status: "requested",
+      createdAt: "2026-10-01T10:00:00Z",
+      updatedAt: "2026-10-01T10:00:00Z",
+    });
+
+    const view = await OrderService.createRefundRequest({
+      orderId: "order-2",
+      targetAsset: "cash",
+      amount: "10.5",
+      reasonDetail: " 商品与描述不符 ",
+    });
+    expect(client.orderOrders.orders.refundRequests.create).toHaveBeenCalledWith(
+      {
+        originalOrderId: "order-2",
+        targetAsset: "cash",
+        amount: "1050",
+        currencyCode: "CNY",
+        reasonCode: undefined,
+        reasonDetail: "商品与描述不符",
+      },
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+    expect(view.requestId).toBe("req-2");
+    expect(view.amount).toBe("1050");
+  });
+
+  it("passes positive-integer asset amounts through verbatim for points", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderOrders.orders.refundRequests.create.mockResolvedValue({
+      accountValueRequestId: "req-3",
+      targetAsset: "points",
+      amount: "150",
+      currencyCode: "CNY",
+      status: "requested",
+    });
+    await OrderService.createRefundRequest({
+      orderId: "order-3",
+      targetAsset: "points",
+      amount: " 150 ",
+    });
+    expect(client.orderOrders.orders.refundRequests.create).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: "150", targetAsset: "points" }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+  });
+
+  it("rejects invalid amounts before calling the API", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    await expect(
+      OrderService.createRefundRequest({
+        orderId: "order-1",
+        targetAsset: "cash",
+        amount: "abc",
+      }),
+    ).rejects.toThrow("请输入有效的退款金额");
+    await expect(
+      OrderService.createRefundRequest({
+        orderId: "order-1",
+        targetAsset: "points",
+        amount: "1.5",
+      }),
+    ).rejects.toThrow("请输入有效的退款额度");
+    await expect(
+      OrderService.createRefundRequest({
+        orderId: "order-1",
+        targetAsset: "token_bank",
+        amount: "0",
+      }),
+    ).rejects.toThrow("请输入有效的退款额度");
+    expect(client.orderOrders.orders.refundRequests.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty original order id before calling the API", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    await expect(
+      OrderService.createRefundRequest({
+        orderId: " ",
+        targetAsset: "cash",
+        amount: "10.00",
+      }),
+    ).rejects.toThrow("original order id");
+    expect(client.orderOrders.orders.refundRequests.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("order shipment assembly", () => {
+  it("assembles fulfillment → shipment → tracking events", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderFulfillments.fulfillments.list.mockResolvedValue({
+      items: [
+        {
+          fulfillmentId: "fulfillment-1",
+          fulfillmentNo: "F20261001001",
+          fulfillmentType: "physical_shipment",
+          orderId: "order-1",
+          status: "shipped",
+        },
+      ],
+      pageInfo: { mode: "offset", page: 1, pageSize: 10 },
+    });
+    client.orderShipments.shipments.retrieve.mockResolvedValue({
+      shipmentId: "shipment-1",
+      shipmentNo: "S20261001001",
+      fulfillmentId: "fulfillment-1",
+      carrierCode: "sf",
+      trackingNo: "SF123456789",
+      status: "in_transit",
+    });
+    client.orderShipments.shipments.trackingEvents.list.mockResolvedValue({
+      items: [
+        {
+          eventId: "event-1",
+          shipmentId: "shipment-1",
+          trackingEventNo: "TE-1",
+          eventType: "pickup",
+          eventTime: "2026-10-01T08:00:00Z",
+          locationText: "杭州转运中心",
+        },
+        {
+          eventId: "event-2",
+          shipmentId: "shipment-1",
+          trackingEventNo: "TE-2",
+          eventType: "in_transit",
+          eventStatus: "delivered",
+          eventTime: "2026-10-02T09:30:00Z",
+        },
+      ],
+      pageInfo: { mode: "offset", page: 1, pageSize: 50 },
+    });
+
+    const summary = await OrderService.getOrderShipment("order-1");
+    expect(client.orderFulfillments.fulfillments.list).toHaveBeenCalledWith({
+      orderId: "order-1",
+      page: 1,
+      pageSize: 10,
+    });
+    expect(client.orderShipments.shipments.retrieve).toHaveBeenCalledWith("fulfillment-1");
+    expect(client.orderShipments.shipments.trackingEvents.list).toHaveBeenCalledWith("shipment-1", {
+      page: 1,
+      pageSize: 50,
+    });
+    expect(summary).toMatchObject({
+      fulfillmentId: "fulfillment-1",
+      fulfillmentNo: "F20261001001",
+      shipmentId: "shipment-1",
+      shipmentNo: "S20261001001",
+      carrierCode: "sf",
+      trackingNo: "SF123456789",
+      status: "in_transit",
+    });
+    expect(summary?.events).toHaveLength(2);
+    expect(summary?.events[0]).toMatchObject({ eventType: "pickup", locationText: "杭州转运中心" });
+    expect(summary?.events[1].eventStatus).toBe("delivered");
+  });
+
+  it("returns null when the order has no fulfillment yet", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderFulfillments.fulfillments.list.mockResolvedValue({ items: [], pageInfo: {} });
+    await expect(OrderService.getOrderShipment("order-1")).resolves.toBeNull();
+    expect(client.orderShipments.shipments.retrieve).not.toHaveBeenCalled();
+  });
+
+  it("keeps the fulfillment header when the shipment read misses", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderFulfillments.fulfillments.list.mockResolvedValue({
+      items: [
+        {
+          fulfillmentId: "fulfillment-2",
+          fulfillmentNo: "F2",
+          fulfillmentType: "physical_shipment",
+          orderId: "order-2",
+          status: "awaiting_shipment",
+        },
+      ],
+      pageInfo: {},
+    });
+    client.orderShipments.shipments.retrieve.mockRejectedValue(new Error("shipment was not found"));
+
+    const summary = await OrderService.getOrderShipment("order-2");
+    expect(summary).toMatchObject({
+      fulfillmentId: "fulfillment-2",
+      fulfillmentNo: "F2",
+      fulfillmentStatus: "awaiting_shipment",
+      status: "awaiting_shipment",
+      carrierCode: "",
+    });
+    expect(summary?.shipmentId).toBeUndefined();
+    expect(summary?.events).toHaveLength(0);
+    expect(client.orderShipments.shipments.trackingEvents.list).not.toHaveBeenCalled();
+  });
+
+  it("keeps the shipment header when the tracking events read fails", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderFulfillments.fulfillments.list.mockResolvedValue({
+      items: [
+        {
+          fulfillmentId: "fulfillment-3",
+          fulfillmentNo: "F3",
+          fulfillmentType: "physical_shipment",
+          orderId: "order-3",
+          status: "shipped",
+        },
+      ],
+      pageInfo: {},
+    });
+    client.orderShipments.shipments.retrieve.mockResolvedValue({
+      shipmentId: "shipment-3",
+      shipmentNo: "S3",
+      fulfillmentId: "fulfillment-3",
+      carrierCode: "yt",
+      status: "in_transit",
+    });
+    client.orderShipments.shipments.trackingEvents.list.mockRejectedValue(new Error("events unavailable"));
+
+    const summary = await OrderService.getOrderShipment("order-3");
+    expect(summary).toMatchObject({
+      shipmentId: "shipment-3",
+      shipmentNo: "S3",
+      carrierCode: "yt",
+      status: "in_transit",
+    });
+    expect(summary?.events).toHaveLength(0);
   });
 });
 

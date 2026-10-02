@@ -7,7 +7,12 @@ import { PageLayout } from "@sdkwork/ui-mobile-react";
 import { OrderActionButtons } from "../components/OrderActionButtons";
 import { OrderInfoCards } from "../components/OrderInfoCards";
 import { OrderItemsCard } from "../components/OrderItemsCard";
-import { OrderService, type Order } from "../services/OrderService";
+import { OrderShipmentCard } from "../components/OrderShipmentCard";
+import {
+  OrderService,
+  type Order,
+} from "../services/OrderService";
+import type { OrderShipmentSummary } from "../services/RefundTypes";
 import { localizeOrderTitle } from "../services/orderTitle";
 import { toUserErrorMessage } from "../services/errorMessage";
 import {
@@ -18,18 +23,26 @@ import {
 /** Host-overridable order route template (path with `:orderId`). */
 export interface OrderDetailProps {
   orderCashierPath?: string;
+  /** Host-overridable refund-requests route path (deep links `?orderId=`). */
+  refundRequestsPath?: string;
 }
 
 const DEFAULT_ORDER_CASHIER_PATH = ORDER_MOBILE_ROUTE_DEFINITIONS.orderCashier.path;
+const DEFAULT_REFUND_REQUESTS_PATH = ORDER_MOBILE_ROUTE_DEFINITIONS.refundRequests.path;
+
+/** Order statuses whose logistics tracking card may exist. */
+const SHIPMENT_TRACKING_STATUSES: readonly string[] = ["fulfilled", "completed"];
 
 export function OrderDetail({
   orderCashierPath = DEFAULT_ORDER_CASHIER_PATH,
+  refundRequestsPath = DEFAULT_REFUND_REQUESTS_PATH,
 }: OrderDetailProps = {}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { orderId = "" } = useParams();
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [shipment, setShipment] = useState<OrderShipmentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -61,8 +74,37 @@ export function OrderDetail({
     void load();
   }, [load]);
 
+  // Logistics tracking only exists once the order is fulfilled/completed.
+  // Failures degrade to "no tracking card" instead of failing the page.
+  useEffect(() => {
+    if (!order || !SHIPMENT_TRACKING_STATUSES.includes(order.status)) {
+      setShipment(null);
+      return;
+    }
+    let cancelled = false;
+    OrderService.getOrderShipment(order.id)
+      .then((value) => {
+        if (!cancelled) {
+          setShipment(value);
+        }
+      })
+      .catch(() => {
+        // Degradation: tracking is supplementary; hide the card on failure.
+        if (!cancelled) {
+          setShipment(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [order]);
+
   const handlePay = (value: Order) => {
     navigate(resolveHostRoutePath(orderCashierPath, { orderId: value.id }));
+  };
+
+  const handleRefund = (value: Order) => {
+    navigate(`${resolveHostRoutePath(refundRequestsPath)}?orderId=${encodeURIComponent(value.id)}`);
   };
 
   return (
@@ -93,11 +135,13 @@ export function OrderDetail({
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-3 py-3 pb-6">
           <OrderInfoCards order={order} />
           <OrderItemsCard order={order} />
+          {shipment && <OrderShipmentCard shipment={shipment} />}
           <div className="mt-1 flex justify-end gap-2">
             <OrderActionButtons
               order={order}
               onRefresh={() => void load()}
               onPay={handlePay}
+              onRefund={handleRefund}
             />
           </div>
         </div>

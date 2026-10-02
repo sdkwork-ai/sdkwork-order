@@ -4,6 +4,14 @@ import type { SdkworkAppClient } from "@sdkwork/order-app-sdk";
 
 import { setPaymentRegionOverride, type PaymentEnvironment, type PaymentRegion } from "./PaymentEnvironment";
 import type { WechatPaymentOAuthChannel } from "./WechatPaymentOAuth";
+import {
+  isRefundTargetAsset,
+  normalizeRefundAmountWire,
+  type CreateRefundRequestInput,
+  type OrderShipmentSummary,
+  type RefundRequestView,
+  type ShipmentTrackingEvent,
+} from "./RefundTypes";
 
 /**
  * Canonical mobile order service backed by the generated Order App SDK.
@@ -400,6 +408,37 @@ function mapOrderSummary(value: Record<string, unknown>): Order {
   };
 }
 
+/** Maps a refund request row (backend `AccountValueRequestResponse`). */
+function mapRefundRequestView(value: Record<string, unknown>): RefundRequestView {
+  const requestId = toOptionalString(value.accountValueRequestId) ?? toOptionalString(value.requestId);
+  if (!requestId) {
+    throw new Error("Refund request response is missing accountValueRequestId.");
+  }
+  return {
+    requestId,
+    requestNo: toOptionalString(value.requestNo) ?? requestId,
+    originalOrderId: toOptionalString(value.originalOrderId),
+    subject: toOptionalString(value.subject) ?? "",
+    targetAsset: toOptionalString(value.targetAsset) ?? "",
+    amount: toOptionalString(value.amount) ?? "0",
+    currencyCode: toOptionalString(value.currencyCode) ?? "CNY",
+    status: toOptionalString(value.status) ?? "",
+    createdAt: toOptionalString(value.createdAt) ?? "",
+    updatedAt: toOptionalString(value.updatedAt) ?? "",
+  };
+}
+
+/** Maps one tracking event row (backend `ShipmentTrackingEventResponse`). */
+function mapTrackingEvent(value: Record<string, unknown>): ShipmentTrackingEvent {
+  return {
+    eventId: toOptionalString(value.eventId) ?? "",
+    eventType: toOptionalString(value.eventType) ?? "",
+    eventStatus: toOptionalString(value.eventStatus),
+    eventTime: toOptionalString(value.eventTime) ?? "",
+    locationText: toOptionalString(value.locationText),
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Service                                                            */
 /* ------------------------------------------------------------------ */
@@ -543,6 +582,161 @@ export class OrderService {
         message: error instanceof Error ? error.message : "核销失败",
       };
     }
+  }
+
+  /**
+   * Confirms receipt of a fulfilled order through
+   * `POST /orders/{orderId}/receipt_confirmations`. The route is marked
+   * idempotent in the manifest, so an `Idempotency-Key` is always sent;
+   * retries of a tapped-twice button dedupe server-side instead of
+   * confirming twice.
+   */
+  static async confirmReceipt(orderId: string): Promise<void> {
+    const { client } = requireOrderRuntime();
+    await client.orderOrders.orders.receipts.create(
+      orderId,
+      { idempotencyKey: uuid() },
+      // Empty command body, same 40002 avoidance as `cancelOrder`: the HTTP
+      // layer always sends `Content-Type: application/json`, so an omitted
+      // body turns into an empty JSON body the server rejects as malformed.
+      {},
+    );
+  }
+
+  /** Lists the buyer's refund requests (`GET /orders/refund_requests`). */
+  static async listRefundRequests(
+    input: { readonly status?: string; readonly page?: number; readonly pageSize?: number } = {},
+  ): Promise<{ items: RefundRequestView[]; hasMore: boolean }> {
+    const { client } = requireOrderRuntime();
+    const page = await client.orderOrders.orders.refundRequests.list({
+      status: input.status,
+      page: input.page ?? 1,
+      pageSize: input.pageSize ?? 20,
+    });
+    const items = (page.items ?? []).map((item) =>
+      mapRefundRequestView(item as Record<string, unknown>),
+    );
+    return { items, hasMore: page.pageInfo?.hasMore === true };
+  }
+
+  /**
+   * Creates a refund request (`POST /orders/refund_requests`). The input
+   * `amount` is user-entered: `cash` is a major-unit decimal (元) that the
+   * service converts to the minor-unit integer string the API requires;
+   * `points`/`token_bank` are positive integer asset-unit strings submitted
+   * verbatim (same rules as the Flutter `RefundService`).
+   */
+  static async createRefundRequest(input: CreateRefundRequestInput): Promise<RefundRequestView> {
+    const { client } = requireOrderRuntime();
+    const originalOrderId = input.orderId.trim();
+    if (!originalOrderId) {
+      throw new Error("A refund request needs the original order id.");
+    }
+    if (!isRefundTargetAsset(input.targetAsset)) {
+      throw new Error(`Unsupported refund target asset ${String(input.targetAsset)}.`);
+    }
+    const amount = normalizeRefundAmountWire(input.targetAsset, input.amount);
+    if (amount === null) {
+      throw new Error(
+        input.targetAsset === "cash"
+          ? "请输入有效的退款金额"
+          : "请输入有效的退款额度（正整数）",
+      );
+    }
+    const reasonCode = input.reasonCode?.trim();
+    const reasonDetail = input.reasonDetail?.trim();
+    const value = (await client.orderOrders.orders.refundRequests.create(
+      {
+        originalOrderId,
+        targetAsset: input.targetAsset,
+        amount,
+        currencyCode: (input.currencyCode ?? "CNY").trim().toUpperCase(),
+        reasonCode: reasonCode ? reasonCode : undefined,
+        reasonDetail: reasonDetail ? reasonDetail : undefined,
+      },
+      { idempotencyKey: uuid() },
+    )) as Record<string, unknown>;
+    return mapRefundRequestView(value);
+  }
+
+  /**
+   * Assembles the buyer logistics view for one order:
+   * `GET /fulfillments?order_id=` (first row) → `GET /shipments/{shipmentId}`
+   * → `GET /shipments/{shipmentId}/tracking_events` (one bounded page).
+   * Returns `null` when the order has no fulfillment yet so the UI hides the
+   * tracking card. Per-read failures degrade instead of failing the card
+   * (Flutter `ShipmentService` precedent): a missing shipment keeps the
+   * fulfillment header, a missing events page keeps the shipment header.
+   */
+  static async getOrderShipment(orderId: string): Promise<OrderShipmentSummary | null> {
+    const { client } = requireOrderRuntime();
+    const normalizedOrderId = orderId.trim();
+    if (!normalizedOrderId) {
+      return null;
+    }
+    // The generated SDK's TS parameter name is `orderId`; it serializes to the
+    // snake_case `order_id` query the API contract defines.
+    const fulfillmentsPage = await client.orderFulfillments.fulfillments.list({
+      orderId: normalizedOrderId,
+      page: 1,
+      pageSize: 10,
+    });
+    const first = (fulfillmentsPage.items ?? [])[0] as Record<string, unknown> | undefined;
+    const fulfillmentId = toOptionalString(first?.fulfillmentId);
+    if (!first || !fulfillmentId) {
+      return null;
+    }
+    const fulfillmentNo = toOptionalString(first?.fulfillmentNo) ?? fulfillmentId;
+    const fulfillmentStatus = toOptionalString(first?.status) ?? "";
+
+    // The buyer API exposes shipments by shipment id only; the fulfillment id
+    // is the owner-scoped handle the flow has, so the shipment is read through
+    // it (a 404 simply means "not shipped yet").
+    let shipment: Record<string, unknown> | null = null;
+    try {
+      shipment = ((await client.orderShipments.shipments.retrieve(
+        fulfillmentId,
+      )) ?? null) as Record<string, unknown> | null;
+    } catch {
+      // Degradation: keep the fulfillment header without shipment details.
+      shipment = null;
+    }
+    const shipmentId = shipment
+      ? toOptionalString(shipment.shipmentId) ?? fulfillmentId
+      : undefined;
+
+    let events: ShipmentTrackingEvent[] = [];
+    if (shipmentId) {
+      try {
+        const eventsPage = await client.orderShipments.shipments.trackingEvents.list(
+          shipmentId,
+          {
+            page: 1,
+            pageSize: 50,
+          },
+        );
+        events = (eventsPage.items ?? []).map((item) =>
+          mapTrackingEvent(item as Record<string, unknown>),
+        );
+      } catch {
+        // Degradation: keep the shipment header without the events timeline.
+        events = [];
+      }
+    }
+
+    return {
+      fulfillmentId,
+      fulfillmentNo,
+      fulfillmentStatus,
+      shipmentId,
+      shipmentNo: shipment
+        ? toOptionalString(shipment.shipmentNo) ?? fulfillmentNo
+        : fulfillmentNo,
+      carrierCode: shipment ? toOptionalString(shipment.carrierCode) ?? "" : "",
+      trackingNo: shipment ? toOptionalString(shipment.trackingNo) : undefined,
+      status: shipment ? toOptionalString(shipment.status) ?? fulfillmentStatus : fulfillmentStatus,
+      events,
+    };
   }
 
   /**

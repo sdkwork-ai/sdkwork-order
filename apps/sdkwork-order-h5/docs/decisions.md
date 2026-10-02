@@ -48,3 +48,27 @@
   from this task) discovers `apps/sdkwork-order-h5/packages/**/*.test.ts(x)`
   only; placing the test there makes it run in the standard `pnpm test:vitest`
   gate.
+- 2026-10-03: refund amount normalization lives client-side in
+  `OrderService.createRefundRequest` (via `normalizeRefundAmountWire`). `cash`
+  refunds are money: the user-entered major-unit decimal (元) converts to the
+  minor-unit integer string the API requires (10.50 → "1050") using decimal
+  string splicing, not float math (`10.10 * 100` is not reliably `1010`);
+  `points`/`token_bank` refunds are asset units: positive integer strings pass
+  through verbatim and "0"/decimals/negatives are rejected before any network
+  call. Same rules as the Flutter `RefundService` and the Token Bank catalog
+  price conversion, so every client submits identical wire amounts.
+- 2026-10-03: buyer logistics tracking assembles in a fixed order:
+  `GET /fulfillments?order_id=` (first row, one bounded page) →
+  `GET /shipments/{shipmentId}` (read through the fulfillment id — the buyer
+  API exposes shipments only by id and the fulfillment id is the owner-scoped
+  handle the flow has) → `GET /shipments/{shipmentId}/tracking_events` (one
+  bounded page, pageSize 50). Per-read failures degrade instead of failing the
+  card: a missing shipment keeps the fulfillment header, a missing events page
+  keeps the shipment header; an order with no fulfillment hides the card.
+- 2026-10-03: receipt confirmation always sends a fresh `Idempotency-Key`
+  (uuid) even though the command body is empty: the route is marked
+  `.with_idempotent(true)` in the manifest so the header is required, and a
+  double-tapped 确认收货 button dedupes server-side instead of confirming
+  twice. The body stays an explicit empty command object because the HTTP
+  layer always sends `Content-Type: application/json` and an omitted body
+  would be rejected as malformed (40002) — same pattern as `cancelOrder`.
