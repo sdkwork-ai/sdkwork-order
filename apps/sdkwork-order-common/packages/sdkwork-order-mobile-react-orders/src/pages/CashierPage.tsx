@@ -374,7 +374,17 @@ export function CashierPage({
         orderRef.current = loaded;
         setOrder(loaded);
         if (loaded.status === "pending_payment") {
-          await createPayment(orderId, availableMethods[0] ?? "wechat_pay");
+          // Returning from a provider cashier (Alipay WAP / PayPal
+          // approval / H5 jump) reloads this page: the payment may already
+          // be submitted and awaiting async confirmation. Check once and
+          // resume the resolved phase before creating a fresh session —
+          // re-creating on every return is wasteful and confusing.
+          await pollPaymentStatus(orderId);
+          if (phaseRef.current === "loading") {
+            await createPayment(orderId, availableMethods[0] ?? "wechat_pay");
+          } else if (phaseRef.current === "pending") {
+            startPolling(orderId);
+          }
         } else if (
           ["paid", "fulfilled", "completed", "refunding", "refunded"].includes(String(loaded.status))
         ) {
