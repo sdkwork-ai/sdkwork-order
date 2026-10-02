@@ -84,7 +84,12 @@ export interface TradeAdminService {
   listShipments(query?: TradeAdminListQuery): Promise<TradeOperationsPage<ShipmentSummary>>;
   getShipment(shipmentId: string): Promise<ShipmentSummary>;
   listShipmentPackages(shipmentId: string): Promise<TradeOperationsPage<ShipmentPackageSummary>>;
-  createShipmentPackage(shipmentId: string, body: CreateShipmentPackageRequest): Promise<ShipmentPackageSummary>;
+  createShipmentPackage(
+    shipmentId: string,
+    body: CreateShipmentPackageRequest,
+    /** Stable within one dialog session so double submits dedupe. */
+    idempotencyKey?: string,
+  ): Promise<ShipmentPackageSummary>;
   updateShipmentPackage(
     shipmentId: string,
     packageId: string,
@@ -96,7 +101,11 @@ export interface TradeAdminService {
   reviewWithdrawalRequest(id: string, action: TradeReviewAction, input?: TradeRequestReviewInput, idempotencyKey?: string): Promise<void>;
   listCancellations(query?: TradeOperationsQuery): Promise<TradeOperationsPage<OrderCancellation>>;
   listAccountValuePackages(query?: AccountValuePackageListQuery): Promise<TradeOperationsPage<AccountValuePackageResponse>>;
-  createAccountValuePackage(body: AccountValuePackageWriteCommand): Promise<AccountValuePackageResponse>;
+  createAccountValuePackage(
+    body: AccountValuePackageWriteCommand,
+    /** Stable within one dialog session so double submits dedupe. */
+    idempotencyKey?: string,
+  ): Promise<AccountValuePackageResponse>;
   updateAccountValuePackage(
     packageId: string,
     body: AccountValuePackageWriteCommand,
@@ -239,8 +248,8 @@ export function createTradeAdminService(client: SdkworkOrderBackendClient): Trad
       })),
     getShipment: (shipmentId) => client.shipments.retrieve(shipmentId),
     listShipmentPackages: (shipmentId) => listPackages(shipmentId),
-    createShipmentPackage: (shipmentId, body) =>
-      client.shipments.packages.create(shipmentId, body, createSdkworkIdempotencyParams()),
+    createShipmentPackage: (shipmentId, body, idempotencyKey) =>
+      client.shipments.packages.create(shipmentId, body, createSdkworkIdempotencyParams(idempotencyKey)),
     updateShipmentPackage: (shipmentId, packageId, body) =>
       client.shipments.packages.update(shipmentId, packageId, body, createSdkworkIdempotencyParams()),
     listRefundRequests: (query = {}) => operations.listRefundRequests(query),
@@ -270,8 +279,8 @@ export function createTradeAdminService(client: SdkworkOrderBackendClient): Trad
         status: query.status,
         targetAsset: query.targetAsset,
       })),
-    createAccountValuePackage: (body) =>
-      client.backend.accountValuePackages.create(body, createSdkworkIdempotencyParams()),
+    createAccountValuePackage: (body, idempotencyKey) =>
+      client.backend.accountValuePackages.create(body, createSdkworkIdempotencyParams(idempotencyKey)),
     updateAccountValuePackage: (packageId, body) =>
       client.backend.accountValuePackages.update(packageId, body, createSdkworkIdempotencyParams()),
     retireAccountValuePackage: (packageId) =>

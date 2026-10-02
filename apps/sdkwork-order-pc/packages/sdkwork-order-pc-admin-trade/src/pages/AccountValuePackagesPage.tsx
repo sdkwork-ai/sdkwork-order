@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { createSdkworkIdempotencyParams } from "@sdkwork/order-service";
 import { PackagePlus, Pencil, RefreshCw, RotateCcw, Search , Download} from "lucide-react";
 import {
   TradeAdminIntlProvider,
@@ -223,7 +224,11 @@ function AccountValuePackagesPageInner({
   };
 
 
+  // One idempotency key per create-dialog session: repeated submits of the
+  // same dialog dedupe server-side instead of creating twin packages.
+  const createKeyRef = useRef<string | null>(null);
   const openCreate = () => {
+    createKeyRef.current = createSdkworkIdempotencyParams().idempotencyKey;
     setDraft(EMPTY_PACKAGE_DRAFT);
     setDialogOpen(true);
   };
@@ -252,7 +257,7 @@ function AccountValuePackagesPageInner({
       if (draft.packageId) {
         await service.updateAccountValuePackage(draft.packageId, values);
       } else {
-        await service.createAccountValuePackage(values);
+        await service.createAccountValuePackage(values, createKeyRef.current ?? undefined);
       }
       setMessage(t("admin.trade.accountValuePackages.saved", "Value package {{name}} has been saved.", {
         name: draft.displayName || draft.packageCode,

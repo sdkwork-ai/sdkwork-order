@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { createSdkworkIdempotencyParams } from "@sdkwork/order-service";
 import { Eye, PackagePlus, Pencil, RefreshCw, RotateCcw, Search , Download} from "lucide-react";
 import {
   TradeAdminIntlProvider,
@@ -273,7 +274,11 @@ function ShipmentsPageInner({
   };
 
 
+  // One idempotency key per create-dialog session: repeated submits of the
+  // same dialog dedupe server-side instead of creating twin packages.
+  const createPackageKeyRef = useRef<string | null>(null);
   const openCreatePackage = () => {
+    createPackageKeyRef.current = createSdkworkIdempotencyParams().idempotencyKey;
     setPackageDraft(EMPTY_PACKAGE_DRAFT);
     setPackageDialogOpen(true);
   };
@@ -303,7 +308,11 @@ function ShipmentsPageInner({
           toUpdateCommand(packageDraft),
         );
       } else {
-        await service.createShipmentPackage(targetShipmentId, toCreateCommand(packageDraft));
+        await service.createShipmentPackage(
+          targetShipmentId,
+          toCreateCommand(packageDraft),
+          createPackageKeyRef.current ?? undefined,
+        );
       }
       setMessage(t("admin.trade.shipments.packageSaved", "Package {{no}} has been saved.", {
         no: packageDraft.packageNo || packageDraft.packageId || t("admin.trade.common.noValue", "-"),

@@ -100,6 +100,7 @@ describe("SdkworkOrderShipmentsPage", () => {
       expect(service.createShipmentPackage).toHaveBeenCalledWith(
         "sh-1",
         expect.objectContaining({ packageType: "express", packageNo: "PKG-2", trackingNo: "SF456" }),
+        expect.any(String),
       );
     });
   });

@@ -61,6 +61,7 @@ describe("SdkworkOrderAccountValuePackagesPage", () => {
     await waitFor(() => {
       expect(service.createAccountValuePackage).toHaveBeenCalledWith(
         expect.objectContaining({ packageCode: "PKG-2", displayName: "Points 200", grantAmount: "200.00", priceAmount: "188.00", targetAsset: "points" }),
+        expect.any(String),
       );
     });
   });
