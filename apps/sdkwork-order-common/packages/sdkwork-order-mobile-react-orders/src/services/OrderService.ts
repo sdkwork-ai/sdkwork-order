@@ -29,7 +29,9 @@ export type OrderPaymentMethod =
   | "wechat_jsapi"
   | "alipay"
   | "alipay_wap"
-  | "balance";
+  | "balance"
+  | "paypal"
+  | "stripe_card";
 
 /**
  * Methods offered on the cashier UI (shown to the user). Environment-aware
@@ -52,15 +54,19 @@ export const ORDER_PAYMENT_METHOD_LABELS: Readonly<Record<OrderPaymentMethod, st
   alipay: "支付宝",
   alipay_wap: "支付宝",
   balance: "余额",
+  paypal: "PayPal",
+  stripe_card: "信用卡 / 借记卡",
 };
 
 /**
- * Overseas cashier defaults. The order backend only accepts the CN wire
- * methods today, so overseas deployments inherit them until their gateway
- * configures paypal/card providers; hosts may override the whole matrix
+ * Overseas cashier defaults. PayPal and card payments launch through the
+ * provider redirect URL the backend returns in paymentParams; hosts may
+ * override the whole matrix
  * through `configureOrderMobileRuntime({ paymentMethodsForEnvironment })`.
  */
 export const ORDER_PAYMENT_METHODS_OVERSEAS: readonly OrderPaymentMethod[] = [
+  "paypal",
+  "stripe_card",
   "wechat_pay",
   "alipay",
   "balance",

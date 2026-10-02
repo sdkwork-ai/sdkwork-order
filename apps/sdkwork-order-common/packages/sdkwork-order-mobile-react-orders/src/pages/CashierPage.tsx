@@ -96,6 +96,18 @@ const PAYMENT_METHOD_META: Readonly<
     descKey: "orders.payment_method_desc_balance",
     descDefault: "余额直接支付",
   },
+  paypal: {
+    badge: "P",
+    badgeClass: "bg-[#003087]",
+    descKey: "orders.payment_method_desc_paypal",
+    descDefault: "跳转 PayPal 完成支付",
+  },
+  stripe_card: {
+    badge: "S",
+    badgeClass: "bg-[#635BFF]",
+    descKey: "orders.payment_method_desc_stripe_card",
+    descDefault: "跳转收银台完成卡支付",
+  },
 };
 
 export function CashierPage({
@@ -249,6 +261,11 @@ export function CashierPage({
       if (!payload) {
         return null;
       }
+      // Provider deep links (a Stripe cashier URL) are launchable, not
+      // scannable: only http(s) targets render as QR content.
+      if (!/^https?:/i.test(payload) && !payload.startsWith("data:image/")) {
+        return null;
+      }
       return QRCode.toDataURL(payload, { width: 220, margin: 1 });
     },
     [],
@@ -331,8 +348,9 @@ export function CashierPage({
       setQrLaunchUrl(null);
       const qr = await renderQrCode(params);
       setQrDataUrl(qr);
-      if (!qr && params.payUrl) {
-        setQrLaunchUrl(params.payUrl);
+      const launchUrl = params.payUrl ?? params.cashierUrl;
+      if (!qr && launchUrl) {
+        setQrLaunchUrl(launchUrl);
       }
       startPolling(targetOrderId);
     },
