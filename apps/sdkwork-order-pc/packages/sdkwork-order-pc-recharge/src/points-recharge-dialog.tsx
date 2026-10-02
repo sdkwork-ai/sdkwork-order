@@ -19,6 +19,7 @@ import {
   type SdkworkPointsRechargePackage,
   type SdkworkPointsRechargePayment,
   type SdkworkPointsRechargeService,
+  createSdkworkIdempotencyParams,
 } from "@sdkwork/order-service";
 import "./points-recharge-dialog.css";
 
@@ -275,10 +276,14 @@ function SdkworkPointsRechargeExperience({
     if (isPayingRef.current) return;
     if (packageId === selectedPackageIdRef.current) {
       if (isExpired && hasAcceptedAgreementRef.current) {
+        // The previous order expired: a new attempt needs a fresh key, or
+        // the server would hand back the dead order instead of a new one.
+        attemptKeyRef.current = null;
         void createPayment(packageId);
       }
       return;
     }
+    attemptKeyRef.current = null;
     paymentRequestSequenceRef.current += 1;
     selectedPackageIdRef.current = packageId;
     completedOrderRef.current = null;
@@ -297,6 +302,8 @@ function SdkworkPointsRechargeExperience({
     onClose?.();
   }
 
+  const attemptKeyRef = useRef<{ packageId: string; key: string } | null>(null);
+
   async function createPayment(packageId: string) {
     if (isPayingRef.current) return;
     const requestSequence = paymentRequestSequenceRef.current + 1;
@@ -305,7 +312,13 @@ function SdkworkPointsRechargeExperience({
     setIsPaying(true);
     setError(null);
     try {
-      const result = await service.createOrder({ packageId, paymentMethod });
+      if (!attemptKeyRef.current || attemptKeyRef.current.packageId !== packageId) {
+        attemptKeyRef.current = {
+          packageId,
+          key: createSdkworkIdempotencyParams().idempotencyKey,
+        };
+      }
+      const result = await service.createOrder({ packageId, idempotencyKey: attemptKeyRef.current.key, paymentMethod });
       if (paymentRequestSequenceRef.current !== requestSequence
         || selectedPackageIdRef.current !== packageId) return;
       setCurrentTimeMs(Date.now());

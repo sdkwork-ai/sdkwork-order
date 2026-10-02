@@ -151,6 +151,11 @@ export interface SdkworkPointsRechargePayment {
 
 export interface SdkworkPointsRechargeOrderInput {
   packageId: number | string;
+  /**
+   * Stable within one purchase attempt so retried submissions dedupe
+   * server-side instead of placing twin recharge orders.
+   */
+  idempotencyKey?: string;
   paymentMethod?: string;
   paymentProduct?: "alipay_native" | "mobile_cashier_h5" | "wechat_native";
   source?: string;
@@ -430,7 +435,7 @@ export function createSdkworkPointsRechargeService(
         subject: "points_recharge" as const,
         targetAsset: "points" as const,
       };
-      const params = createSdkworkIdempotencyParams();
+      const params = createSdkworkIdempotencyParams(input.idempotencyKey);
       const response = await resolveAppService().recharges.orders.create(body, params);
       return normalizePointsRechargePayment(
         unwrapSdkworkOrderResource<unknown>(response, "Unable to create points recharge order."),
