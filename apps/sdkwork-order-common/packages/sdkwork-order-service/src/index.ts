@@ -60,6 +60,8 @@ export interface SdkworkPhysicalShippingAddress {
 }
 
 export interface SdkworkPhysicalCheckoutInput {
+  /** Stable within one checkout attempt so retried sessions dedupe. */
+  idempotencyKey?: string;
   currencyCode?: string;
   items: SdkworkPhysicalPurchaseItem[];
   shippingAddress: SdkworkPhysicalShippingAddress;
@@ -84,7 +86,7 @@ export interface SdkworkPhysicalOrder {
 }
 
 export interface SdkworkPhysicalPurchaseService {
-  placeOrder(checkoutSessionId: string): Promise<SdkworkPhysicalOrder>;
+  placeOrder(checkoutSessionId: string, idempotencyKey?: string): Promise<SdkworkPhysicalOrder>;
   prepareCheckout(input: SdkworkPhysicalCheckoutInput): Promise<SdkworkPhysicalCheckout>;
 }
 
@@ -95,6 +97,8 @@ export interface CreateSdkworkPhysicalPurchaseServiceOptions {
 export type SdkworkMembershipCheckoutAction = "purchase" | "renew" | "upgrade" | "recharge";
 
 export interface SdkworkMembershipCheckoutInput {
+  /** Stable within one purchase attempt so retried orders dedupe. */
+  idempotencyKey?: string;
   action: SdkworkMembershipCheckoutAction;
   packageId: number;
   paymentMethod?: string;
@@ -229,7 +233,7 @@ export type SdkworkCouponRedemptionResult =
 export type SdkworkCouponRechargeResult = SdkworkCouponRedemptionResult;
 
 export interface SdkworkCouponRedemptionService {
-  redeem(code: string): Promise<SdkworkCouponRedemptionResult>;
+  redeem(code: string, idempotencyKey?: string): Promise<SdkworkCouponRedemptionResult>;
 }
 
 export type SdkworkCouponRechargeService = SdkworkCouponRedemptionService;
@@ -363,7 +367,7 @@ export function createSdkworkPhysicalPurchaseService(
           })),
           shippingAddress,
         },
-        createSdkworkIdempotencyParams(),
+        createSdkworkIdempotencyParams(input.idempotencyKey),
       );
       const checkoutSessionId = requirePhysicalText(
         "checkout session id",
@@ -371,7 +375,9 @@ export function createSdkworkPhysicalPurchaseService(
       );
       const quote = await resolveAppService().checkout.sessions.quotes.create(
         checkoutSessionId,
-        createSdkworkIdempotencyParams(),
+        createSdkworkIdempotencyParams(
+          input.idempotencyKey ? input.idempotencyKey + ':quote' : undefined,
+        ),
       );
       return {
         checkoutSessionId,
@@ -384,7 +390,7 @@ export function createSdkworkPhysicalPurchaseService(
       };
     },
 
-    async placeOrder(checkoutSessionId) {
+    async placeOrder(checkoutSessionId, idempotencyKey) {
       requireSdkworkOrderSession();
       const normalizedSessionId = requirePhysicalText(
         "checkout session id",
@@ -392,7 +398,9 @@ export function createSdkworkPhysicalPurchaseService(
       );
       return resolveAppService().checkout.sessions.orders.create(
         normalizedSessionId,
-        createSdkworkIdempotencyParams(),
+        createSdkworkIdempotencyParams(
+          idempotencyKey ? idempotencyKey + ':place' : undefined,
+        ),
       );
     },
   };
@@ -461,13 +469,13 @@ export function createSdkworkCouponRechargeService(
   const resolveAppService = () => options.appService ?? getSdkworkOrderService();
 
   return {
-    async redeem(code) {
+    async redeem(code, idempotencyKey) {
       requireSdkworkOrderSession();
       const couponCode = code.trim();
       if (!couponCode) {
         throw new Error("A coupon code is required.");
       }
-      const params = createSdkworkIdempotencyParams();
+      const params = createSdkworkIdempotencyParams(idempotencyKey);
       const response = await resolveAppService().orders.couponRedemptions.create({ couponCode }, params);
       return normalizeCouponRechargeResult(
         unwrapSdkworkOrderResource<unknown>(response, "Unable to redeem this coupon."),
@@ -516,7 +524,7 @@ export function createSdkworkMembershipCheckoutService(
           : {}),
       };
       const checkout = (async () => {
-        const params = createSdkworkIdempotencyParams();
+        const params = createSdkworkIdempotencyParams(input.idempotencyKey);
         const response = await resolveAppService().memberships.orders.create(body, params);
         return normalizeMembershipCheckoutPayment(
           unwrapSdkworkOrderResource<unknown>(response, "Unable to create membership order."),
