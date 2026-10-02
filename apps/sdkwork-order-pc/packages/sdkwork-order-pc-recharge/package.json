@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@sdkwork/order-service": "workspace:*",
+    "@sdkwork/utils": "workspace:*",
     "@sdkwork/ui-pc-react": "workspace:*",
     "lucide-react": "catalog:",
     "qrcode": "catalog:"
