@@ -611,6 +611,7 @@ mod tests {
                 stripe: None,
                 alipay: None,
                 wechat_pay: None,
+                paypal: None,
                 webhook_base_url: None,
             },
         );

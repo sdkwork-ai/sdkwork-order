@@ -43,8 +43,8 @@ use sdkwork_payment_providers::{
 };
 use sdkwork_payment_repository_sqlx::{
     claim_due_payment_attempts_postgres, claim_due_refunds_postgres,
-    ensure_provider_account_matches, load_active_provider_account_postgres,
-    load_claim_attempt_provider_context_postgres,
+    claim_succeeded_unsettled_payment_attempts_postgres, ensure_provider_account_matches,
+    load_active_provider_account_postgres, load_claim_attempt_provider_context_postgres,
     load_provider_account_for_existing_payment_postgres, provider_account_binding,
     ClaimedPaymentAttempt, ClaimedRefund,
 };
@@ -84,8 +84,13 @@ impl Default for PaymentCompensationPassConfig {
 pub struct PaymentCompensationRunSummary {
     pub claimed_payment_attempts: usize,
     pub claimed_refunds: usize,
+    /// Settled (`succeeded`) attempts claimed for order-side convergence.
+    pub claimed_settled_attempts: usize,
     pub payment_events_applied: usize,
     pub refund_events_applied: usize,
+    /// Convergence sweeps that re-entered settlement for an
+    /// already-succeeded attempt (idempotent when the order was fine).
+    pub converged_payments: usize,
     pub payments_still_pending: usize,
     pub payments_not_found: usize,
     pub refunds_still_processing: usize,
@@ -129,7 +134,9 @@ pub async fn run_payment_compensation_pass_with_registries(
     let mut summary = PaymentCompensationRunSummary {
         claimed_payment_attempts: 0,
         claimed_refunds: 0,
+        claimed_settled_attempts: 0,
         payment_events_applied: 0,
+        converged_payments: 0,
         refund_events_applied: 0,
         payments_still_pending: 0,
         payments_not_found: 0,
@@ -184,6 +191,47 @@ pub async fn run_payment_compensation_pass_with_registries(
                     attempt_id = %attempt.id,
                     error = ?error,
                     "payment compensation pass failed for one attempt"
+                );
+            }
+        }
+    }
+
+    // Convergence sweep: attempts the payment side already settled
+    // (succeeded) whose owning order never recorded the payment success —
+    // the cross-domain crash window between webhook ingest and order-side
+    // settlement (or a settlement that kept failing after the PSP stopped
+    // retrying). No PSP query is involved: the succeeded attempt IS the
+    // fact, and a synthetic succeeded event re-enters the full notify
+    // framework so confirm → mark-paid → fulfillment run idempotently.
+    let settled_attempts = claim_succeeded_unsettled_payment_attempts_postgres(
+        pool,
+        tenant_id,
+        organization_id,
+        config.batch_size,
+        now_seconds,
+        config.min_age_seconds,
+    )
+    .await?;
+    summary.claimed_settled_attempts = settled_attempts.len();
+    for attempt in settled_attempts {
+        match converge_settled_payment_attempt(
+            &ports,
+            settlement_ports,
+            payment_notify_registry,
+            &attempt,
+        )
+        .await
+        {
+            Ok(ConvergedPayment::Converged) => summary.converged_payments += 1,
+            Ok(ConvergedPayment::Unrepresentable) => summary.skipped_unrepresentable += 1,
+            Err(error) => {
+                summary.errors += 1;
+                tracing::warn!(
+                    target = "order.payment_compensation",
+                    attempt_id = %attempt.id,
+                    order_id = %attempt.order_id,
+                    error = ?error,
+                    "settled payment convergence failed for one attempt"
                 );
             }
         }
@@ -328,6 +376,76 @@ async fn compensate_payment_attempt(
         "payment compensation applied a synthetic query event"
     );
     Ok(AppliedCompensation::Applied)
+}
+
+/// Outcome of one settled-attempt convergence claim.
+enum ConvergedPayment {
+    /// The synthetic succeeded event re-entered settlement (idempotently).
+    Converged,
+    /// The provider has no succeeded representation in the notify
+    /// vocabulary; the sweep never invents one.
+    Unrepresentable,
+}
+
+async fn converge_settled_payment_attempt(
+    ports: &StorePaymentNotifyPorts,
+    settlement_ports: OwnerOrderSettlementPorts<'_>,
+    notify_registry: &dyn PaymentNotifyHandlerRegistry,
+    attempt: &ClaimedPaymentAttempt,
+) -> Result<ConvergedPayment, CommerceServiceError> {
+    let provider_code = attempt.provider_code.trim().to_ascii_lowercase();
+    if provider_code.is_empty() {
+        tracing::warn!(
+            target = "order.payment_compensation",
+            attempt_id = %attempt.id,
+            order_id = %attempt.order_id,
+            "convergence sweep: settled attempt has no provider code; skipped"
+        );
+        return Ok(ConvergedPayment::Unrepresentable);
+    }
+    let Some(raw_status) =
+        compensation_payment_raw_status(&provider_code, ProviderPaymentQueryState::Succeeded)
+    else {
+        tracing::warn!(
+            target = "order.payment_compensation",
+            attempt_id = %attempt.id,
+            order_id = %attempt.order_id,
+            provider_code,
+            "convergence sweep: provider has no succeeded notify representation; skipped"
+        );
+        return Ok(ConvergedPayment::Unrepresentable);
+    };
+    let event = PaymentNotifyEvent {
+        provider_code: provider_code.clone(),
+        provider_event_id: Some(format!(
+            "reconcile:{provider_code}:{}:succeeded",
+            attempt.out_trade_no
+        )),
+        event_type: Some("reconcile.payment".to_owned()),
+        out_trade_no: Some(attempt.out_trade_no.clone()),
+        payment_status: Some(raw_status.to_owned()),
+        payload: serde_json::json!({
+            "out_trade_no": attempt.out_trade_no,
+            "query_status": raw_status,
+            "source": "payment-convergence",
+            "payment_attempt_id": attempt.id,
+        }),
+        tenant_id: Some(attempt.tenant_id.clone()),
+        organization_id: attempt.organization_id.clone(),
+    };
+    let outcome =
+        process_payment_notify_verified(event, ports, ports, settlement_ports, notify_registry)
+            .await?;
+    tracing::info!(
+        target = "order.payment_compensation",
+        webhook_event_id = %outcome.webhook_event_id,
+        attempt_id = %attempt.id,
+        order_id = %attempt.order_id,
+        replayed = outcome.replayed,
+        status = %outcome.status,
+        "convergence sweep re-entered settlement for a succeeded attempt"
+    );
+    Ok(ConvergedPayment::Converged)
 }
 
 async fn compensate_refund(

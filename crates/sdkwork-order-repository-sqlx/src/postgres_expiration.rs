@@ -41,6 +41,14 @@ pub async fn list_due_expiring_orders(
         WHERE LOWER(COALESCE(status, '')) IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay')
           AND expired_at IS NOT NULL
           AND expired_at <= CURRENT_TIMESTAMP
+          AND NOT EXISTS (
+                SELECT 1
+                FROM commerce_payment_attempt a
+                WHERE a.order_id = commerce_order.id
+                  AND a.tenant_id = commerce_order.tenant_id
+                  AND a.status = 'succeeded'
+                  AND a.deleted_at IS NULL
+          )
         ORDER BY expired_at, id
         LIMIT $1
         "#,
@@ -81,6 +89,14 @@ pub async fn expire_due_order(
         WHERE tenant_id = CAST($1 AS TEXT)
           AND id = CAST($2 AS TEXT)
           AND LOWER(COALESCE(status, '')) IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay')
+          AND NOT EXISTS (
+                SELECT 1
+                FROM commerce_payment_attempt a
+                WHERE a.order_id = commerce_order.id
+                  AND a.tenant_id = commerce_order.tenant_id
+                  AND a.status = 'succeeded'
+                  AND a.deleted_at IS NULL
+          )
         FOR UPDATE
         "#,
     )

@@ -11,8 +11,9 @@
 //! webhook path — a lost webhook is recovered without double success.
 //!
 //! Configuration (CONFIG_SPEC: env authority):
-//! - `SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED` (default disabled —
-//!   opt-in so no deployment accidentally polls providers)
+//! - `SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED` (default enabled —
+//!   it is the automatic convergence for lost webhooks and cross-domain
+//!   settlement gaps; set `0` to opt out)
 //! - `SDKWORK_ORDER_PAYMENT_COMPENSATION_TENANT_ID` (default unset = all
 //!   tenants)
 //! - `SDKWORK_ORDER_PAYMENT_COMPENSATION_ORGANIZATION_ID` (default unset)
@@ -54,7 +55,7 @@ static WORKER_STARTED: AtomicBool = AtomicBool::new(false);
 
 /// Spawns the payment compensation worker loop on the host's pools.
 ///
-/// Returns `None` when the worker is disabled by env (default) or already
+/// Returns `None` when the worker is disabled by env or already
 /// running.
 pub fn spawn_payment_compensation_worker(
     host: Arc<OrderServiceHost>,
@@ -165,13 +166,19 @@ async fn run_compensation_pass(
     Ok(())
 }
 
+/// Worker enablement. Enabled by default: the compensation loop is the only
+/// automatic convergence for lost webhooks and for the cross-domain window
+/// where a payment settles on the payment side but the order-side
+/// confirmation never ran — leaving it off by default left those orders
+/// diverging silently. `SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED=0`
+/// opts a deployment out explicitly.
 fn worker_enabled_from_env() -> bool {
     match std::env::var("SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED") {
         Ok(value) => matches!(
             value.trim().to_ascii_lowercase().as_str(),
             "1" | "true" | "yes" | "on"
         ),
-        Err(_) => false,
+        Err(_) => true,
     }
 }
 

@@ -34,10 +34,10 @@ use sdkwork_payment_providers::{
 };
 use sdkwork_payment_repository_sqlx::{
     ingest_provider_refund_webhook_postgres, ingest_provider_webhook_postgres,
-    load_active_provider_account_by_merchant_id_postgres, load_active_provider_account_postgres,
-    load_webhook_attempt_context_by_out_trade_no_postgres, provider_account_binding,
-    record_rejected_provider_webhook_postgres, IngestProviderWebhookCommand,
-    PaymentProviderAccountRecord, PaymentWebhookAttemptContext,
+    list_active_provider_accounts_postgres, load_active_provider_account_by_merchant_id_postgres,
+    load_active_provider_account_postgres, load_webhook_attempt_context_by_out_trade_no_postgres,
+    provider_account_binding, record_rejected_provider_webhook_postgres,
+    IngestProviderWebhookCommand, PaymentProviderAccountRecord, PaymentWebhookAttemptContext,
 };
 use sqlx::PgPool;
 
@@ -104,6 +104,7 @@ impl PaymentNotifyVerifyPort for StorePaymentNotifyPorts {
                 &self.credentials,
                 self.deployment_registry.as_ref(),
                 &provider_code,
+                headers,
                 body,
             )
             .await?;
@@ -339,6 +340,7 @@ async fn resolve_webhook_provider_account_postgres(
     credentials: &ProviderCredentialBundle,
     deployment_registry: &PaymentProviderRegistry,
     provider_code: &str,
+    headers: &[(String, String)],
     body: &[u8],
 ) -> Result<WebhookProviderResolution, CommerceServiceError> {
     let peek = peek_webhook_routing_fields(provider_code, body);
@@ -368,12 +370,105 @@ async fn resolve_webhook_provider_account_postgres(
     } else {
         None
     };
+    // WeChat Pay v3 encrypts the notification resource, so no tenant can be
+    // peeked from the body and the deployment-level credentials are the only
+    // remaining verifier. A SaaS deployment whose WeChat merchants live in
+    // tenant-scoped provider accounts instead verifies by enumeration: the
+    // resource ciphertext only decrypts (AES-GCM authenticates) under the
+    // owning account's API v3 key, so the first account whose verification
+    // succeeds IS the tenant routing answer.
+    if provider_code.eq_ignore_ascii_case("wechat_pay") && account.is_none() {
+        if let Some(account) = resolve_wechat_account_by_verification(
+            pool,
+            credentials,
+            provider_code,
+            headers,
+            body,
+        )
+        .await?
+        {
+            return Ok(webhook_provider_resolution(
+                deployment_registry,
+                credentials,
+                Some(account),
+                fallback_scope,
+            ));
+        }
+    }
     Ok(webhook_provider_resolution(
         deployment_registry,
         credentials,
         account,
         fallback_scope,
     ))
+}
+
+/// Upper bound on candidate accounts tried per webhook; a deployment with
+/// more active WeChat accounts than this must scope notify domains so the
+/// body peek path (attempt lookup) resolves the tenant instead.
+const WECHAT_VERIFICATION_CANDIDATE_LIMIT: i64 = 100;
+
+async fn resolve_wechat_account_by_verification(
+    pool: &PgPool,
+    credentials: &ProviderCredentialBundle,
+    provider_code: &str,
+    headers: &[(String, String)],
+    body: &[u8],
+) -> Result<Option<PaymentProviderAccountRecord>, CommerceServiceError> {
+    let candidates = list_active_provider_accounts_postgres(
+        pool,
+        provider_code,
+        WECHAT_VERIFICATION_CANDIDATE_LIMIT,
+    )
+    .await?;
+    if candidates.len() >= WECHAT_VERIFICATION_CANDIDATE_LIMIT as usize {
+        tracing::warn!(
+            target = "order.payment_notify",
+            provider_code,
+            limit = WECHAT_VERIFICATION_CANDIDATE_LIMIT,
+            "wechat webhook tenant enumeration hit the candidate cap; configure a notify domain or env credentials"
+        );
+    }
+    let verify_request = PaymentVerifyWebhookRequest {
+        headers: headers.to_vec(),
+        body: body.to_vec(),
+        metadata: serde_json::json!({ "provider_code": provider_code }),
+    };
+    for account in candidates {
+        let registry = provider_registry_for_account(
+            credentials,
+            Some(provider_account_binding(&account)),
+        );
+        let Some(adapter) = registry.resolve(provider_code) else {
+            continue;
+        };
+        let verified = match adapter.verify_webhook(verify_request.clone()).await {
+            Ok(outcome) => outcome.verified,
+            // A candidate account with incomplete credentials fails its own
+            // verification; that must not abort the enumeration.
+            Err(error) => {
+                tracing::debug!(
+                    target = "order.payment_notify",
+                    provider_code,
+                    account_id = %account.id,
+                    error = %format!("{error:?}"),
+                    "wechat candidate account verification error; trying next"
+                );
+                continue;
+            }
+        };
+        if verified {
+            tracing::info!(
+                target = "order.payment_notify",
+                provider_code,
+                account_id = %account.id,
+                tenant_id = %account.tenant_id,
+                "wechat webhook tenant resolved by per-account verification"
+            );
+            return Ok(Some(account));
+        }
+    }
+    Ok(None)
 }
 
 fn webhook_provider_resolution(
