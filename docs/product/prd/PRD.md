@@ -122,6 +122,8 @@ Contract alignment is enforced by:
 
 None blocking the account value order architecture. Platform ingress rate-limit store and Grafana dashboards are owned by deployment topology, documented in `docs/guides/operations/PRODUCTION.md`.
 
+- OpenAPI discovery serving (adjudicated 2026-10-03): the standalone gateway publishes the combined authority at `GET /openapi.json` (framework-hosted, live-verified). The per-prefix paths `/app/v3/api/openapi.json` and `/backend/v3/api/openapi.json` are 404-by-manifest-guard at runtime: the IAM web request-context resolver rejects any app-api/backend-api path absent from the route manifest, and both remediation paths are platform-level (declare the discovery operations in the authored authorities and regenerate every consumer SDK, or add a framework manifest exemption for contract endpoints). The cloudrouter reference implementation serves per-prefix paths only through stub routers. Runtime discovery stays on the root path until the platform picks one remediation.
+
 ## 11. Fulfillment Boundaries
 
 | Subject | Automated fulfillment in order gateway |
