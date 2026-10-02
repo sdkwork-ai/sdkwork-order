@@ -33,7 +33,8 @@ export function PaymentPanel({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [status, setStatus] = useState<PaymentPanelStatus>("pending");
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollFailuresRef = useRef(0);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const paidRef = useRef(false);
 
@@ -51,7 +52,7 @@ export function PaymentPanel({
 
   const stopTimers = useCallback(() => {
     if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
+      clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
     }
     if (countdownTimerRef.current) {
@@ -64,29 +65,58 @@ export function PaymentPanel({
     setStatus("pending");
     const startedAt = Date.now();
     setRemainingSeconds(computeCashierRemainingSeconds(expiresAt, startedAt, startedAt));
-    pollTimerRef.current = setInterval(() => {
+    const settle = (payment: { status: "completed" | "failed" | "pending" }) => {
+      if (payment.status === "completed" && !paidRef.current) {
+        paidRef.current = true;
+        stopTimers();
+        setStatus("paid");
+        onPaid?.();
+      } else if (payment.status === "failed") {
+        stopTimers();
+        setStatus("failed");
+      }
+    };
+    const poll = () => {
       void getStatus(orderId)
         .then((payment) => {
-          if (payment.status === "completed" && !paidRef.current) {
-            paidRef.current = true;
-            stopTimers();
-            setStatus("paid");
-            onPaid?.();
-          } else if (payment.status === "failed") {
-            stopTimers();
-            setStatus("failed");
+          if (pollFailuresRef.current > 0) {
+            pollFailuresRef.current = 0;
           }
+          settle(payment);
         })
         .catch(() => {
-          // transient network errors keep polling
+          // Transient network errors keep polling, with backoff after a
+          // sustained outage so a degraded network stops hammering the API.
+          pollFailuresRef.current += 1;
         });
-    }, 3000);
+    };
+    const schedulePoll = (delayMs: number) => {
+      pollTimerRef.current = setTimeout(() => {
+        poll();
+        if (pollTimerRef.current !== null) {
+          schedulePoll(pollFailuresRef.current >= 3 ? 6_000 : 3_000);
+        }
+      }, delayMs);
+    };
+    schedulePoll(0);
     countdownTimerRef.current = setInterval(() => {
       setRemainingSeconds((previous) => {
         const next = computeCashierRemainingSeconds(expiresAt, startedAt, Date.now());
         if (next <= 0 && previous > 0) {
-          stopTimers();
-          setStatus("expired");
+          // Final authoritative check: a payment confirmed at the last
+          // second must win over the expired presentation.
+          void getStatus(orderId)
+            .then((payment) => {
+              settle(payment);
+              if (!paidRef.current && payment.status !== "failed") {
+                stopTimers();
+                setStatus("expired");
+              }
+            })
+            .catch(() => {
+              stopTimers();
+              setStatus("expired");
+            });
         }
         return next;
       });
