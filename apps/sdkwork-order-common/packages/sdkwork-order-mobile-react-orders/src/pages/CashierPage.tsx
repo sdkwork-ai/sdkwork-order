@@ -156,6 +156,8 @@ export function CashierPage({
   const [launchNotice, setLaunchNotice] = useState<string | null>(null);
 
   const paymentCreatedAtRef = useRef(0);
+  /** Re-entry guard for payment creation (StrictMode double effects, rapid retries). */
+  const createInFlightRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollFailuresRef = useRef(0);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -361,6 +363,10 @@ export function CashierPage({
   );
 
   const createPayment = useCallback(async (targetOrderId: string, method: OrderPaymentMethod) => {
+    if (createInFlightRef.current) {
+      return;
+    }
+    createInFlightRef.current = true;
     setPhase("creating");
     setErrorMessageText(null);
     setLaunchNotice(null);
@@ -371,6 +377,9 @@ export function CashierPage({
         setPhase("oauth_waiting");
         const redirect = buildCashierOAuthRedirect(window.location);
         const authorizeUrl = await OrderService.fetchWechatOAuthAuthorizeUrl(redirect);
+        // Navigation takes over; release the guard so a blocked navigation
+        // can still be retried from the UI.
+        createInFlightRef.current = false;
         window.location.assign(authorizeUrl);
         return;
       }
@@ -395,6 +404,8 @@ export function CashierPage({
       setRemainingSeconds(0);
       showToast(message);
       stopCashier("pending");
+    } finally {
+      createInFlightRef.current = false;
     }
   }, [environment, handlePaymentSession, stopCashier, t]);
 
