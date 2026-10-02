@@ -302,10 +302,16 @@ export function CashierPage({
         return;
       }
 
-      // Desktop browser: render the QR code for scanning.
+      // Desktop browser: render the QR code for scanning. Redirect-style
+      // providers without QR content (PayPal approval URLs, Stripe cashier
+      // deep links) surface a launch button instead of an unscannable code.
       setPhase("pending");
       setQrLaunchUrl(null);
-      setQrDataUrl(await renderQrCode(params));
+      const qr = await renderQrCode(params);
+      setQrDataUrl(qr);
+      if (!qr && params.payUrl) {
+        setQrLaunchUrl(params.payUrl);
+      }
       startPolling(targetOrderId);
     },
     [environment, isMobile, renderQrCode, startPolling, t],
@@ -595,7 +601,7 @@ export function CashierPage({
                 </button>
               )}
 
-              {environment === "alipay" && qrLaunchUrl && (
+              {qrLaunchUrl && (
                 <button
                   onClick={launchQrPayment}
                   className="mt-4 w-full max-w-[220px] bg-[#1677FF] active:opacity-80 text-white font-medium text-[14px] py-2.5 rounded-lg transition-opacity"
@@ -626,7 +632,15 @@ export function CashierPage({
               </h3>
               <div className="flex flex-col gap-2">
                 {availableMethods.map((method, index) => {
-                  const meta = PAYMENT_METHOD_META[method];
+                  // Host-injected method matrices may contain methods this
+                  // build has no brand meta for; fall back to a generic
+                  // badge instead of crashing the cashier.
+                  const meta = PAYMENT_METHOD_META[method] ?? {
+                    badge: "支",
+                    badgeClass: "bg-primary-blue",
+                    descKey: `orders.payment_method_desc_${method}`,
+                    descDefault: method,
+                  };
                   return (
                     <label
                       key={method}
