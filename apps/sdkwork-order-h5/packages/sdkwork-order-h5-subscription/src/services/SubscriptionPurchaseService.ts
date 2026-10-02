@@ -34,7 +34,11 @@ export interface SubscriptionPurchasePort {
   ): Promise<SdkworkMembershipCheckoutPayment>;
   getSubscriptionStatus(orderId: string): Promise<SdkworkMembershipCheckoutPayment>;
   /** 兑换优惠券：输入码 → Token Bank 额度 / 会员权益等。 */
-  redeemCoupon(code: string): Promise<CouponRedemptionResult>;
+  redeemCoupon(
+    code: string,
+    /** Stable within one redemption attempt so retries dedupe server-side. */
+    idempotencyKey?: string,
+  ): Promise<CouponRedemptionResult>;
 }
 
 /** Coupon redemption result (benefit-shaped contract). */
@@ -149,12 +153,12 @@ export function createSubscriptionPurchaseService(
       const response = await appService.orders.paymentSuccess.retrieve(orderId);
       return normalizeMembershipCheckoutPayment(response);
     },
-    redeemCoupon: async (code) => {
+    redeemCoupon: async (code, idempotencyKey) => {
       const couponCode = code.trim();
       if (!couponCode) {
         throw new Error("A coupon code is required.");
       }
-      const params = createSdkworkIdempotencyParams();
+      const params = createSdkworkIdempotencyParams(idempotencyKey);
       const response = await appService.orders.couponRedemptions.create(
         { couponCode },
         params,

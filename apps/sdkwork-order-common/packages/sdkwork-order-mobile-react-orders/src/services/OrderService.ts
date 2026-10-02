@@ -551,7 +551,16 @@ export class OrderService {
    * `sessions.orders.create`) and returns the placed order. Hosts of the
    * shop domain use this as the order-creation port.
    */
-  static async createOrder(input: CreateOrderInput): Promise<Order> {
+  static async createOrder(
+    input: CreateOrderInput,
+    /**
+     * Stable idempotency key scoped to one placement attempt: retries of the
+     * same cart dedupe server-side instead of placing twin orders. Callers
+     * SHOULD derive it when the attempt starts and reuse it across retries;
+     * a fresh key per call keeps the legacy behavior.
+     */
+    idempotencyKey?: string,
+  ): Promise<Order> {
     const { client } = requireOrderRuntime();
     const items = input.items.map((item) => ({
       quantity: String(item.quantity),

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import { createSdkworkIdempotencyParams } from "@sdkwork/order-service";
 import { useTranslation } from "react-i18next";
 import { Ticket, CheckCircle2, Loader2 } from "lucide-react";
 import { PageLayout } from "@sdkwork/ui-mobile-react";
@@ -25,6 +26,13 @@ export function CouponRedemptionPage({
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [result, setResult] = useState<CouponRedemptionResult | null>(null);
 
+  /**
+   * Idempotency key scoped to one redemption attempt of the currently
+   * entered code: retries of the same code dedupe server-side instead of
+   * re-consuming the coupon.
+   */
+  const redeemKeyRef = useRef<{ code: string; key: string } | null>(null);
+
   async function handleRedeem() {
     const normalizedCode = code.trim();
     if (!normalizedCode) {
@@ -37,7 +45,13 @@ export function CouponRedemptionPage({
     setError(null);
     setIsRedeeming(true);
     try {
-      const next = await service.redeemCoupon(normalizedCode);
+      if (!redeemKeyRef.current || redeemKeyRef.current.code !== normalizedCode) {
+        redeemKeyRef.current = {
+          code: normalizedCode,
+          key: createSdkworkIdempotencyParams().idempotencyKey,
+        };
+      }
+      const next = await service.redeemCoupon(normalizedCode, redeemKeyRef.current.key);
       setResult(next);
       onBalanceChanged?.();
     } catch (cause) {
