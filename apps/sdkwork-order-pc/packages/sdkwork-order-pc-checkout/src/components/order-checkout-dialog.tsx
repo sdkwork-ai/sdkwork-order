@@ -50,6 +50,7 @@ export interface SdkworkOrderCheckoutDialogCopy {
   expired?: string;
   expiredDescription?: string;
   expiresIn?: string;
+  openPaymentLink?: string;
   paymentUnavailable: string;
   paymentUnavailableDescription: string;
   payByQr: string;
@@ -79,6 +80,23 @@ export interface SdkworkOrderCheckoutDialogProps {
 
 function isImageDataUrl(value: string | undefined): value is string {
   return Boolean(value?.startsWith("data:image/"));
+}
+
+/**
+ * Only http(s) targets are scannable by a generic phone camera. Provider
+ * deep links (a Stripe cashier URL) must surface as a launch
+ * button instead of an unscannable QR code.
+ */
+function isScannableUrl(value: string | undefined): value is string {
+  if (!value) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 function parseExpirationTime(value: string | undefined): number | null {
@@ -523,6 +541,15 @@ export function SdkworkOrderCheckoutDialog({
                       : paymentError ?? copy.paymentUnavailableDescription}
                   </span>
                 </StatusNotice>
+                {payment?.qrCode && !isScannableUrl(payment.qrCode) ? (
+                  <Button
+                    className="sdkwork-order-checkout-dialog__retry"
+                    onClick={() => window.open(payment.qrCode, "_blank", "noopener,noreferrer")}
+                    type="button"
+                  >
+                    {copy.openPaymentLink ?? "Open payment page"}
+                  </Button>
+                ) : null}
                 <Button
                   className="sdkwork-order-checkout-dialog__retry"
                   onClick={() => void retryPayment()}
