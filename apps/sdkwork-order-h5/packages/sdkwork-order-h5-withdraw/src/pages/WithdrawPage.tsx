@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createSdkworkIdempotencyParams } from "@sdkwork/order-service";
 import { useTranslation } from "react-i18next";
 import { Landmark, Wallet, CheckCircle2 } from "lucide-react";
 import { PageLayout } from "@sdkwork/ui-mobile-react";
@@ -82,6 +83,14 @@ export function WithdrawPage({
 
   const insufficient = Number.isFinite(amount) && amount > 0 && amount > available;
 
+  /**
+   * Idempotency key scoped to one withdrawal submission: retries of the
+   * same amount dedupe server-side instead of freezing the balance twice;
+   * a completed submission resets it so the next withdrawal is a new
+   * intent.
+   */
+  const attemptKeyRef = useRef<string | null>(null);
+
   const handleSubmit = async () => {
     if (!canSubmit) {
       return;
@@ -89,16 +98,22 @@ export function WithdrawPage({
     setSubmitting(true);
     setError(null);
     try {
+      const attemptAmount = amount.toFixed(2);
+      if (!attemptKeyRef.current) {
+        attemptKeyRef.current = createSdkworkIdempotencyParams().idempotencyKey;
+      }
       const result = await service.createWithdrawalRequest({
-        amount: amount.toFixed(2),
+        amount: attemptAmount,
         currencyCode,
         payoutMethod: "bank_account",
+        idempotencyKey: attemptKeyRef.current ?? undefined,
         payoutAccountRef: JSON.stringify({
           accountName: accountName.trim(),
           accountNo: accountNo.trim(),
           bankName: bankName.trim(),
         }),
       });
+      attemptKeyRef.current = null;
       setSubmitted(result);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

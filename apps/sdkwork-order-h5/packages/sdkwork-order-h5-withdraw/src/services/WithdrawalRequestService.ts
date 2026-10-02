@@ -13,6 +13,11 @@ import {
 export interface WithdrawalRequestInput {
   amount: string;
   currencyCode: string;
+  /**
+   * Stable within one submission attempt so retries dedupe server-side
+   * instead of freezing the balance twice.
+   */
+  idempotencyKey?: string;
   payoutMethod?: string;
   payoutAccountRef?: string;
   reasonCode?: string;
@@ -68,7 +73,7 @@ export function createWithdrawalRequestService(
 
   return {
     createWithdrawalRequest: async (input) => {
-      const params = createSdkworkIdempotencyParams();
+      const params = createSdkworkIdempotencyParams(input.idempotencyKey);
       const response = await appService.withdrawals.requests.create(
         {
           asset: "cash",
