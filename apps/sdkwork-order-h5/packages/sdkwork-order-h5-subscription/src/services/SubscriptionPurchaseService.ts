@@ -117,12 +117,20 @@ export function createSubscriptionPurchaseService(
         throw new Error("The selected Token Bank plan is unavailable.");
       }
       const params = createSdkworkIdempotencyParams(idempotencyKey);
+      // Catalog priceAmount is a major-unit decimal ("10.00"); the recharge
+      // API takes minor-unit integers ("1000"). Sending the catalog value
+      // verbatim failed decimal prices outright and undercharged integer
+      // prices a hundredfold.
+      const amountMinor = Math.round(Number(plan.priceAmount) * 100);
+      if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
+        throw new Error("The selected Token Bank plan has an invalid price.");
+      }
       const response = await appService.recharges.orders.create(
         {
           subject: "points_recharge",
           targetAsset: "points",
           packageId: plan.planCode,
-          amount: plan.priceAmount,
+          amount: String(amountMinor),
           currencyCode: plan.currencyCode,
           paymentMethod: paymentMethod ?? "wechat_pay",
           paymentProduct: "mobile_cashier_h5",
