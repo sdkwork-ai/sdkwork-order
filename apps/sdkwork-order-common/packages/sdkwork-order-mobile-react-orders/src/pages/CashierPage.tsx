@@ -348,8 +348,11 @@ export function CashierPage({
       setQrLaunchUrl(null);
       const qr = await renderQrCode(params);
       setQrDataUrl(qr);
+      // An https provider cashier works both ways on desktop: scan the QR
+      // with a phone or click through in this browser. Deep links only
+      // offer the click-through.
       const launchUrl = params.payUrl ?? params.cashierUrl;
-      if (!qr && launchUrl) {
+      if (launchUrl && (/^https?:/i.test(launchUrl) || !qr)) {
         setQrLaunchUrl(launchUrl);
       }
       startPolling(targetOrderId);
