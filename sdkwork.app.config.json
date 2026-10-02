@@ -17,11 +17,13 @@
   },
   "backend": {
     "profileKey": "backend-root-admin",
+    "appId": "sdkwork-order",
+    "serviceId": "sdkwork-order",
     "ownerMode": "tenant",
     "grantMode": "current",
     "platform": "WEB",
-    "tenantId": "100001",
-    "organizationId": "0"
+    "organizationId": "0",
+    "tenantId": "100001"
   },
   "runtime": {
     "family": "web",
