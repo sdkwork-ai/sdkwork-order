@@ -12,7 +12,7 @@ Read `../sdkwork-specs/SOUL.md` before executing tasks in this root.
 - App API prefix: `/app/v3/api/orders`
 - Backend API prefix: `/backend/v3/api/orders`
 
-This repo owns the full order capability stack: Rust services, database, APIs, SDKs, and **PC client surface** at `apps/sdkwork-order-pc/` (see `sdkwork-shop/apps/sdkwork-shop-pc/` as template).
+This repo owns the full order capability stack: Rust services, database, APIs, SDKs, and client surfaces — **PC** at `apps/sdkwork-order-pc/`, **H5** at `apps/sdkwork-order-h5/`, **Flutter mobile** at `apps/sdkwork-order-flutter-mobile/`, and **WeChat mini program** at `apps/sdkwork-order-mini-program/` (see `sdkwork-shop` and `sdkwork-mall` app roots as templates).
 
 PC packages migrate from the dissolved `sdkwork-commerce (deleted)` monolith — see `../sdkwork-specs/MIGRATION_SPEC.md` §8 for the commerce repository dissolution plan.
 

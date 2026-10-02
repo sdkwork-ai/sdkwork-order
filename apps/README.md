@@ -16,7 +16,9 @@ Runnable application roots live under `apps/<application-root>/`.
 | --- | --- | --- | --- | --- |
 | sdkwork-order-pc | pc | yes | SDKWork Order PC pc application root. | `sdkwork-order-pc/` |
 | sdkwork-order-common | composed services | no (library) | Composed order service facade shared by PC/H5 apps (UI -> service -> SDK). | `sdkwork-order-common/` |
-| sdkwork-order-h5 | h5 | yes | Mobile H5 surfaces (subscription, withdrawal wallet). | `sdkwork-order-h5/` |
+| sdkwork-order-h5 | h5 | yes | Mobile H5 application root: order center, cashier, account value (VIP/Token Bank/coupon), withdrawal wallet. | `sdkwork-order-h5/` |
+| sdkwork-order-flutter-mobile | flutter-mobile | yes | Flutter mobile app: orders, cashier, recharge, coupon redemption, withdrawal, refund requests. | `sdkwork-order-flutter-mobile/` |
+| sdkwork-order-mini-program | mini-program | yes | WeChat mini program storefront for order and account value flows. | `sdkwork-order-mini-program/` |
 
 ## Allowed Content
 
