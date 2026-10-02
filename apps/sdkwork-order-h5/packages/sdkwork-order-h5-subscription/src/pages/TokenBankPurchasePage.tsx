@@ -9,7 +9,7 @@ import {
   createSubscriptionPurchaseService,
   type SubscriptionPurchasePort,
 } from "../services/SubscriptionPurchaseService";
-import type { TokenBankPlan } from "../services/SubscriptionCatalogPort";
+import { formatCatalogPrice, type TokenBankPlan } from "../services/SubscriptionCatalogPort";
 
 export interface TokenBankPurchasePageProps {
   service?: SubscriptionPurchasePort;
@@ -156,7 +156,7 @@ export function TokenBankPurchasePage({
                         </div>
                       )}
                       <div className={`mt-3 text-[18px] font-bold ${active ? "text-white" : "text-primary-blue"}`}>
-                        ¥{Number(plan.priceAmount).toFixed(2)}
+                        {formatCatalogPrice(plan.priceAmount, plan.currencyCode)}
                       </div>
                     </button>
                   );
@@ -188,7 +188,7 @@ export function TokenBankPurchasePage({
           {selectedPlan ? (
             <>
               <div className="text-[20px] font-bold text-primary-blue leading-none">
-                ¥{Number(selectedPlan.priceAmount).toFixed(2)}
+                {formatCatalogPrice(selectedPlan.priceAmount, selectedPlan.currencyCode)}
               </div>
                 <div className="mt-1 text-[12px] text-text-sub truncate">
                   {t("subscription.points_display", "{{points}} 算力积分", {

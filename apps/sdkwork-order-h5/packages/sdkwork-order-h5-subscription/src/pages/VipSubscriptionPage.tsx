@@ -5,6 +5,8 @@ import { useNavigate } from "react-router";
 import { Check, Crown, Shield, Zap } from "lucide-react";
 import { PageLayout, cn } from "@sdkwork/ui-mobile-react";
 
+import { formatCatalogPrice } from "../services/SubscriptionCatalogPort";
+
 import { VipPlanTabs } from "../components/VipPlanTabs";
 import { VipPurchaseFooterBar } from "../components/VipPurchaseFooterBar";
 import {
@@ -215,7 +217,7 @@ export function VipSubscriptionPage({
                           active ? "text-white" : "text-primary-blue",
                         )}
                       >
-                        ¥{pkg.price}
+                        {formatCatalogPrice(pkg.price, pkg.currencyCode)}
                       </span>
                       {pkg.originalPrice && (
                         <span
@@ -224,7 +226,7 @@ export function VipSubscriptionPage({
                             active ? "text-white opacity-70" : "text-text-sub",
                           )}
                         >
-                          ¥{pkg.originalPrice}
+                          {formatCatalogPrice(pkg.originalPrice, pkg.currencyCode)}
                         </span>
                       )}
                       <span

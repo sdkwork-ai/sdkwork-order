@@ -15,6 +15,8 @@ export interface MembershipPackage {
   id: string;
   name: string;
   price: string;
+  /** ISO-4217 price currency; defaults to CNY when the backend omits it. */
+  currencyCode: string;
   originalPrice?: string;
   durationDays: number;
   planName?: string;
@@ -81,6 +83,7 @@ function toMembershipPackage(record: Record<string, unknown>): MembershipPackage
     id: readId(record.id),
     name: readString(record.name) ?? "",
     price: toNumberString(record.price),
+    currencyCode: readString(record.currencyCode) ?? "CNY",
     ...(readString(record.originalPrice) ? { originalPrice: readString(record.originalPrice) } : {}),
     durationDays: toNumber(record.durationDays),
     ...(readString(record.planName) ? { planName: readString(record.planName) } : {}),
@@ -156,4 +159,30 @@ export function createDefaultSubscriptionCatalogPort(
       });
     },
   };
+}
+
+import { formatMoneyMinorUnits } from "@sdkwork/utils/money";
+
+/**
+ * Formats a catalog price (major-unit decimal string from the backend
+ * catalog) for display in the price currency. Catalog majors are scaled to
+ * minor integers so the shared formatter applies the currency's own symbol,
+ * placement and exponent (CNY default keeps today's rendering).
+ */
+export function formatCatalogPrice(
+  majorAmount: string,
+  currencyCode: string,
+  locale = "zh-CN",
+): string {
+  const value = Number(majorAmount);
+  if (!Number.isFinite(value)) {
+    return `${currencyCode} ${majorAmount}`;
+  }
+  const formatted = formatMoneyMinorUnits(
+    Math.round(value * 100),
+    currencyCode,
+    locale,
+    "symbol",
+  );
+  return formatted ?? `${currencyCode} ${majorAmount}`;
 }
