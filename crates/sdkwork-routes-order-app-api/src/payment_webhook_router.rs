@@ -109,6 +109,19 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
     let deployment_registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
     ));
+    // Default refund post-processing: request-backed refunds settle their
+    // account hold and terminalize their refund request from the webhook
+    // outcome (same idempotency keys as the synchronous execution path).
+    let refund_registry = refund_notify_handler_registry.unwrap_or_else(|| {
+        sdkwork_order_service::refund_notify_handler_registry_with(
+            Arc::new(sdkwork_order_repository_sqlx::PostgresRefundRequestSettlementStore::new(
+                pool.clone(),
+            )),
+            account_value_ledger_port.clone(),
+            None,
+            None,
+        )
+    });
     let framework = Arc::new(ProviderWebhookFramework::new(
         pool.clone(),
         credit_port,
@@ -118,7 +131,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
         physical_goods_port,
         payment_notify_handler_registry
             .unwrap_or_else(default_payment_notify_handler_registry),
-        refund_notify_handler_registry.unwrap_or_else(default_refund_notify_handler_registry),
+        refund_registry,
     ));
     Router::new()
         .route(

@@ -30,10 +30,13 @@ use std::time::Duration;
 
 use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_order_integration_payment::{
-    run_payment_compensation_pass, PaymentCompensationPassConfig,
+    run_payment_compensation_pass_with_registries, PaymentCompensationPassConfig,
 };
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
-use sdkwork_order_service::OwnerOrderSettlementPorts;
+use sdkwork_order_service::{
+    default_payment_notify_handler_registry, AccountValueRequestExecutionStore,
+    OwnerOrderSettlementPorts,
+};
 use sdkwork_payment_providers::ProviderCredentialBundle;
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
 use tokio::time::{interval, MissedTickBehavior};
@@ -146,7 +149,27 @@ async fn run_compensation_pass(
         membership_port: membership_port.as_ref(),
         physical_goods_port: physical_goods_port.as_ref(),
     };
-    let summary = run_payment_compensation_pass(pool, &credentials, settlement_ports, config)
+    // Refund post-processing: request-backed refunds get their account hold
+    // settled/released and their request terminalized from the webhook/
+    // compensation outcome, with the same idempotency keys as the
+    // synchronous execution path.
+    let refund_registry = sdkwork_order_service::refund_notify_handler_registry_with(
+        std::sync::Arc::new(
+            sdkwork_order_repository_sqlx::PostgresRefundRequestSettlementStore::new(pool.clone()),
+        ),
+        account_value_ledger_port.clone(),
+        None,
+        Some(std::sync::Arc::new(PostgresCommerceRechargeStore::new(pool.clone()))
+            as std::sync::Arc<dyn AccountValueRequestExecutionStore>),
+    );
+    let summary = run_payment_compensation_pass_with_registries(
+        pool,
+        &credentials,
+        settlement_ports,
+        default_payment_notify_handler_registry().as_ref(),
+        refund_registry.as_ref(),
+        config,
+    )
         .await
         .map_err(|error| format!("payment compensation pass failed: {error:?}"))?;
     tracing::info!(
