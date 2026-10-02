@@ -19,11 +19,18 @@ export interface SubscriptionPurchasePort {
   listMembershipPackages(): Promise<MembershipPackage[]>;
   listMembershipPackageGroups(): Promise<MembershipPackageGroup[]>;
   listTokenBankPlans(): Promise<TokenBankPlan[]>;
-  createRechargeOrder(planCode: string, paymentMethod?: string): Promise<TokenBankPayment>;
+  createRechargeOrder(
+    planCode: string,
+    paymentMethod?: string,
+    /** Stable within one purchase attempt so retries dedupe server-side. */
+    idempotencyKey?: string,
+  ): Promise<TokenBankPayment>;
   getRechargeStatus(orderId: string): Promise<TokenBankPayment>;
   createSubscriptionOrder(
     packageId: string,
     paymentMethod?: string,
+    /** Stable within one purchase attempt so retries dedupe server-side. */
+    idempotencyKey?: string,
   ): Promise<SdkworkMembershipCheckoutPayment>;
   getSubscriptionStatus(orderId: string): Promise<SdkworkMembershipCheckoutPayment>;
   /** 兑换优惠券：输入码 → Token Bank 额度 / 会员权益等。 */
@@ -99,13 +106,13 @@ export function createSubscriptionPurchaseService(
     listMembershipPackages: () => catalog.listMembershipPackages(),
     listMembershipPackageGroups: () => catalog.listMembershipPackageGroups(),
     listTokenBankPlans: () => catalog.listTokenBankPlans(),
-    createRechargeOrder: async (planCode, paymentMethod) => {
+    createRechargeOrder: async (planCode, paymentMethod, idempotencyKey) => {
       const plans = await catalog.listTokenBankPlans();
       const plan = plans.find((item) => item.planCode === planCode);
       if (!plan) {
         throw new Error("The selected Token Bank plan is unavailable.");
       }
-      const params = createSdkworkIdempotencyParams();
+      const params = createSdkworkIdempotencyParams(idempotencyKey);
       const response = await appService.recharges.orders.create(
         {
           subject: "points_recharge",
@@ -125,8 +132,8 @@ export function createSubscriptionPurchaseService(
       const response = await appService.recharges.orders.retrieve(orderId);
       return normalizeTokenBankPayment(response);
     },
-    createSubscriptionOrder: async (packageId, paymentMethod) => {
-      const params = createSdkworkIdempotencyParams();
+    createSubscriptionOrder: async (packageId, paymentMethod, idempotencyKey) => {
+      const params = createSdkworkIdempotencyParams(idempotencyKey);
       const response = await appService.memberships.orders.create(
         {
           action: "purchase",

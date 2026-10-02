@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createSdkworkIdempotencyParams } from "@sdkwork/order-service";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { Wallet, Check } from "lucide-react";
@@ -60,13 +61,27 @@ export function TokenBankPurchasePage({
    * 下单后跳转到宿主收银台路由（移动端在收银台内完成环境适配的支付，
    * 不再在本页展示二维码）。
    */
+  /**
+   * Idempotency key scoped to one purchase attempt: stable across retries
+   * of the same plan (server-side dedupe absorbs double submits), fresh
+   * when the selection changes or after a completed order.
+   */
+  const attemptKeyRef = useRef<{ planCode: string; key: string } | null>(null);
   const handlePay = async () => {
     if (!selectedCode || !agreed || creating) {
       return;
     }
+    if (!attemptKeyRef.current || attemptKeyRef.current.planCode !== selectedCode) {
+      attemptKeyRef.current = { planCode: selectedCode, key: createSdkworkIdempotencyParams().idempotencyKey };
+    }
     setCreating(true);
     try {
-      const result = await service.createRechargeOrder(selectedCode);
+      const result = await service.createRechargeOrder(
+        selectedCode,
+        undefined,
+        attemptKeyRef.current.key,
+      );
+      attemptKeyRef.current = null;
       if (result.orderId) {
         navigate(cashierPath.replace(":orderId", encodeURIComponent(result.orderId)));
       }
