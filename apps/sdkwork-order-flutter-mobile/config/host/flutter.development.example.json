@@ -1,0 +1,16 @@
+{
+  "platform": "flutter",
+  "environment": "development",
+  "android": {
+    "applicationId": "com.sdkwork.sdkwork_order_flutter_mobile",
+    "minSdkVersion": 23
+  },
+  "ios": {
+    "bundleId": "com.sdkwork.sdkwork-order-flutter-mobile",
+    "deploymentTarget": "13.0"
+  },
+  "permissions": [],
+  "signing": {
+    "referenceName": "sdkwork-order-mobile-debug"
+  }
+}

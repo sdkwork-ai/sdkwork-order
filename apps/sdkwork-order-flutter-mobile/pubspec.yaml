@@ -1,0 +1,32 @@
+name: sdkwork_order_flutter_mobile
+description: >-
+  SDKWork Order capability Flutter mobile app (domain commerce, capability
+  order): order center, cashier, recharge (Token Bank), coupon redemption,
+  withdrawal, and refund surfaces over the order app-api.
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # App-owned capability packages (snake_case Dart packages, per
+  # FLUTTER_APP_MOBILE_ARCHITECTURE_SPEC.md section 3). The root lib stays a
+  # thin composition: bootstrap + shell only.
+  sdkwork_order_flutter_mobile_core:
+    path: packages/sdkwork_order_flutter_mobile_core
+  sdkwork_order_flutter_mobile_orders:
+    path: packages/sdkwork_order_flutter_mobile_orders
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

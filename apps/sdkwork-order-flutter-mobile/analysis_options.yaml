@@ -1,0 +1,14 @@
+# Analyzer configuration for the Flutter mobile root. Covers the app root
+# lib/ plus the path-dependency packages under packages/.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+
+linter:
+  rules:
+    - prefer_single_quotes
+    - always_declare_return_types

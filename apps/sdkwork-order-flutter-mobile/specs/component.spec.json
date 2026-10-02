@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-order-flutter-mobile",
+    "displayName": "SDKWork Order Flutter Mobile",
+    "version": "1.0.0",
+    "type": "flutter-mobile-app",
+    "root": "sdkwork-order/apps/sdkwork-order-flutter-mobile",
+    "domain": "commerce",
+    "capability": "order",
+    "surface": "app",
+    "languages": [
+      "dart"
+    ],
+    "framework": "flutter",
+    "generated": false,
+    "private": true,
+    "manifests": [
+      "sdkwork.app.config.json",
+      "pubspec.yaml"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "FLUTTER_APP_MOBILE_ARCHITECTURE_SPEC.md",
+      "path": "../../../sdkwork-specs/FLUTTER_APP_MOBILE_ARCHITECTURE_SPEC.md",
+      "purpose": "Flutter mobile root layout, package taxonomy, and verification."
+    },
+    {
+      "file": "APP_FLUTTER_UI_SPEC.md",
+      "path": "../../../sdkwork-specs/APP_FLUTTER_UI_SPEC.md",
+      "purpose": "Flutter app UI package split, SDK/platform integration, and testing."
+    },
+    {
+      "file": "API_SPEC.md",
+      "path": "../../../sdkwork-specs/API_SPEC.md",
+      "purpose": "SdkWorkApiResponse envelope, ProblemDetail errors, pagination, int64 wire contract."
+    },
+    {
+      "file": "PAGINATION_SPEC.md",
+      "path": "../../../sdkwork-specs/PAGINATION_SPEC.md",
+      "purpose": "Server-paged interactive lists (page/page_size, data.items + data.pageInfo)."
+    },
+    {
+      "file": "ENVIRONMENT_SPEC.md",
+      "path": "../../../sdkwork-specs/ENVIRONMENT_SPEC.md",
+      "purpose": "Profile id matrix and SDKWORK_* dart-define keys."
+    },
+    {
+      "file": "APP_MANIFEST_SPEC.md",
+      "path": "../../../sdkwork-specs/APP_MANIFEST_SPEC.md",
+      "purpose": "sdkwork.app.config.json manifest contract."
+    }
+  ],
+  "stateManagement": {
+    "pattern": "setState + ChangeNotifier",
+    "note": "One primary presentation-state pattern per root (see docs/decisions.md); no riverpod/bloc."
+  },
+  "packages": [
+    {
+      "name": "sdkwork_order_flutter_mobile_core",
+      "role": "core",
+      "owns": "transport seam, environment, session store, domain services (order/recharge/withdrawal/refund), pure cashier/money/envelope logic"
+    },
+    {
+      "name": "sdkwork_order_flutter_mobile_orders",
+      "role": "capability",
+      "owns": "screens, widgets, controllers for orders, cashier, recharge, coupon, withdrawal, refund surfaces"
+    }
+  ],
+  "contracts": {
+    "publicExports": [
+      "lib/main.dart"
+    ],
+    "runtimeEntrypoints": [
+      "lib/main.dart",
+      "lib/bootstrap/environment.dart",
+      "lib/bootstrap/providers.dart",
+      "lib/shell/mobile_shell.dart"
+    ],
+    "configKeys": [
+      "env/sdkwork.<deploymentProfile>.<environment>.json",
+      "config/app/runtime-env.<deploymentProfile>.<environment>.example.json",
+      "config/host/flutter.<environment>.example.json"
+    ]
+  },
+  "verification": {
+    "commands": [
+      "flutter pub get",
+      "flutter analyze",
+      "flutter test",
+      "cd packages/sdkwork_order_flutter_mobile_core && flutter analyze && flutter test",
+      "cd packages/sdkwork_order_flutter_mobile_orders && flutter analyze && flutter test"
+    ]
+  }
+}

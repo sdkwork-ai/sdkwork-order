@@ -1,0 +1,24 @@
+name: sdkwork_order_flutter_mobile_orders
+description: >-
+  Screens and widgets for the SDKWork Order Flutter mobile app: order center,
+  cashier, recharge (Token Bank), coupon redemption, withdrawal, and refund
+  surfaces. Consumes services through constructor injection only.
+publish_to: 'none'
+
+version: 1.0.0
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  sdkwork_order_flutter_mobile_core:
+    path: ../sdkwork_order_flutter_mobile_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0

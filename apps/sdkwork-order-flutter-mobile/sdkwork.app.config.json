@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 3,
+  "kind": "sdkwork.app",
+  "app": {
+    "key": "sdkwork-order-flutter-mobile",
+    "name": "SDKWork Order Flutter Mobile",
+    "displayName": "SDKWork 订单",
+    "description": "SDKWork Order capability Flutter mobile app: order center, cashier, recharge (Token Bank), coupon redemption, withdrawal, and refund surfaces.",
+    "vendor": "SDKWork",
+    "appType": "APP_FLUTTER",
+    "versionSource": "pubspec.yaml",
+    "identifiers": {
+      "packageName": "com.sdkwork.order.flutter",
+      "bundleId": "com.sdkwork.order.flutter",
+      "desktopAppId": null,
+      "containerImage": null
+    }
+  },
+  "backend": {
+    "profileKey": "backend-root-admin",
+    "ownerMode": "tenant",
+    "grantMode": "current",
+    "platform": "APP_ANDROID",
+    "appId": null,
+    "organizationId": "0",
+    "tenantId": "100001"
+  },
+  "runtime": {
+    "family": "mobile",
+    "framework": "flutter",
+    "runtimes": [
+      "MOBILE",
+      "APP_ANDROID",
+      "APP_IOS"
+    ],
+    "deliveryModes": [
+      "APP_STORE_PACKAGE"
+    ],
+    "defaultPlatform": "APP_ANDROID",
+    "defaultArchitecture": "arm64",
+    "supportedDeploymentProfiles": [
+      "standalone",
+      "cloud"
+    ],
+    "defaultDeploymentProfile": "standalone"
+  },
+  "publish": {
+    "status": "DRAFT",
+    "platforms": [
+      "APP_ANDROID",
+      "APP_IOS"
+    ],
+    "installPlatforms": [
+      "APP_ANDROID",
+      "APP_IOS"
+    ],
+    "config": {
+      "workspaceRoot": "apps/sdkwork-order-flutter-mobile",
+      "managedBy": "sdkwork-order"
+    }
+  },
+  "environments": {
+    "development": {
+      "accessUrl": "https://api-dev.sdkwork.com/apps/sdkwork-order-flutter-mobile",
+      "deployUrl": "https://api-dev.sdkwork.com/apps/sdkwork-order-flutter-mobile",
+      "deployEnv": "dev"
+    },
+    "production": {
+      "accessUrl": "https://api.sdkwork.com/apps/sdkwork-order-flutter-mobile",
+      "deployUrl": "https://api.sdkwork.com/apps/sdkwork-order-flutter-mobile",
+      "deployEnv": "production"
+    }
+  },
+  "artifacts": {
+    "media": {
+      "icon": "generatedPlaceholder",
+      "screenshots": "generatedPlaceholder"
+    }
+  },
+  "metadata": {
+    "standardOwner": "sdkwork-order",
+    "initializedAt": "2026-10-03T00:00:00Z"
+  }
+}
