@@ -43,7 +43,6 @@ struct AppFulfillmentState {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct FulfillmentListParams {
     order_id: Option<String>,
     status: Option<String>,

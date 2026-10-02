@@ -6,6 +6,7 @@ import type { SdkWorkPageData } from '../types';
 
 export interface OrderFulfillmentsFulfillmentsListParams {
   status?: string;
+  orderId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -22,6 +23,7 @@ export class OrderFulfillmentsFulfillmentsApi {
   async list(params?: OrderFulfillmentsFulfillmentsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
+      { name: 'order_id', value: params?.orderId, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);

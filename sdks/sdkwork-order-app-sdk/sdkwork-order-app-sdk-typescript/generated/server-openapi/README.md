@@ -112,8 +112,9 @@ const result = await client.orderAfterSales.afterSales.requests.list(params);
 // Fulfillments list.
 const params = {
   status: 'status',
-  page: 2,
-  page_size: 3,
+  order_id: 'order_id',
+  page: 3,
+  page_size: 4,
 };
 const result = await client.orderFulfillments.fulfillments.list(params);
 ```

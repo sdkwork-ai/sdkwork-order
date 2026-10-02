@@ -2492,6 +2492,15 @@
             }
           },
           {
+            "name": "order_id",
+            "in": "query",
+            "required": false,
+            "description": "Filters fulfillments to one owner order (snake_case query wire name).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "required": false,
