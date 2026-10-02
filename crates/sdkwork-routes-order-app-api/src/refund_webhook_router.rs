@@ -44,7 +44,12 @@ pub fn app_refund_webhook_router_with_postgres_pool_and_registries(
     pool: PgPool,
     refund_notify_handler_registry: Option<Arc<dyn RefundNotifyHandlerRegistry>>,
 ) -> Router {
-    app_refund_webhook_router_with_postgres_pool_and_handlers(pool, None, None, refund_notify_handler_registry)
+    app_refund_webhook_router_with_postgres_pool_and_handlers(
+        pool,
+        None,
+        None,
+        refund_notify_handler_registry,
+    )
 }
 
 /// Full post-processing mount: the default refund registry settles
@@ -55,7 +60,9 @@ pub fn app_refund_webhook_router_with_postgres_pool_and_registries(
 pub fn app_refund_webhook_router_with_postgres_pool_and_handlers(
     pool: PgPool,
     account_value_ledger_port: Option<Arc<dyn sdkwork_order_service::AccountValueLedgerPort>>,
-    physical_inventory_port: Option<Arc<dyn sdkwork_order_service::PhysicalInventoryReservationPort>>,
+    physical_inventory_port: Option<
+        Arc<dyn sdkwork_order_service::PhysicalInventoryReservationPort>,
+    >,
     refund_notify_handler_registry: Option<Arc<dyn RefundNotifyHandlerRegistry>>,
 ) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
@@ -64,13 +71,19 @@ pub fn app_refund_webhook_router_with_postgres_pool_and_handlers(
     );
     let default_registry = match account_value_ledger_port {
         Some(ledger) => sdkwork_order_service::refund_notify_handler_registry_with(
-            Arc::new(sdkwork_order_repository_sqlx::PostgresRefundRequestSettlementStore::new(
-                pool.clone(),
-            )),
+            Arc::new(
+                sdkwork_order_repository_sqlx::PostgresRefundRequestSettlementStore::new(
+                    pool.clone(),
+                ),
+            ),
             ledger,
             physical_inventory_port,
-            Some(Arc::new(sdkwork_order_repository_sqlx::PostgresCommerceRechargeStore::new(pool.clone()))
-                as Arc<dyn sdkwork_order_service::AccountValueRequestExecutionStore>),
+            Some(Arc::new(
+                sdkwork_order_repository_sqlx::PostgresCommerceRechargeStore::new(pool.clone()),
+            )
+                as Arc<
+                    dyn sdkwork_order_service::AccountValueRequestExecutionStore,
+                >),
         ),
         None => default_refund_notify_handler_registry(),
     };

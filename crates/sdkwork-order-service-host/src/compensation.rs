@@ -159,8 +159,10 @@ async fn run_compensation_pass(
         ),
         account_value_ledger_port.clone(),
         None,
-        Some(std::sync::Arc::new(PostgresCommerceRechargeStore::new(pool.clone()))
-            as std::sync::Arc<dyn AccountValueRequestExecutionStore>),
+        Some(
+            std::sync::Arc::new(PostgresCommerceRechargeStore::new(pool.clone()))
+                as std::sync::Arc<dyn AccountValueRequestExecutionStore>,
+        ),
     );
     let summary = run_payment_compensation_pass_with_registries(
         pool,
@@ -170,8 +172,8 @@ async fn run_compensation_pass(
         refund_registry.as_ref(),
         config,
     )
-        .await
-        .map_err(|error| format!("payment compensation pass failed: {error:?}"))?;
+    .await
+    .map_err(|error| format!("payment compensation pass failed: {error:?}"))?;
     tracing::info!(
         target = "order.payment_compensation",
         claimed_payment_attempts = summary.claimed_payment_attempts,

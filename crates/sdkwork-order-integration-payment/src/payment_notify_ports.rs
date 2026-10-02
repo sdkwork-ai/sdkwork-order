@@ -378,14 +378,9 @@ async fn resolve_webhook_provider_account_postgres(
     // owning account's API v3 key, so the first account whose verification
     // succeeds IS the tenant routing answer.
     if provider_code.eq_ignore_ascii_case("wechat_pay") && account.is_none() {
-        if let Some(account) = resolve_wechat_account_by_verification(
-            pool,
-            credentials,
-            provider_code,
-            headers,
-            body,
-        )
-        .await?
+        if let Some(account) =
+            resolve_wechat_account_by_verification(pool, credentials, provider_code, headers, body)
+                .await?
         {
             return Ok(webhook_provider_resolution(
                 deployment_registry,
@@ -435,10 +430,8 @@ async fn resolve_wechat_account_by_verification(
         metadata: serde_json::json!({ "provider_code": provider_code }),
     };
     for account in candidates {
-        let registry = provider_registry_for_account(
-            credentials,
-            Some(provider_account_binding(&account)),
-        );
+        let registry =
+            provider_registry_for_account(credentials, Some(provider_account_binding(&account)));
         let Some(adapter) = registry.resolve(provider_code) else {
             continue;
         };

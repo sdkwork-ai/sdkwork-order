@@ -126,9 +126,7 @@ impl RefundRequestSettlementPort for PostgresRefundRequestSettlementStore {
             .bind(request_id)
             .execute(&self.pool)
             .await
-            .map_err(|error| {
-                map_sql_store_error("failed to mark refund request settled", error)
-            })?;
+            .map_err(|error| map_sql_store_error("failed to mark refund request settled", error))?;
             Ok(result.rows_affected() == 1)
         })
     }

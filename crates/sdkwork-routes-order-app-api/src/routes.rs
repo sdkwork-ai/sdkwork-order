@@ -11,8 +11,7 @@ use crate::{
     app_membership_order_router_with_postgres_pool_and_payments,
     app_order_router_with_postgres_pool_and_inventory,
     app_payment_webhook_router_with_postgres_pool_and_integrations,
-    app_shipment_router_with_postgres_pool,
-    build_app_checkout_router_with_integrations,
+    app_shipment_router_with_postgres_pool, build_app_checkout_router_with_integrations,
     build_app_recharge_checkout_router_with_integrations,
 };
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};

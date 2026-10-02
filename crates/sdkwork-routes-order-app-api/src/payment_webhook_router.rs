@@ -19,15 +19,15 @@ use sdkwork_order_service::{
     default_payment_notify_handler_registry, default_refund_notify_handler_registry,
     AccountPointsCreditPort, AccountValueLedgerPort, CouponRedemptionPort,
     MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort, PaymentNotifyHandlerRegistry,
-    PhysicalGoodsFulfillmentPort, RefundNotifyHandlerRegistry, UnavailablePhysicalGoodsFulfillmentPort,
+    PhysicalGoodsFulfillmentPort, RefundNotifyHandlerRegistry,
+    UnavailablePhysicalGoodsFulfillmentPort,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
 use sqlx::PgPool;
 
 use crate::payment_webhook_framework::{
-    collect_webhook_intake, ProviderWebhookFramework, WebhookFamilyPolicy,
-    WEBHOOK_BODY_MAX_BYTES,
+    collect_webhook_intake, ProviderWebhookFramework, WebhookFamilyPolicy, WEBHOOK_BODY_MAX_BYTES,
 };
 
 /// Maximum provider notification body size. Explicit and bounded so oversized
@@ -114,9 +114,11 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
     // outcome (same idempotency keys as the synchronous execution path).
     let refund_registry = refund_notify_handler_registry.unwrap_or_else(|| {
         sdkwork_order_service::refund_notify_handler_registry_with(
-            Arc::new(sdkwork_order_repository_sqlx::PostgresRefundRequestSettlementStore::new(
-                pool.clone(),
-            )),
+            Arc::new(
+                sdkwork_order_repository_sqlx::PostgresRefundRequestSettlementStore::new(
+                    pool.clone(),
+                ),
+            ),
             account_value_ledger_port.clone(),
             None,
             None,
@@ -129,8 +131,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
         coupon_redemption_port,
         membership_port,
         physical_goods_port,
-        payment_notify_handler_registry
-            .unwrap_or_else(default_payment_notify_handler_registry),
+        payment_notify_handler_registry.unwrap_or_else(default_payment_notify_handler_registry),
         refund_registry,
     ));
     Router::new()

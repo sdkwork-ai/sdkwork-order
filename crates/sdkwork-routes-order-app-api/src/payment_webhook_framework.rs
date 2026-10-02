@@ -28,9 +28,7 @@ use std::sync::Arc;
 use axum::body::Bytes;
 use axum::response::Response;
 use sdkwork_order_integration_payment::StorePaymentNotifyPorts;
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
-};
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
 use sdkwork_order_service::{
     is_refund_event_type, process_payment_notify_verified, process_refund_notify_verified,
     AccountPointsCreditPort, AccountValueLedgerPort, CouponRedemptionPort,
@@ -236,7 +234,9 @@ impl ProviderWebhookFramework {
                 {
                     Ok(outcome) => success_command(
                         ctx,
-                        outcome.payment_attempt_id.or(Some(outcome.webhook_event_id)),
+                        outcome
+                            .payment_attempt_id
+                            .or(Some(outcome.webhook_event_id)),
                         Some(outcome.status),
                     ),
                     Err(error) => map_webhook_service_error(ctx, error),
@@ -256,13 +256,14 @@ impl ProviderWebhookFramework {
     ) {
         let reason = format!("{family:?} event delivered to a non-matching webhook url");
         tracing::warn!(target = "order.payment_webhook", provider_code, reason);
-        if let Err(error) = sdkwork_payment_repository_sqlx::record_rejected_provider_webhook_postgres(
-            ports.pool(),
-            provider_code,
-            body,
-            &reason,
-        )
-        .await
+        if let Err(error) =
+            sdkwork_payment_repository_sqlx::record_rejected_provider_webhook_postgres(
+                ports.pool(),
+                provider_code,
+                body,
+                &reason,
+            )
+            .await
         {
             tracing::error!(
                 target = "order.payment_webhook",
@@ -276,9 +277,7 @@ impl ProviderWebhookFramework {
 
 /// Collects the HTTP layer into the transport-neutral intake the pipeline
 /// consumes (identical for every channel and family).
-pub fn collect_webhook_intake(
-    headers: &axum::http::HeaderMap,
-) -> Vec<(String, String)> {
+pub fn collect_webhook_intake(headers: &axum::http::HeaderMap) -> Vec<(String, String)> {
     headers
         .iter()
         .filter_map(|(name, value)| {
