@@ -11,7 +11,10 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use sdkwork_iam_web_adapter::{build_web_framework_builder, IamWebRequestContextResolver};
-use sdkwork_order_service::{NoopAccountValueLedgerPort, NoopMembershipPurchaseFulfillmentPort};
+use sdkwork_order_service::{
+    NoopAccountValueLedgerPort, NoopAppTemplatePurchaseFulfillmentPort,
+    NoopMembershipPurchaseFulfillmentPort,
+};
 use sdkwork_routes_order_app_api::{
     app_payment_webhook_router_with_postgres_pool, http_route_manifest::app_route_manifest,
 };
@@ -30,6 +33,7 @@ fn composed_gateway() -> axum::Router {
         Arc::new(NoopAccountPointsCreditPort),
         Arc::new(NoopAccountValueLedgerPort),
         Arc::new(NoopMembershipPurchaseFulfillmentPort),
+        Arc::new(NoopAppTemplatePurchaseFulfillmentPort),
     ));
     let contribution = ApiAssemblyContribution::from_manifest(
         "sdkwork-order-test",

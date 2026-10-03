@@ -4,8 +4,8 @@ use axum::Router;
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_postgres_pool_from_env;
 use sdkwork_order_service::{
     AccountPointsCreditFuture, AccountPointsCreditPort, NoopAccountValueLedgerPort,
-    NoopMembershipPurchaseFulfillmentPort, PointsRechargeCreditOutcome,
-    PointsRechargeCreditRequest,
+    NoopAppTemplatePurchaseFulfillmentPort, NoopMembershipPurchaseFulfillmentPort,
+    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_routes_order_app_api::{
@@ -74,6 +74,7 @@ fn build_test_app_router(pool: sqlx::PgPool) -> Router {
                 Arc::new(NoopAccountPointsCreditPort),
                 Arc::new(NoopAccountValueLedgerPort),
                 Arc::new(NoopMembershipPurchaseFulfillmentPort),
+                Arc::new(NoopAppTemplatePurchaseFulfillmentPort),
             ))
             .merge(app_refund_webhook_router_with_postgres_pool(pool)),
     )

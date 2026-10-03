@@ -7,7 +7,8 @@ use crate::openapi_contract::mount_app_openapi;
 use crate::refund_webhook_router::app_refund_webhook_router_with_postgres_pool_and_handlers;
 use crate::web_bootstrap::wrap_router_with_web_framework_from_env;
 use crate::{
-    app_after_sales_router_with_postgres_pool, app_fulfillment_router_with_postgres_pool,
+    app_after_sales_router_with_postgres_pool, app_app_template_order_router_with_postgres_pool,
+    app_fulfillment_router_with_postgres_pool,
     app_membership_order_router_with_postgres_pool_and_payments,
     app_order_router_with_postgres_pool_and_inventory,
     app_payment_webhook_router_with_postgres_pool_and_integrations,
@@ -29,6 +30,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
     let account_value_ledger_port = host.account_value_ledger_port();
     let coupon_redemption_port = host.coupon_redemption_port();
     let membership_port = host.membership_fulfillment_port();
+    let app_template_port = host.app_template_fulfillment_port();
     let physical_checkout_resolver = host.physical_checkout_resolver_port();
     let physical_inventory = host.physical_inventory_reservation_port();
     let physical_goods = host.physical_goods_fulfillment_port();
@@ -64,6 +66,9 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
             registry,
             credentials,
         ))
+        .merge(app_app_template_order_router_with_postgres_pool(
+            pool.clone(),
+        ))
         .merge(app_fulfillment_router_with_postgres_pool(pool.clone()))
         .merge(app_shipment_router_with_postgres_pool(pool.clone()))
         .merge(app_after_sales_router_with_postgres_pool(pool.clone()))
@@ -74,6 +79,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
                 account_value_ledger_port.clone(),
                 coupon_redemption_port,
                 membership_port,
+                app_template_port,
                 physical_goods,
             ),
         )

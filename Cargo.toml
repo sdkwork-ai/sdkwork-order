@@ -1,4 +1,4 @@
-﻿[workspace]
+[workspace]
 resolver = "2"
 members = [
     "crates/sdkwork-api-order-assembly",
@@ -6,6 +6,7 @@ members = [
   "crates/sdkwork-order-service",
   "crates/sdkwork-order-repository-sqlx",
   "crates/sdkwork-order-integration-account",
+  "crates/sdkwork-order-integration-deployments",
   "crates/sdkwork-order-integration-payment",
   "crates/sdkwork-order-integration-membership",
   "crates/sdkwork-order-integration-promotion",
@@ -78,6 +79,7 @@ sdkwork_api_order_assembly = { path = "crates/sdkwork-api-order-assembly", packa
 sdkwork_order_database_host = { path = "crates/sdkwork-order-database-host", package = "sdkwork-order-database-host" }
 sdkwork_order_service_host = { path = "crates/sdkwork-order-service-host", package = "sdkwork-order-service-host" }
 sdkwork_order_integration_account = { path = "crates/sdkwork-order-integration-account", package = "sdkwork-order-integration-account" }
+sdkwork_order_integration_deployments = { path = "crates/sdkwork-order-integration-deployments", package = "sdkwork-order-integration-deployments" }
 sdkwork_order_integration_payment = { path = "crates/sdkwork-order-integration-payment", package = "sdkwork-order-integration-payment" }
 sdkwork_order_integration_membership = { path = "crates/sdkwork-order-integration-membership", package = "sdkwork-order-integration-membership" }
 sdkwork_order_integration_promotion = { path = "crates/sdkwork-order-integration-promotion", package = "sdkwork-order-integration-promotion" }

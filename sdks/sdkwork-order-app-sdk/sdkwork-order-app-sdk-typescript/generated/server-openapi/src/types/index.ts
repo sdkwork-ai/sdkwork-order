@@ -27,6 +27,11 @@ export type { RechargeOrderCreateCommand } from './recharge-order-create-command
 export type { MembershipOrderCreateCommand } from './membership-order-create-command';
 export type { MembershipOrderCreateResponse } from './membership-order-create-response';
 export type { MembershipOrderCreateResult } from './membership-order-create-result';
+export type { AppTemplateOrderCreateCommand } from './app-template-order-create-command';
+export type { AppTemplateOrderCreateResult } from './app-template-order-create-result';
+export type { AppTemplateOrderCreateResponse } from './app-template-order-create-response';
+export type { AppTemplateOrderSummary } from './app-template-order-summary';
+export type { AppTemplateOrderListResponse } from './app-template-order-list-response';
 export type { SdkWorkApiResponse } from './sdk-work-api-response';
 export type { SdkWorkResourceData } from './sdk-work-resource-data';
 export type { SdkWorkPageData } from './sdk-work-page-data';

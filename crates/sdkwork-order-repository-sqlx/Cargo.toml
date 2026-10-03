@@ -30,4 +30,8 @@ chrono = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
+sdkwork-database-config.workspace = true
+sdkwork-database-sqlx.workspace = true
+sdkwork_order_integration_deployments.workspace = true
 sdkwork_order_repository_sqlx = { workspace = true, features = ["test-support"] }
+uuid = { workspace = true }

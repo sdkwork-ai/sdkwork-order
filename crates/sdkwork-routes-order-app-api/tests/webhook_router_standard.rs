@@ -7,8 +7,9 @@ use axum::http::{Request, StatusCode};
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_postgres_pool_from_env;
 use sdkwork_order_service::{
     default_payment_notify_handler_registry, AccountPointsCreditFuture, AccountPointsCreditPort,
-    NoopAccountValueLedgerPort, NoopCouponRedemptionPort, NoopMembershipPurchaseFulfillmentPort,
-    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
+    NoopAccountValueLedgerPort, NoopAppTemplatePurchaseFulfillmentPort, NoopCouponRedemptionPort,
+    NoopMembershipPurchaseFulfillmentPort, PointsRechargeCreditOutcome,
+    PointsRechargeCreditRequest,
 };
 use sdkwork_routes_order_app_api::{
     app_payment_webhook_router_with_postgres_pool,
@@ -53,6 +54,7 @@ fn payment_router(pool: sqlx::PgPool) -> axum::Router {
         Arc::new(NoopAccountPointsCreditPort),
         Arc::new(NoopAccountValueLedgerPort),
         Arc::new(NoopMembershipPurchaseFulfillmentPort),
+        Arc::new(NoopAppTemplatePurchaseFulfillmentPort),
     )
 }
 
@@ -146,6 +148,7 @@ async fn registry_seam_variants_are_constructible() {
             Arc::new(NoopAccountValueLedgerPort),
             Arc::new(NoopCouponRedemptionPort),
             Arc::new(NoopMembershipPurchaseFulfillmentPort),
+            Arc::new(NoopAppTemplatePurchaseFulfillmentPort),
             Arc::new(sdkwork_order_service::UnavailablePhysicalGoodsFulfillmentPort),
             Some(default_payment_notify_handler_registry()),
             None,

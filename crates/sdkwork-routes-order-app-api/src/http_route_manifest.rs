@@ -283,6 +283,20 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "memberships.orders.create",
     )
     .with_idempotent(true),
+    // === App templates (catalog owned by sdkwork-deployments) ===
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/app/v3/api/app_template_orders",
+        "orderAppTemplates",
+        "appTemplateOrders.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/app/v3/api/app_template_orders",
+        "orderAppTemplates",
+        "appTemplateOrders.list",
+    ),
 ];
 
 pub fn app_route_manifest() -> HttpRouteManifest {

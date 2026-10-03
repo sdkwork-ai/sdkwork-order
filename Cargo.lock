@@ -2476,6 +2476,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkwork-order-integration-deployments"
+version = "0.1.0"
+dependencies = [
+ "sdkwork-contract-service",
+ "sdkwork-database-sqlx",
+ "sdkwork-order-service",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "sdkwork-order-integration-membership"
 version = "0.1.0"
 dependencies = [
@@ -2558,6 +2569,9 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "sdkwork-contract-service",
+ "sdkwork-database-config",
+ "sdkwork-database-sqlx",
+ "sdkwork-order-integration-deployments",
  "sdkwork-order-repository-sqlx",
  "sdkwork-order-service",
  "sdkwork-payment-service",
@@ -2594,6 +2608,7 @@ dependencies = [
  "sdkwork-database-sqlx",
  "sdkwork-order-database-host",
  "sdkwork-order-integration-account",
+ "sdkwork-order-integration-deployments",
  "sdkwork-order-integration-membership",
  "sdkwork-order-integration-partner",
  "sdkwork-order-integration-payment",

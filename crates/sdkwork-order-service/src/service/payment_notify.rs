@@ -23,17 +23,19 @@ use std::sync::Arc;
 use sdkwork_contract_service::CommerceServiceError;
 
 use crate::{
-    default_fulfill_account_value_order_command, default_fulfill_points_recharge_command,
-    fulfill_account_value_order, fulfill_points_recharge_order,
-    mark_points_recharge_payment_succeeded, membership_purchase_fulfillment_idempotency_key,
-    membership_quota_recharge_idempotency_key, physical_goods_fulfillment_idempotency_key,
-    points_recharge_payment_success_idempotency_key, redeem_coupon_and_fulfill_account_value_order,
-    AccountPointsCreditPort, AccountValueFulfillmentStore, AccountValueLedgerPort,
-    AccountValueOrderSubject, CouponRedemptionPort, FulfillPaidPhysicalOrderRequest,
-    MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentPort,
-    MembershipPurchaseFulfillmentRequest, MembershipPurchaseSettlementSnapshot,
-    MembershipQuotaRechargeFulfillmentRequest, OrderPaymentSettlementAttempt, OrderSubjectKind,
-    OwnerOrderSettlementPorts, PhysicalGoodsFulfillmentPort, PointsRechargeFulfillmentStore,
+    app_template_purchase_fulfillment_idempotency_key, default_fulfill_account_value_order_command,
+    default_fulfill_points_recharge_command, fulfill_account_value_order,
+    fulfill_points_recharge_order, mark_points_recharge_payment_succeeded,
+    membership_purchase_fulfillment_idempotency_key, membership_quota_recharge_idempotency_key,
+    physical_goods_fulfillment_idempotency_key, points_recharge_payment_success_idempotency_key,
+    redeem_coupon_and_fulfill_account_value_order, AccountPointsCreditPort,
+    AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
+    AppTemplatePurchaseFulfillmentPort, CouponRedemptionPort, FulfillPaidAppTemplateOrderRequest,
+    FulfillPaidPhysicalOrderRequest, MarkPointsRechargePaymentSucceededCommand,
+    MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
+    MembershipPurchaseSettlementSnapshot, MembershipQuotaRechargeFulfillmentRequest,
+    OrderPaymentSettlementAttempt, OrderSubjectKind, OwnerOrderSettlementPorts,
+    PhysicalGoodsFulfillmentPort, PointsRechargeFulfillmentStore,
 };
 
 /// Canonical business type for points recharge orders.
@@ -50,6 +52,8 @@ pub const PAYMENT_NOTIFY_BUSINESS_ACCOUNT_RECHARGE_PACKAGE: &str = "account_rech
 pub const PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE: &str = "coupon_recharge";
 /// Canonical business type for membership purchase/activation orders.
 pub const PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP: &str = "membership";
+/// Canonical business type for app-template purchase orders.
+pub const PAYMENT_NOTIFY_BUSINESS_APP_TEMPLATE: &str = "app_template";
 /// Canonical business type for physical goods orders.
 pub const PAYMENT_NOTIFY_BUSINESS_PRODUCT: &str = "product";
 /// Canonical business type for virtual goods / external fulfillment orders.
@@ -178,6 +182,7 @@ pub fn default_payment_notify_handler_registry() -> Arc<dyn PaymentNotifyHandler
             }))
             .with(Arc::new(CouponRechargeNotifyHandler))
             .with(Arc::new(MembershipNotifyHandler))
+            .with(Arc::new(AppTemplateNotifyHandler))
             .with(Arc::new(PhysicalGoodsNotifyHandler))
             .with(Arc::new(ExternalFulfillmentNotifyHandler))
             .with(Arc::new(UnknownSubjectNotifyHandler)),
@@ -529,10 +534,68 @@ where
     })
 }
 
+/// App-template purchase fulfillment (idempotent). The entitlement is the order
+/// itself, so settlement advances the order and asks the catalog owner to count
+/// the install; a replayed webhook performs both steps exactly once.
+pub struct AppTemplateNotifyHandler;
+
+impl PaymentNotifyHandler for AppTemplateNotifyHandler {
+    fn business_type(&self) -> &'static str {
+        PAYMENT_NOTIFY_BUSINESS_APP_TEMPLATE
+    }
+
+    fn handle<'ports, 'data>(
+        &'ports self,
+        ctx: PaymentNotifyContext<'ports, 'data>,
+    ) -> PaymentNotifyHandlerFuture<'ports, 'data>
+    where
+        'data: 'ports,
+    {
+        Box::pin(async move {
+            settle_app_template_subject(
+                ctx.ports.app_template_port,
+                ctx.attempt,
+                ctx.paid_at,
+                ctx.request_no,
+            )
+            .await
+        })
+    }
+}
+
+async fn settle_app_template_subject<P>(
+    app_template_port: &P,
+    attempt: &OrderPaymentSettlementAttempt,
+    paid_at: &str,
+    request_no: &str,
+) -> Result<PaymentNotifyHandlingOutcome, CommerceServiceError>
+where
+    P: AppTemplatePurchaseFulfillmentPort + ?Sized,
+{
+    let idempotency_key = app_template_purchase_fulfillment_idempotency_key(&attempt.order_id);
+    let outcome = app_template_port
+        .fulfill_app_template_purchase(FulfillPaidAppTemplateOrderRequest {
+            tenant_id: attempt.tenant_id.clone(),
+            organization_id: attempt.organization_id.clone(),
+            owner_user_id: attempt.owner_user_id.clone(),
+            order_id: attempt.order_id.clone(),
+            paid_at: paid_at.to_owned(),
+            request_no: request_no.to_owned(),
+            idempotency_key,
+        })
+        .await?;
+
+    Ok(PaymentNotifyHandlingOutcome {
+        accepted: outcome.accepted,
+        replayed: outcome.replayed,
+        points_credited: 0,
+        status: outcome.fulfillment_status,
+    })
+}
+
 /// Physical goods fulfillment (idempotent; the port decides the actual
 /// shipping/inventory flow).
 pub struct PhysicalGoodsNotifyHandler;
-
 impl PaymentNotifyHandler for PhysicalGoodsNotifyHandler {
     fn business_type(&self) -> &'static str {
         PAYMENT_NOTIFY_BUSINESS_PRODUCT

@@ -16,11 +16,10 @@ use axum::routing::post;
 use axum::Router;
 use sdkwork_order_integration_payment::StorePaymentNotifyPorts;
 use sdkwork_order_service::{
-    default_payment_notify_handler_registry, default_refund_notify_handler_registry,
-    AccountPointsCreditPort, AccountValueLedgerPort, CouponRedemptionPort,
-    MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort, PaymentNotifyHandlerRegistry,
-    PhysicalGoodsFulfillmentPort, RefundNotifyHandlerRegistry,
-    UnavailablePhysicalGoodsFulfillmentPort,
+    default_payment_notify_handler_registry, AccountPointsCreditPort, AccountValueLedgerPort,
+    AppTemplatePurchaseFulfillmentPort, CouponRedemptionPort, MembershipPurchaseFulfillmentPort,
+    NoopCouponRedemptionPort, PaymentNotifyHandlerRegistry, PhysicalGoodsFulfillmentPort,
+    RefundNotifyHandlerRegistry, UnavailablePhysicalGoodsFulfillmentPort,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
@@ -44,6 +43,7 @@ pub fn app_payment_webhook_router_with_postgres_pool(
     credit_port: Arc<dyn AccountPointsCreditPort>,
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
 ) -> Router {
     app_payment_webhook_router_with_postgres_pool_and_coupon(
         pool,
@@ -51,6 +51,7 @@ pub fn app_payment_webhook_router_with_postgres_pool(
         account_value_ledger_port,
         Arc::new(NoopCouponRedemptionPort),
         membership_port,
+        app_template_port,
     )
 }
 
@@ -60,6 +61,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_coupon(
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
 ) -> Router {
     app_payment_webhook_router_with_postgres_pool_and_integrations(
         pool,
@@ -67,6 +69,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_coupon(
         account_value_ledger_port,
         coupon_redemption_port,
         membership_port,
+        app_template_port,
         Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
     )
 }
@@ -77,6 +80,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations(
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
 ) -> Router {
     app_payment_webhook_router_with_postgres_pool_and_integrations_and_registries(
@@ -85,6 +89,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations(
         account_value_ledger_port,
         coupon_redemption_port,
         membership_port,
+        app_template_port,
         physical_goods_port,
         None,
         None,
@@ -101,6 +106,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
     payment_notify_handler_registry: Option<Arc<dyn PaymentNotifyHandlerRegistry>>,
     refund_notify_handler_registry: Option<Arc<dyn RefundNotifyHandlerRegistry>>,
@@ -130,6 +136,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
         account_value_ledger_port,
         coupon_redemption_port,
         membership_port,
+        app_template_port,
         physical_goods_port,
         payment_notify_handler_registry.unwrap_or_else(default_payment_notify_handler_registry),
         refund_registry,

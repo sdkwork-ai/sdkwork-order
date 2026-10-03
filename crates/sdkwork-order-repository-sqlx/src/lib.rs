@@ -1,3 +1,4 @@
+mod app_template_order_identity;
 mod membership_order_identity;
 mod money_amount;
 pub mod order_lifecycle;
@@ -6,6 +7,7 @@ pub mod order_payment_settlement;
 pub mod order_settlement_context;
 pub mod postgres_account_value;
 pub mod postgres_after_sales;
+pub mod postgres_app_template_order;
 pub mod postgres_checkout;
 pub mod postgres_expiration;
 pub mod postgres_fulfillment;
@@ -30,6 +32,7 @@ pub use test_postgres_pool::order_points_recharge_e2e_postgres_pool_from_env;
 mod test_postgres_pool;
 
 pub use order_settlement_context::OrderPaymentSettlementContext;
+pub use postgres_app_template_order::PostgresCommerceAppTemplateOrderStore;
 pub use postgres_membership_order::PostgresCommerceMembershipOrderStore;
 pub use postgres_order::PostgresCommerceOrderStore;
 pub use postgres_recharge::PostgresCommerceRechargeStore;

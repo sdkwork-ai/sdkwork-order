@@ -1,5 +1,6 @@
 mod account_ledger;
 mod account_value;
+mod app_template_fulfillment;
 mod membership_fulfillment;
 mod owner_order_payment;
 mod partner_relation;
@@ -36,6 +37,12 @@ pub use account_value::{
     PaymentExecutorOutcome, PaymentPayoutExecutionRequest, PaymentPayoutExecutorPort,
     PaymentRefundExecutionRequest, PaymentRefundExecutorPort, ACCOUNT_VALUE_LEDGER_PORT,
     COUPON_REDEMPTION_PORT, PAYMENT_PAYOUT_EXECUTOR_PORT, PAYMENT_REFUND_EXECUTOR_PORT,
+};
+pub use app_template_fulfillment::{
+    app_template_purchase_fulfillment_idempotency_key, AppTemplatePurchaseFulfillmentFuture,
+    AppTemplatePurchaseFulfillmentOutcome, AppTemplatePurchaseFulfillmentPort,
+    FulfillPaidAppTemplateOrderRequest, NoopAppTemplatePurchaseFulfillmentPort,
+    APP_TEMPLATE_PURCHASE_FULFILLMENT_PORT,
 };
 pub use membership_fulfillment::{
     membership_purchase_fulfillment_idempotency_key, membership_quota_recharge_idempotency_key,

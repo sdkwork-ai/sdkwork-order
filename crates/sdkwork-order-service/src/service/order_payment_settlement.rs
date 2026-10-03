@@ -3,10 +3,10 @@ use sdkwork_contract_service::CommerceServiceError;
 use crate::service::payment_notify::{
     default_payment_notify_handler_registry, dispatch_payment_notify_handler,
     PaymentNotifyHandlerRegistry, PAYMENT_NOTIFY_BUSINESS_ACCOUNT_RECHARGE_PACKAGE,
-    PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE, PAYMENT_NOTIFY_BUSINESS_EXTERNAL,
-    PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP, PAYMENT_NOTIFY_BUSINESS_POINTS_RECHARGE,
-    PAYMENT_NOTIFY_BUSINESS_PRODUCT, PAYMENT_NOTIFY_BUSINESS_TOKEN_BANK_RECHARGE,
-    PAYMENT_NOTIFY_BUSINESS_UNKNOWN,
+    PAYMENT_NOTIFY_BUSINESS_APP_TEMPLATE, PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE,
+    PAYMENT_NOTIFY_BUSINESS_EXTERNAL, PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP,
+    PAYMENT_NOTIFY_BUSINESS_POINTS_RECHARGE, PAYMENT_NOTIFY_BUSINESS_PRODUCT,
+    PAYMENT_NOTIFY_BUSINESS_TOKEN_BANK_RECHARGE, PAYMENT_NOTIFY_BUSINESS_UNKNOWN,
 };
 use crate::{
     MembershipPurchaseSettlementSnapshot, OrderPaymentSettlementAttempt,
@@ -24,6 +24,7 @@ pub enum OrderSubjectKind {
     Product,
     VirtualGoods,
     Membership,
+    AppTemplate,
     CouponPackage,
     External,
     Unknown,
@@ -54,6 +55,10 @@ impl OrderSubjectKind {
             Some(value) if value.eq_ignore_ascii_case("virtual_delivery") => Self::VirtualGoods,
             Some(value) if value.eq_ignore_ascii_case("membership") => Self::Membership,
             Some(value) if value.eq_ignore_ascii_case("membership_activation") => Self::Membership,
+            Some(value) if value.eq_ignore_ascii_case(crate::APP_TEMPLATE_ORDER_SUBJECT) => {
+                Self::AppTemplate
+            }
+            Some(value) if value.eq_ignore_ascii_case("deploy_app_template") => Self::AppTemplate,
             Some(value) if value.eq_ignore_ascii_case("coupon_package") => Self::CouponPackage,
             Some(value) if value.eq_ignore_ascii_case("points_credit") => Self::PointsRecharge,
             Some(value) if is_machine_subject(value) => Self::External,
@@ -72,6 +77,7 @@ impl OrderSubjectKind {
                 | Self::AccountRechargePackage
                 | Self::CouponRecharge
                 | Self::Membership
+                | Self::AppTemplate
         )
     }
 
@@ -97,6 +103,7 @@ impl OrderSubjectKind {
             Self::CouponRecharge => PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE,
             Self::Product => PAYMENT_NOTIFY_BUSINESS_PRODUCT,
             Self::Membership => PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP,
+            Self::AppTemplate => PAYMENT_NOTIFY_BUSINESS_APP_TEMPLATE,
             Self::VirtualGoods | Self::CouponPackage | Self::External => {
                 PAYMENT_NOTIFY_BUSINESS_EXTERNAL
             }
@@ -188,6 +195,7 @@ pub struct OwnerOrderSettlementPorts<'a> {
     pub account_value_ledger_port: &'a dyn crate::AccountValueLedgerPort,
     pub coupon_redemption_port: &'a dyn crate::CouponRedemptionPort,
     pub membership_port: &'a dyn crate::MembershipPurchaseFulfillmentPort,
+    pub app_template_port: &'a dyn crate::AppTemplatePurchaseFulfillmentPort,
     pub physical_goods_port: &'a dyn crate::PhysicalGoodsFulfillmentPort,
 }
 

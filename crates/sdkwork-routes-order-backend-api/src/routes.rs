@@ -19,6 +19,7 @@ pub fn build_order_backend_business_router(host: Arc<OrderServiceHost>) -> Route
     let account_value_ledger_port = host.account_value_ledger_port();
     let coupon_redemption_port = host.coupon_redemption_port();
     let membership_port = host.membership_fulfillment_port();
+    let app_template_port = host.app_template_fulfillment_port();
     let reconciliation_port = host.owner_order_payment_reconciliation_port();
     let physical_goods_port = host.physical_goods_fulfillment_port();
     let payment_refund_executor_port = host.payment_refund_executor_port();
@@ -44,6 +45,7 @@ pub fn build_order_backend_business_router(host: Arc<OrderServiceHost>) -> Route
                 account_value_ledger_port,
                 coupon_redemption_port,
                 membership_port,
+                app_template_port,
                 reconciliation_port,
                 physical_goods_port,
             ),

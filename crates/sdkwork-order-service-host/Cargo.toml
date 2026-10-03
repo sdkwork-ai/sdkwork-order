@@ -21,6 +21,7 @@ sdkwork-web-bootstrap.workspace = true
 sdkwork-web-core.workspace = true
 sdkwork_order_database_host.workspace = true
 sdkwork_order_integration_account.workspace = true
+sdkwork_order_integration_deployments.workspace = true
 sdkwork_order_integration_membership.workspace = true
 sdkwork_order_integration_promotion.workspace = true
 sdkwork_order_integration_payment.workspace = true

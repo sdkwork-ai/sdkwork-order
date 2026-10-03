@@ -3,6 +3,7 @@ use sdkwork_order_database_host::{bootstrap_order_database_from_env, OrderDataba
 use sdkwork_order_integration_account::{
     account_points_credit_port_from_env, account_value_ledger_port_from_env,
 };
+use sdkwork_order_integration_deployments::app_template_purchase_fulfillment_port_from_database_pool;
 use sdkwork_order_integration_membership::membership_purchase_fulfillment_port_from_database_pool;
 use sdkwork_order_integration_partner::order_partner_relation_port_from_database_pool;
 use sdkwork_order_integration_payment::{
@@ -13,12 +14,14 @@ use sdkwork_order_integration_physical_commerce::physical_commerce_ports_from_en
 use sdkwork_order_integration_promotion::promotion_coupon_redemption_port_from_database_pool;
 pub use sdkwork_order_service::order_service_contract;
 use sdkwork_order_service::{
-    AccountPointsCreditPort, AccountValueLedgerPort, CouponRedemptionPort,
-    MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort, NoopPaymentPayoutExecutorPort,
-    OrderPartnerRelationPort, OwnerOrderPaymentReconciliationPort, PaymentPayoutExecutorPort,
-    PaymentRefundExecutorPort, PhysicalCheckoutResolverPort, PhysicalGoodsFulfillmentPort,
-    PhysicalInventoryReservationPort, UnavailablePhysicalCheckoutResolverPort,
-    UnavailablePhysicalGoodsFulfillmentPort, UnavailablePhysicalInventoryReservationPort,
+    AccountPointsCreditPort, AccountValueLedgerPort, AppTemplatePurchaseFulfillmentPort,
+    CouponRedemptionPort, MembershipPurchaseFulfillmentPort,
+    NoopAppTemplatePurchaseFulfillmentPort, NoopCouponRedemptionPort,
+    NoopPaymentPayoutExecutorPort, OrderPartnerRelationPort, OwnerOrderPaymentReconciliationPort,
+    PaymentPayoutExecutorPort, PaymentRefundExecutorPort, PhysicalCheckoutResolverPort,
+    PhysicalGoodsFulfillmentPort, PhysicalInventoryReservationPort,
+    UnavailablePhysicalCheckoutResolverPort, UnavailablePhysicalGoodsFulfillmentPort,
+    UnavailablePhysicalInventoryReservationPort,
 };
 use std::sync::Arc;
 
@@ -39,6 +42,7 @@ pub struct OrderServiceHost {
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_fulfillment_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_fulfillment_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     owner_order_payment_reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
     partner_relation_port: Arc<dyn OrderPartnerRelationPort>,
     payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
@@ -75,6 +79,8 @@ impl OrderServiceHost {
             promotion_coupon_redemption_port_from_database_pool(database.pool());
         let membership_fulfillment_port =
             membership_purchase_fulfillment_port_from_database_pool(database.pool())?;
+        let app_template_fulfillment_port =
+            app_template_purchase_fulfillment_port_from_database_pool(database.pool())?;
         let owner_order_payment_reconciliation_port =
             owner_order_payment_reconciliation_port_from_database_pool(database.pool());
         let payment_refund_executor_port =
@@ -94,6 +100,7 @@ impl OrderServiceHost {
             account_value_ledger_port,
             coupon_redemption_port,
             membership_fulfillment_port,
+            app_template_fulfillment_port,
             owner_order_payment_reconciliation_port,
             partner_relation_port,
             payment_refund_executor_port,
@@ -142,6 +149,7 @@ impl OrderServiceHost {
             account_value_ledger_port,
             coupon_redemption_port,
             membership_fulfillment_port,
+            app_template_fulfillment_port: Arc::new(NoopAppTemplatePurchaseFulfillmentPort),
             owner_order_payment_reconciliation_port,
             partner_relation_port,
             payment_refund_executor_port,
@@ -176,6 +184,10 @@ impl OrderServiceHost {
 
     pub fn membership_fulfillment_port(&self) -> Arc<dyn MembershipPurchaseFulfillmentPort> {
         self.membership_fulfillment_port.clone()
+    }
+
+    pub fn app_template_fulfillment_port(&self) -> Arc<dyn AppTemplatePurchaseFulfillmentPort> {
+        self.app_template_fulfillment_port.clone()
     }
 
     pub fn owner_order_payment_reconciliation_port(

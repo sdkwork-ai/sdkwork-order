@@ -31,9 +31,9 @@ use sdkwork_order_integration_payment::StorePaymentNotifyPorts;
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
 use sdkwork_order_service::{
     is_refund_event_type, process_payment_notify_verified, process_refund_notify_verified,
-    AccountPointsCreditPort, AccountValueLedgerPort, CouponRedemptionPort,
-    MembershipPurchaseFulfillmentPort, OwnerOrderSettlementPorts, PaymentNotifyHandlerRegistry,
-    PhysicalGoodsFulfillmentPort, RefundNotifyHandlerRegistry,
+    AccountPointsCreditPort, AccountValueLedgerPort, AppTemplatePurchaseFulfillmentPort,
+    CouponRedemptionPort, MembershipPurchaseFulfillmentPort, OwnerOrderSettlementPorts,
+    PaymentNotifyHandlerRegistry, PhysicalGoodsFulfillmentPort, RefundNotifyHandlerRegistry,
 };
 use sdkwork_payment_providers::normalize_provider_code;
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
@@ -94,6 +94,7 @@ struct PaymentDispatchPorts {
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
     payment_registry: Arc<dyn PaymentNotifyHandlerRegistry>,
 }
@@ -118,6 +119,7 @@ impl ProviderWebhookFramework {
         account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
         coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
         membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+        app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
         physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
         payment_registry: Arc<dyn PaymentNotifyHandlerRegistry>,
         refund_registry: Arc<dyn RefundNotifyHandlerRegistry>,
@@ -130,6 +132,7 @@ impl ProviderWebhookFramework {
                 account_value_ledger_port,
                 coupon_redemption_port,
                 membership_port,
+                app_template_port,
                 physical_goods_port,
                 payment_registry,
             }),
@@ -221,6 +224,7 @@ impl ProviderWebhookFramework {
                     account_value_ledger_port: dispatch.account_value_ledger_port.as_ref(),
                     coupon_redemption_port: dispatch.coupon_redemption_port.as_ref(),
                     membership_port: dispatch.membership_port.as_ref(),
+                    app_template_port: dispatch.app_template_port.as_ref(),
                     physical_goods_port: dispatch.physical_goods_port.as_ref(),
                 };
                 match process_payment_notify_verified(

@@ -12,10 +12,10 @@ use sdkwork_order_repository_sqlx::{
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
-    CouponRedemptionPort, MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort,
-    OwnerOrderPaymentReconciliationPort, OwnerOrderSettlementPorts, PhysicalGoodsFulfillmentPort,
-    ReconcileOwnerOrderPaymentRequest, UnavailableOwnerOrderPaymentReconciliationPort,
-    UnavailablePhysicalGoodsFulfillmentPort,
+    AppTemplatePurchaseFulfillmentPort, CouponRedemptionPort, MembershipPurchaseFulfillmentPort,
+    NoopCouponRedemptionPort, OwnerOrderPaymentReconciliationPort, OwnerOrderSettlementPorts,
+    PhysicalGoodsFulfillmentPort, ReconcileOwnerOrderPaymentRequest,
+    UnavailableOwnerOrderPaymentReconciliationPort, UnavailablePhysicalGoodsFulfillmentPort,
 };
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
 use sdkwork_web_core::WebRequestContext;
@@ -49,6 +49,7 @@ struct PaymentConfirmationState {
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
 }
@@ -76,6 +77,7 @@ pub fn payment_confirmation_router_with_postgres_pool(
     credit_port: Arc<dyn AccountPointsCreditPort>,
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
 ) -> Router {
     payment_confirmation_router_with_postgres_pool_and_coupon(
         pool,
@@ -83,6 +85,7 @@ pub fn payment_confirmation_router_with_postgres_pool(
         account_value_ledger_port,
         Arc::new(NoopCouponRedemptionPort),
         membership_port,
+        app_template_port,
     )
 }
 
@@ -92,6 +95,7 @@ pub fn payment_confirmation_router_with_postgres_pool_and_coupon(
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
 ) -> Router {
     payment_confirmation_router_with_postgres_pool_and_integrations(
         pool,
@@ -99,6 +103,7 @@ pub fn payment_confirmation_router_with_postgres_pool_and_coupon(
         account_value_ledger_port,
         coupon_redemption_port,
         membership_port,
+        app_template_port,
         Arc::new(UnavailableOwnerOrderPaymentReconciliationPort),
         Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
     )
@@ -110,6 +115,7 @@ pub fn payment_confirmation_router_with_postgres_pool_and_integrations(
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
 ) -> Router {
@@ -123,6 +129,7 @@ pub fn payment_confirmation_router_with_postgres_pool_and_integrations(
         account_value_ledger_port,
         coupon_redemption_port,
         membership_port,
+        app_template_port,
         reconciliation_port,
         physical_goods_port,
     })
@@ -169,6 +176,7 @@ async fn confirm_order_payment(
     let account_value_ledger_port = state.account_value_ledger_port.clone();
     let coupon_redemption_port = state.coupon_redemption_port.clone();
     let membership_port = state.membership_port.clone();
+    let app_template_port = state.app_template_port.clone();
     let reconciliation_port = state.reconciliation_port.clone();
     let physical_goods_port = state.physical_goods_port.clone();
     match state.store {
@@ -193,6 +201,7 @@ async fn confirm_order_payment(
                     account_value_ledger_port: account_value_ledger_port.as_ref(),
                     coupon_redemption_port: coupon_redemption_port.as_ref(),
                     membership_port: membership_port.as_ref(),
+                    app_template_port: app_template_port.as_ref(),
                     physical_goods_port: physical_goods_port.as_ref(),
                 },
             )

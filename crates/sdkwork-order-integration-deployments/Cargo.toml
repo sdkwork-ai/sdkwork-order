@@ -1,0 +1,24 @@
+[package]
+rust-version.workspace = true
+name = "sdkwork-order-integration-deployments"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Order to Deployments app-template fulfillment integration adapter."
+
+[lints]
+workspace = true
+
+[lib]
+name = "sdkwork_order_integration_deployments"
+path = "src/lib.rs"
+
+[dependencies]
+sdkwork-database-sqlx.workspace = true
+sdkwork_contract_service.workspace = true
+sdkwork_order_service.workspace = true
+sqlx.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

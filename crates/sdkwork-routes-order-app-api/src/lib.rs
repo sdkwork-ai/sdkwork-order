@@ -1,5 +1,6 @@
 pub mod after_sales_router;
 pub mod api_response;
+pub mod app_template_router;
 pub mod checkout_router;
 pub mod command_headers;
 pub mod fulfillment_router;
@@ -29,6 +30,10 @@ pub use routes::{
 pub use after_sales_router::{
     app_after_sales_router_with_postgres_pool, build_app_after_sales_router,
     CommerceAfterSalesFuture, CommerceAfterSalesStore,
+};
+pub use app_template_router::{
+    app_app_template_order_router_with_postgres_pool, build_app_app_template_order_router,
+    CommerceAppTemplateOrderFuture, CommerceAppTemplateOrderStore,
 };
 pub use checkout_router::{
     app_checkout_router_with_postgres_pool, build_app_checkout_router,

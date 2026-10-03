@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-order-integration-deployments",
+    "displayName": "SDKWork Order Deployments Integration",
+    "version": "0.1.0",
+    "type": "rust-crate",
+    "root": "crates/sdkwork-order-integration-deployments",
+    "domain": "commerce",
+    "capability": "order-app-template-fulfillment",
+    "surface": "backend-service",
+    "status": "stable",
+    "languages": [
+      "rust"
+    ],
+    "generated": false,
+    "private": false,
+    "manifests": [
+      "Cargo.toml"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "MODULE_SPEC.md",
+      "path": "../../../sdkwork-specs/MODULE_SPEC.md",
+      "purpose": "Reusable adapter ownership and dependency direction."
+    },
+    {
+      "file": "CODE_STYLE_SPEC.md",
+      "path": "../../../sdkwork-specs/CODE_STYLE_SPEC.md",
+      "purpose": "Authored source and generated ownership boundaries."
+    },
+    {
+      "file": "NAMING_SPEC.md",
+      "path": "../../../sdkwork-specs/NAMING_SPEC.md",
+      "purpose": "Canonical SDKWork naming."
+    },
+    {
+      "file": "RUST_CODE_SPEC.md",
+      "path": "../../../sdkwork-specs/RUST_CODE_SPEC.md",
+      "purpose": "Rust crate and module rules."
+    },
+    {
+      "file": "TEST_SPEC.md",
+      "path": "../../../sdkwork-specs/TEST_SPEC.md",
+      "purpose": "Integration and replay verification."
+    }
+  ],
+  "contracts": {
+    "layerRole": "backend-service",
+    "publicExports": [
+      "src/lib.rs"
+    ],
+    "providedPorts": [
+      {
+        "name": "AppTemplatePurchaseFulfillmentPort adapter",
+        "export": "src/lib.rs"
+      }
+    ],
+    "requiredPorts": [
+      {
+        "name": "deploy_app_template catalog counter",
+        "export": "src/lib.rs"
+      }
+    ],
+    "runtimeEntrypoints": [
+      "app_template_purchase_fulfillment_port_from_database_pool"
+    ],
+    "routeManifest": null,
+    "sdkClients": [],
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "events": [],
+    "configKeys": []
+  },
+  "verification": {
+    "commands": [
+      "cargo test -p sdkwork-order-integration-deployments"
+    ]
+  },
+  "metadata": {
+    "managedBy": "sdkwork-order",
+    "standardVersion": "2026-07-26"
+  }
+}

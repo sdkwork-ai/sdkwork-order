@@ -63,6 +63,7 @@ const client = new SdkworkAppClient({
 - `client.orderRecharges` - order_recharges API
 - `client.orderMemberships` - order_memberships API
 - `client.orderWithdrawals` - order_withdrawals API
+- `client.orderAppTemplates` - order_app_templates API
 
 ## Usage Examples
 
@@ -161,6 +162,17 @@ const result = await client.orderMemberships.memberships.orders.create(body, par
 // Withdrawal requests retrieve.
 const withdrawalRequestId = '1';
 const result = await client.orderWithdrawals.withdrawals.requests.retrieve(withdrawalRequestId);
+```
+
+### order_app_templates
+
+```typescript
+// List my app template orders
+const params = {
+  page: 1,
+  page_size: 2,
+};
+const result = await client.orderAppTemplates.appTemplateOrders.list(params);
 ```
 
 ## Error Handling

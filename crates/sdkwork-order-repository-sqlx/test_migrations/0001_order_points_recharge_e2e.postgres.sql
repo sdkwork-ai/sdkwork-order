@@ -535,3 +535,83 @@ INSERT INTO commerce_payment_method (
     1, 'tenant', 'CNY', '{}', 'seed-payment-method-wechat-pay',
     'seed-payment-method-wechat-pay', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 ) ON CONFLICT DO NOTHING;
+
+-- Deployments-owned app-template catalog (read by the order center, written only
+-- for the install counter). Mirrors the deployments baseline tables the
+-- app-template order store and its fulfillment adapter touch.
+CREATE TABLE IF NOT EXISTS deploy_app_template_category (
+    id BIGINT NOT NULL PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL,
+    tenant_id BIGINT NOT NULL,
+    organization_id BIGINT NOT NULL DEFAULT 0,
+    parent_id BIGINT,
+    category_key VARCHAR(64) NOT NULL,
+    display_name VARCHAR(128) NOT NULL,
+    description VARCHAR(512),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+    created_by BIGINT,
+    updated_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    version BIGINT NOT NULL DEFAULT 1,
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS deploy_app_template (
+    id BIGINT NOT NULL PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL,
+    tenant_id BIGINT NOT NULL,
+    organization_id BIGINT NOT NULL DEFAULT 0,
+    category_id BIGINT NOT NULL,
+    author_user_id BIGINT NOT NULL,
+    app_uuid VARCHAR(36) NOT NULL,
+    template_type VARCHAR(16) NOT NULL DEFAULT 'APP',
+    template_key VARCHAR(64) NOT NULL,
+    display_name VARCHAR(200) NOT NULL,
+    summary VARCHAR(512) NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    icon_media_ref VARCHAR(512),
+    cover_media_ref VARCHAR(512),
+    visibility VARCHAR(16) NOT NULL DEFAULT 'PRIVATE',
+    pricing_model VARCHAR(16) NOT NULL DEFAULT 'FREE',
+    price_minor BIGINT NOT NULL DEFAULT 0,
+    currency VARCHAR(8) NOT NULL DEFAULT 'CNY',
+    status VARCHAR(16) NOT NULL DEFAULT 'DRAFT',
+    review_note VARCHAR(512),
+    is_featured BOOLEAN NOT NULL DEFAULT FALSE,
+    install_count BIGINT NOT NULL DEFAULT 0,
+    view_count BIGINT NOT NULL DEFAULT 0,
+    latest_version_uuid VARCHAR(36),
+    metadata JSONB NOT NULL DEFAULT '{}',
+    created_by BIGINT,
+    updated_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    version BIGINT NOT NULL DEFAULT 1,
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS deploy_app_template_version (
+    id BIGINT NOT NULL PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL,
+    tenant_id BIGINT NOT NULL,
+    organization_id BIGINT NOT NULL DEFAULT 0,
+    template_id BIGINT NOT NULL,
+    template_version VARCHAR(64) NOT NULL,
+    changelog TEXT NOT NULL DEFAULT '',
+    artifact_uuid VARCHAR(36),
+    source_app_version VARCHAR(64),
+    platform_targets_json JSONB NOT NULL DEFAULT '[]',
+    package_size_bytes BIGINT NOT NULL DEFAULT 0,
+    checksum_sha256 VARCHAR(128),
+    status VARCHAR(16) NOT NULL DEFAULT 'DRAFT',
+    published_at TIMESTAMPTZ,
+    metadata JSONB NOT NULL DEFAULT '{}',
+    created_by BIGINT,
+    updated_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    version BIGINT NOT NULL DEFAULT 1,
+    deleted_at TIMESTAMPTZ
+);

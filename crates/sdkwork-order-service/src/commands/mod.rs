@@ -1,4 +1,5 @@
 mod account_value;
+mod app_template;
 mod fulfillment;
 mod membership;
 mod recharge;
@@ -13,6 +14,7 @@ pub use account_value::{
     RetireAccountValuePackageCommand, RetireTokenBankPlanCommand, ReviewAccountValueRequestCommand,
     UpsertAccountValuePackageCommand, UpsertTokenBankPlanCommand,
 };
+pub use app_template::CreateAppTemplateOrderCommand;
 pub use fulfillment::{
     FulfillPointsRechargeOrderCommand, MarkPointsRechargePaymentSucceededCommand,
 };

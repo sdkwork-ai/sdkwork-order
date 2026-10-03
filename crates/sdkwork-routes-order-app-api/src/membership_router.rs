@@ -29,11 +29,13 @@ use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 /// Payment countdown in seconds, backed by the shared expiry window
 /// (`SDKWORK_ORDER_PAYMENT_EXPIRE_SECONDS`, default 30 minutes).
-fn payment_expire_seconds() -> i64 {
+pub(crate) fn payment_expire_seconds() -> i64 {
     sdkwork_order_service::payment_expire_seconds()
 }
 const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
-const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
+/// Cashier product that resolves its provider after the order exists. Shared
+/// with the app-template family, which pays through the same seam.
+pub(crate) const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 
 pub type CommerceMembershipOrderFuture<'a, T> =
@@ -406,7 +408,7 @@ fn validate_payment_method(value: Option<&str>, payment_product: &str) -> Result
     Ok(method)
 }
 
-fn payment_scene(payment_product: &str) -> &str {
+pub(crate) fn payment_scene(payment_product: &str) -> &str {
     match payment_product {
         "wechat_native" => "wechat_native",
         "alipay_native" => "alipay_qr",
@@ -414,7 +416,7 @@ fn payment_scene(payment_product: &str) -> &str {
     }
 }
 
-fn provider_qr_code(payment_params: &BTreeMap<String, String>) -> Option<&String> {
+pub(crate) fn provider_qr_code(payment_params: &BTreeMap<String, String>) -> Option<&String> {
     payment_params
         .get("qrCodeUrl")
         .or_else(|| payment_params.get("qrCode"))
@@ -536,7 +538,7 @@ fn fallback_request_no(
     ))
 }
 
-fn stable_header_token(value: &str) -> String {
+pub(crate) fn stable_header_token(value: &str) -> String {
     value
         .chars()
         .map(|character| {
@@ -549,7 +551,7 @@ fn stable_header_token(value: &str) -> String {
         .collect()
 }
 
-fn stable_hex_token(value: &str) -> String {
+pub(crate) fn stable_hex_token(value: &str) -> String {
     let mut hash = 0xcbf29ce484222325u64;
     for byte in value.bytes() {
         hash ^= u64::from(byte);

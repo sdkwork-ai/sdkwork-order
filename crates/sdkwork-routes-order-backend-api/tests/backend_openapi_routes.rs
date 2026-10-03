@@ -7,11 +7,11 @@ use sdkwork_order_repository_sqlx::order_points_recharge_e2e_postgres_pool_from_
 use sdkwork_order_service::{
     AccountPointsCreditFuture, AccountPointsCreditPort, AccountValueFuture,
     AccountValueLedgerCommand, AccountValueLedgerOperation, AccountValueLedgerOutcome,
-    AccountValueLedgerPort, NoopAccountValueLedgerPort, NoopMembershipPurchaseFulfillmentPort,
-    NoopPaymentPayoutExecutorPort, NoopPaymentRefundExecutorPort, PaymentExecutorOutcome,
-    PaymentPayoutExecutorPort, PaymentRefundExecutionRequest, PaymentRefundExecutorPort,
-    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
-    UnavailablePhysicalInventoryReservationPort,
+    AccountValueLedgerPort, NoopAccountValueLedgerPort, NoopAppTemplatePurchaseFulfillmentPort,
+    NoopMembershipPurchaseFulfillmentPort, NoopPaymentPayoutExecutorPort,
+    NoopPaymentRefundExecutorPort, PaymentExecutorOutcome, PaymentPayoutExecutorPort,
+    PaymentRefundExecutionRequest, PaymentRefundExecutorPort, PointsRechargeCreditOutcome,
+    PointsRechargeCreditRequest, UnavailablePhysicalInventoryReservationPort,
 };
 use sdkwork_routes_order_backend_api::{
     backend_commerce_admin_router_with_postgres_pool_and_ports,
@@ -85,6 +85,7 @@ fn build_test_backend_router_with_ledger(
                 credit,
                 Arc::new(NoopAccountValueLedgerPort),
                 Arc::new(NoopMembershipPurchaseFulfillmentPort),
+                Arc::new(NoopAppTemplatePurchaseFulfillmentPort),
             )),
     )
 }
