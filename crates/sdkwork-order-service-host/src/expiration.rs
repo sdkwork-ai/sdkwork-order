@@ -82,7 +82,11 @@ pub fn spawn_order_expiration_scheduler(
 }
 
 async fn run_expiration_pass(host: &OrderServiceHost, batch_size: i64) -> Result<(), String> {
-    let DatabasePool::Postgres(pool, _) = host.database_pool();
+    #[allow(unreachable_patterns)]
+    let pool = match host.database_pool() {
+        DatabasePool::Postgres(pool, _) => pool,
+        _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+    };
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),

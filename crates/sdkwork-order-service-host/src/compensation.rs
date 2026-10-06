@@ -128,7 +128,11 @@ async fn run_compensation_pass(
     host: &OrderServiceHost,
     config: &PaymentCompensationPassConfig,
 ) -> Result<(), String> {
-    let DatabasePool::Postgres(pool, _) = host.database_pool();
+    #[allow(unreachable_patterns)]
+    let pool = match host.database_pool() {
+        DatabasePool::Postgres(pool, _) => pool,
+        _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+    };
     let credentials = ProviderCredentialBundle::from_env();
     let payments = PostgresCommerceOwnerOrderPaymentStore::new(pool.clone());
     let orders = PostgresCommerceOrderStore::new(pool.clone());

@@ -22,7 +22,11 @@ pub struct StoreMembershipFulfillmentAdapter {
 impl StoreMembershipFulfillmentAdapter {
     pub fn from_database_pool(pool: &DatabasePool) -> Result<Self, String> {
         // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-        let DatabasePool::Postgres(pool, _) = pool;
+        #[allow(unreachable_patterns)]
+        let pool = match pool {
+            DatabasePool::Postgres(pool, _) => pool,
+            _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+        };
         Ok(Self {
             store: PostgresCommerceMembershipStore::new(pool.clone()),
         })

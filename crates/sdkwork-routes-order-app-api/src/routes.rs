@@ -38,7 +38,11 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
     ));
-    let DatabasePool::Postgres(pool, _) = host.database_pool();
+    #[allow(unreachable_patterns)]
+    let pool = match host.database_pool() {
+        DatabasePool::Postgres(pool, _) => pool,
+        _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+    };
     let pool = pool.clone();
 
     Router::new()

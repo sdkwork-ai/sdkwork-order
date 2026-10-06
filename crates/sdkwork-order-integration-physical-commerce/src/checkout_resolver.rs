@@ -38,9 +38,17 @@ impl PhysicalCheckoutAdapter {
         ids: Arc<dyn IdGenerator>,
     ) -> Self {
         // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-        let DatabasePool::Postgres(pool, _) = merchandise_pool;
+        #[allow(unreachable_patterns)]
+        let pool = match merchandise_pool {
+            DatabasePool::Postgres(pool, _) => pool,
+            _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+        };
         let catalog = CatalogStore::Postgres(PostgresCommerceCatalogStore::new(pool, ids));
-        let DatabasePool::Postgres(pool, _) = shop_pool;
+        #[allow(unreachable_patterns)]
+        let pool = match shop_pool {
+            DatabasePool::Postgres(pool, _) => pool,
+            _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+        };
         let shops = ShopStore::Postgres(PostgresCommerceShopStore::new(pool));
         Self { catalog, shops }
     }

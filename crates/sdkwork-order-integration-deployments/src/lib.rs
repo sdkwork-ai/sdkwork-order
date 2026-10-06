@@ -44,7 +44,11 @@ impl StoreAppTemplateFulfillmentAdapter {
         request: FulfillPaidAppTemplateOrderRequest,
     ) -> Result<AppTemplatePurchaseFulfillmentOutcome, CommerceServiceError> {
         // Authoritative server persistence is PostgreSQL only (DATABASE_SPEC).
-        let DatabasePool::Postgres(pool, _) = &self.pool;
+        #[allow(unreachable_patterns)]
+        let pool = match &self.pool {
+            DatabasePool::Postgres(pool, _) => pool,
+            _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+        };
         fulfill_postgres(pool, &request).await
     }
 }

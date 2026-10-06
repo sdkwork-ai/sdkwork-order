@@ -26,7 +26,11 @@ impl PhysicalInventoryReservationPort for PhysicalInventoryAdapter {
     ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
         Box::pin(async move {
             // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-            let DatabasePool::Postgres(pool, _) = &self.pool;
+            #[allow(unreachable_patterns)]
+            let pool = match &self.pool {
+                DatabasePool::Postgres(pool, _) => pool,
+                _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+            };
             reserve_postgres(pool, &request).await
         })
     }
@@ -37,7 +41,11 @@ impl PhysicalInventoryReservationPort for PhysicalInventoryAdapter {
     ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
         Box::pin(async move {
             // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-            let DatabasePool::Postgres(pool, _) = &self.pool;
+            #[allow(unreachable_patterns)]
+            let pool = match &self.pool {
+                DatabasePool::Postgres(pool, _) => pool,
+                _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+            };
             release_postgres(pool, &request).await
         })
     }
@@ -48,7 +56,11 @@ impl PhysicalInventoryReservationPort for PhysicalInventoryAdapter {
     ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
         Box::pin(async move {
             // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-            let DatabasePool::Postgres(pool, _) = &self.pool;
+            #[allow(unreachable_patterns)]
+            let pool = match &self.pool {
+                DatabasePool::Postgres(pool, _) => pool,
+                _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+            };
             restock_postgres(pool, &request).await
         })
     }
@@ -60,7 +72,11 @@ impl PhysicalInventoryReservationPort for PhysicalInventoryAdapter {
         let pool = self.pool.clone();
         Box::pin(async move {
             // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-            let DatabasePool::Postgres(pool, _) = &pool;
+            #[allow(unreachable_patterns)]
+            let pool = match &pool {
+                DatabasePool::Postgres(pool, _) => pool,
+                _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+            };
             sweep_expired_reservations_postgres(pool, limit).await
         })
     }
@@ -73,7 +89,11 @@ pub(crate) async fn consume_order_inventory(
     idempotency_key: &str,
 ) -> Result<PhysicalInventoryMutationOutcome, CommerceServiceError> {
     // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-    let DatabasePool::Postgres(pool, _) = pool;
+    #[allow(unreachable_patterns)]
+    let pool = match pool {
+        DatabasePool::Postgres(pool, _) => pool,
+        _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+    };
     let mut tx = pool
         .begin()
         .await

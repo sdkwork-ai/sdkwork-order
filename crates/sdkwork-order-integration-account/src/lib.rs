@@ -55,7 +55,11 @@ async fn build_store_adapter() -> Result<Arc<dyn AccountPointsCreditPort>, Strin
         .map_err(|error| format!("create account database pool failed: {error}"))?;
 
     // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-    let DatabasePool::Postgres(pool, _) = pool;
+    #[allow(unreachable_patterns)]
+    let pool = match pool {
+        DatabasePool::Postgres(pool, _) => pool,
+        _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+    };
     Ok(Arc::new(StoreAccountPointsCreditAdapter::postgres(pool)))
 }
 
@@ -68,6 +72,10 @@ async fn build_store_account_value_adapter() -> Result<Arc<dyn AccountValueLedge
         .map_err(|error| format!("create account database pool failed: {error}"))?;
 
     // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
-    let DatabasePool::Postgres(pool, _) = pool;
+    #[allow(unreachable_patterns)]
+    let pool = match pool {
+        DatabasePool::Postgres(pool, _) => pool,
+        _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+    };
     Ok(Arc::new(StoreAccountPointsCreditAdapter::postgres(pool)))
 }

@@ -24,7 +24,11 @@ pub fn build_order_backend_business_router(host: Arc<OrderServiceHost>) -> Route
     let physical_goods_port = host.physical_goods_fulfillment_port();
     let payment_refund_executor_port = host.payment_refund_executor_port();
     let payment_payout_executor_port = host.payment_payout_executor_port();
-    let DatabasePool::Postgres(pool, _) = host.database_pool();
+    #[allow(unreachable_patterns)]
+    let pool = match host.database_pool() {
+        DatabasePool::Postgres(pool, _) => pool,
+        _ => panic!("authoritative persistence requires a PostgreSQL pool (DATABASE_SPEC: authoritative-server)"),
+    };
 
     Router::new()
         .merge(backend_order_admin_router_with_postgres_pool(
