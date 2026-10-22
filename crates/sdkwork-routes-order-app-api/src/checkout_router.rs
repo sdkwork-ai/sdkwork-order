@@ -328,7 +328,10 @@ async fn create_checkout_session(
     }
     match state.store.create_checkout_session(command).await {
         Ok(session) => success_created_item(ctx, map_checkout_session(session)),
-        Err(error) => map_service_error(ctx, error),
+        Err(error) => {
+            eprintln!("create checkout session failed: {error:?}");
+            map_service_error(ctx, error)
+        }
     }
 }
 
@@ -426,6 +429,21 @@ async fn create_checkout_order(
     };
     match state.store.create_owner_order(command).await {
         Ok(mut outcome) => {
+            if outcome.inventory_lines.is_empty() {
+                if let Err(error) = state
+                    .store
+                    .mark_owner_order_inventory_reserved(
+                        &subject.tenant_id,
+                        &subject.user_id,
+                        &outcome.order_id,
+                    )
+                    .await
+                {
+                    return map_service_error(ctx, error);
+                }
+                outcome.status = "pending_payment".to_owned();
+                return success_created_item(ctx, map_checkout_order(outcome));
+            }
             let merchant_organization_id = match outcome.merchant_organization_id.as_deref() {
                 Some(value) if !value.trim().is_empty() => value.to_owned(),
                 _ => {
@@ -440,17 +458,6 @@ async fn create_checkout_order(
                     return validation(ctx, "physical order merchant organization is missing");
                 }
             };
-            if outcome.inventory_lines.is_empty() {
-                let _ = state
-                    .store
-                    .mark_owner_order_inventory_failed(
-                        &subject.tenant_id,
-                        &subject.user_id,
-                        &outcome.order_id,
-                    )
-                    .await;
-                return validation(ctx, "physical order inventory lines are missing");
-            }
             let reserve_result = state
                 .inventory
                 .reserve_physical_order_inventory(ReservePhysicalOrderInventoryRequest {

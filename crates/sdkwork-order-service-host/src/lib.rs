@@ -28,11 +28,13 @@ use std::sync::Arc;
 use sdkwork_database_id::IdGenerator;
 
 pub mod compensation;
+pub mod course_entitlement_relay;
 pub mod expiration;
 pub mod identity;
 pub mod runtime_env;
 
 pub use compensation::spawn_payment_compensation_worker;
+pub use course_entitlement_relay::spawn_course_entitlement_relay;
 pub use expiration::spawn_order_expiration_scheduler;
 pub use identity::{shared_identity, OrderIdentity};
 

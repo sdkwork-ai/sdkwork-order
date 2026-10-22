@@ -854,7 +854,10 @@ async fn pay_order(
 
     match state.payments.pay_owner_order(command).await {
         Ok(outcome) => success_created_item(ctx, map_pay_outcome(outcome)),
-        Err(error) => map_service_error(ctx, error),
+        Err(error) => {
+            eprintln!("pay owner order failed: {error:?}");
+            map_service_error(ctx, error)
+        }
     }
 }
 

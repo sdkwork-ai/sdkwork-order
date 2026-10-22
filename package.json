@@ -70,7 +70,8 @@
     "_sdkwork:check": "pnpm run check:app-composition && pnpm db:validate && pnpm api:assembly:validate && pnpm format:check",
     "_sdkwork:verify": "pnpm typecheck && pnpm test:vitest && cargo test --workspace && pnpm run check:app-composition && pnpm run check:governance && pnpm check:cors-standard",
     "_sdkwork:clean": "cargo clean",
-    "_sdkwork:dev:standalone": "pnpm --dir apps/sdkwork-order-pc dev"
+    "_sdkwork:dev:standalone": "pnpm --dir apps/sdkwork-order-pc dev",
+    "relay:course-entitlements": "node scripts/relay-course-entitlements.mjs"
   },
   "devDependencies": {
     "@sdkwork/appbase-pc-react": "workspace:*",

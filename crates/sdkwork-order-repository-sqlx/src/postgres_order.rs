@@ -1,11 +1,11 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
-    stable_checkout_order_subject, stable_order_settlement_subject, CancelOwnerOrderCommand,
-    CreateOwnerOrderCommand, CreateOwnerOrderOutcome, NoopOrderPartnerRelationPort,
-    OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery, OrderOwnerEventPage,
-    OrderOwnerEventView, OrderOwnerItem, OrderOwnerListPage, OrderOwnerListQuery,
-    OrderOwnerPaymentStatus, OrderOwnerStatistics, OrderOwnerSummary, OrderPartnerRelationPort,
-    OrderPartnerSnapshot,
+    canonical_timestamp_after_seconds, payment_expire_seconds, stable_checkout_order_subject,
+    stable_order_settlement_subject, CancelOwnerOrderCommand, CreateOwnerOrderCommand,
+    CreateOwnerOrderOutcome, NoopOrderPartnerRelationPort, OrderOwnerDetail, OrderOwnerDetailQuery,
+    OrderOwnerEventListQuery, OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerItem,
+    OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerPaymentStatus, OrderOwnerStatistics,
+    OrderOwnerSummary, OrderPartnerRelationPort, OrderPartnerSnapshot,
 };
 use sdkwork_payment_service::{parse_scene_codes_csv, PaymentMethodItem, PaymentMethodListQuery};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -779,8 +779,7 @@ impl PostgresCommerceOrderStore {
         let original_amount = normalize_money_amount(&string_cell(&quote, "original_amount"))?;
         let discount_amount = normalize_money_amount(&string_cell(&quote, "discount_amount"))?;
         let total_amount = commerce_money(&payable_amount)?;
-        let expires_at =
-            optional_string_cell(&session, "expires_at").unwrap_or_else(|| now.clone());
+        let expires_at = canonical_timestamp_after_seconds(payment_expire_seconds());
 
         let partner_snapshot_json = partner_snapshot
             .as_ref()
@@ -851,8 +850,8 @@ impl PostgresCommerceOrderStore {
                      title, quantity, unit_price_amount, discount_amount, tax_amount,
                      total_amount, fulfillment_status, refund_status, created_at)
                 VALUES
-                    ($1, CAST($2 AS TEXT), $3, $4, $5, $6, $7, $8, $9, $10, '0', '0', $11,
-                     'unfulfilled', 'none', $12)
+                    ($1, CAST($2 AS TEXT), $3, $4, $5, $6, $7, $8, $9, CAST($10 AS NUMERIC), '0', '0',
+                     CAST($11 AS NUMERIC), 'unfulfilled', 'none', CAST($12 AS TIMESTAMPTZ))
                 "#,
             )
             .bind(&item_id)
@@ -878,7 +877,9 @@ impl PostgresCommerceOrderStore {
                 (id, tenant_id, organization_id, order_id, order_item_id, allocation_type,
                  original_amount, discount_amount, payable_amount, currency_code, created_at)
             VALUES
-                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, NULL, 'order_total', $5, $6, $7, $8, $9::timestamptz)
+                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, NULL, 'order_total',
+                 CAST($5 AS NUMERIC), CAST($6 AS NUMERIC), CAST($7 AS NUMERIC), $8,
+                 CAST($9 AS TIMESTAMPTZ))
             "#,
         )
         .bind(format!("{order_id}-amount"))
@@ -923,7 +924,7 @@ impl PostgresCommerceOrderStore {
             order_sn,
             status: "pending_inventory".to_owned(),
             total_amount,
-            expires_at: optional_string_cell(&session, "expires_at"),
+            expires_at: Some(expires_at),
             partner_snapshot,
         })
     }

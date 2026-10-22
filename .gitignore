@@ -110,3 +110,8 @@ apps/**/packages/*/src/**/*.map
 # Added by repo-commit task 2026-09-25; targeted rules only, compliant with check-gitignore-standard
 sdks/**/*-typescript/src/*.js
 sdks/**/*-typescript/src/*.d.ts
+
+# Dependency lockfiles emitted inside generated SDK output directories
+# (generated artifacts are not committed; no other generated tree tracks a lockfile).
+**/generated/**/pnpm-lock.yaml
+**/generated/**/package-lock.json

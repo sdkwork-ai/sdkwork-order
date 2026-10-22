@@ -139,7 +139,6 @@ fn should_use_development_cashier_fallback(
     environment: Option<String>,
 ) -> bool {
     error.code() == "provider-unavailable"
-        && error.message().contains("is not configured")
         && matches!(
             environment.as_deref(),
             Some("development" | "dev" | "local" | "test")

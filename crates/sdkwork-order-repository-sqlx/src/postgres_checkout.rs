@@ -506,7 +506,8 @@ async fn insert_checkout_session(
              idempotency_key, shop_id, merchant_organization_id, shop_snapshot_json,
              shipping_address_snapshot_json, expires_at, created_at, updated_at)
         VALUES
-            ($1, $2, $3, $4, $5, 'cart', 'active', $6, '[]', $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            ($1, $2, $3, $4, $5, 'cart', 'active', $6, '[]', $7, $8, $9, $10, $11, $12, $13,
+             CAST($14 AS TIMESTAMPTZ), CAST($15 AS TIMESTAMPTZ), CAST($16 AS TIMESTAMPTZ))
        "#,
     )
     .bind(session_id)
@@ -564,12 +565,13 @@ async fn insert_checkout_lines(
                  fulfillment_type, price_amount_snapshot, currency_code, selected, created_at,
                  updated_at)
             VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8, 'default', $9, 'one_time', CAST($10 AS NUMERIC), $11, $12, 1, $13, $14)
+                ($1, $2, $3, $4, $5, $6, $7, $8, 'default', $9, 'one_time', $10, CAST($11 AS NUMERIC), $12, 1,
+                 CAST($13 AS TIMESTAMPTZ), CAST($14 AS TIMESTAMPTZ))
            "#,
         )
         .bind(&line_id)
         .bind(&command.tenant_id)
-        .bind(command.organization_id.as_deref())
+        .bind(normalize_organization_scope(command.organization_id.as_deref()))
         .bind(session_id)
         .bind(line.product_id.as_deref())
         .bind(&line.sku_id)
@@ -605,7 +607,7 @@ async fn insert_checkout_quote(
             (id, tenant_id, organization_id, checkout_session_id, quote_no, original_amount,
              discount_amount, payable_amount, currency_code, quote_status, expires_at, created_at)
         VALUES
-            ($1, $2, $3, $4, $5, CAST($6 AS NUMERIC), CAST($7 AS NUMERIC), CAST($8 AS NUMERIC), $9, 'ready', $10, $11)
+            ($1, $2, $3, $4, $5, CAST($6 AS NUMERIC), CAST($7 AS NUMERIC), CAST($8 AS NUMERIC), $9, 'ready', CAST($10 AS TIMESTAMPTZ), CAST($11 AS TIMESTAMPTZ))
        "#,
     )
     .bind(quote_id)
@@ -713,7 +715,7 @@ async fn insert_checkout_quote_for_command(
             (id, tenant_id, organization_id, checkout_session_id, quote_no, original_amount,
              discount_amount, payable_amount, currency_code, quote_status, expires_at, created_at)
         VALUES
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'ready', $10, $11)
+            ($1, $2, $3, $4, $5, CAST($6 AS NUMERIC), CAST($7 AS NUMERIC), CAST($8 AS NUMERIC), $9, 'ready', CAST($10 AS TIMESTAMPTZ), CAST($11 AS TIMESTAMPTZ))
        "#,
     )
     .bind(quote_id)

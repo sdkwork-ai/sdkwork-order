@@ -174,6 +174,11 @@ fn start_runtime_workers(host: &Arc<OrderServiceHost>) -> OrderRuntimeWorkers {
     {
         workers.handles.push(handle);
     }
+    if let Some(handle) =
+        sdkwork_order_service_host::spawn_course_entitlement_relay(host.clone())
+    {
+        workers.handles.push(handle);
+    }
     workers
 }
 
