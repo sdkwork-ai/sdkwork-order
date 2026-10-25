@@ -6,7 +6,7 @@
     "name": "sdkwork-order",
     "repository": "sdkwork-ai/sdkwork-order",
     "sourcePath": ".",
-    "configPath": "sdkwork.app.config.json"
+    "configPath": "agent.app.config.json"
   },
   "release": {
     "artifactPrefix": "sdkwork-order",

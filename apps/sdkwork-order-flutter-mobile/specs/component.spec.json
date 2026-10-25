@@ -17,7 +17,7 @@
     "generated": false,
     "private": true,
     "manifests": [
-      "sdkwork.app.config.json",
+      "agent.app.config.json",
       "pubspec.yaml"
     ]
   },
@@ -50,7 +50,7 @@
     {
       "file": "APP_MANIFEST_SPEC.md",
       "path": "../../../sdkwork-specs/APP_MANIFEST_SPEC.md",
-      "purpose": "sdkwork.app.config.json manifest contract."
+      "purpose": "agent.app.config.json manifest contract."
     }
   ],
   "stateManagement": {

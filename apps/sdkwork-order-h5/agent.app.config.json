@@ -1,27 +1,30 @@
 {
   "schemaVersion": 3,
-  "kind": "sdkwork.app",
+  "kind": "agent.app",
   "app": {
-    "key": "sdkwork-order-pc",
-    "name": "SDKWork Order PC",
-    "displayName": "SDKWork Order PC",
-    "description": "Order capability PC surface for buyer and operator workflows.",
+    "key": "sdkwork-order-h5",
+    "name": "SDKWork Order H5",
+    "displayName": "SDKWork 订单 H5",
+    "description": "Order capability H5 surface for buyer order, cashier, voucher, account value and withdraw workflows.",
     "vendor": "SDKWork",
     "appType": "APP_REACT",
     "versionSource": "package.json",
     "identifiers": {
-      "desktopAppId": "com.sdkwork.order.pc.desktop",
-      "containerImage": "registry.sdkwork.com/apps/sdkwork-order-pc"
+      "packageName": null,
+      "bundleId": null,
+      "desktopAppId": null,
+      "containerImage": "registry.sdkwork.com/apps/sdkwork-order-h5"
     },
-    "officialWebsiteUrl": "https://sdkwork.com/apps/sdkwork-order-pc"
+    "officialWebsiteUrl": "https://sdkwork.com/apps/sdkwork-order-h5"
   },
   "backend": {
     "profileKey": "backend-root-admin",
     "ownerMode": "tenant",
     "grantMode": "current",
     "platform": "WEB",
-    "tenantId": "100001",
-    "organizationId": "0"
+    "appId": null,
+    "organizationId": "0",
+    "tenantId": "100001"
   },
   "runtime": {
     "family": "web",
@@ -42,10 +45,10 @@
   "media": {
     "icons": {
       "primary": {
-        "id": "sdkwork-order-pc-primary-icon",
+        "id": "sdkwork-order-h5-primary-icon",
         "type": "ICON",
         "purpose": "PRIMARY",
-        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/assets/icon-1024.png",
+        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-h5/assets/icon-1024.png",
         "platform": "APP",
         "locale": "en-US",
         "width": 1024,
@@ -66,34 +69,34 @@
     },
     "screenshots": [
       {
-        "id": "sdkwork-order-pc-web-screenshot",
+        "id": "sdkwork-order-h5-web-screenshot",
         "type": "SCREENSHOT",
         "purpose": "CATALOG_SCREENSHOT",
-        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/media/web-screenshot.png",
+        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-h5/media/web-screenshot.png",
         "platform": "WEB",
         "locale": "en-US",
         "deviceClass": "BROWSER",
-        "displayType": "WEB_DESKTOP",
+        "displayType": "WEB_MOBILE",
         "width": 1920,
         "height": 1080,
         "format": "PNG",
         "fileSizeBytes": 1048576,
         "alphaChannel": false,
-        "caption": "SDKWork Order PC product screenshot.",
+        "caption": "SDKWork Order H5 mobile screenshot.",
         "sortOrder": 0,
         "enabled": true,
         "metadata": {
           "generatedPlaceholder": true,
-          "altText": "SDKWork Order PC app screenshot."
+          "altText": "SDKWork Order H5 app screenshot."
         }
       }
     ],
     "previews": [
       {
-        "id": "sdkwork-order-pc-catalog-preview",
+        "id": "sdkwork-order-h5-catalog-preview",
         "type": "PREVIEW_IMAGE",
         "purpose": "CATALOG_PREVIEW",
-        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/media/preview-cover.png",
+        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-h5/media/preview-cover.png",
         "platform": "WEB",
         "locale": "en-US",
         "width": 1600,
@@ -101,12 +104,12 @@
         "format": "PNG",
         "fileSizeBytes": 786432,
         "alphaChannel": false,
-        "caption": "SDKWork Order PC preview.",
+        "caption": "SDKWork Order H5 preview.",
         "sortOrder": 0,
         "enabled": true,
         "metadata": {
           "generatedPlaceholder": true,
-          "altText": "SDKWork Order PC preview cover."
+          "altText": "SDKWork Order H5 preview cover."
         }
       }
     ],
@@ -122,62 +125,49 @@
     },
     "status": "ACTIVE",
     "platforms": [
-      "WEB"
+      "H5"
     ],
     "installPlatforms": [
-      "WEB"
+      "H5"
     ],
-    "defaultPackageId": "linux-x64-standalone-server-tar-gz",
+    "defaultPackageId": "web-universal-cloud-browser-zip",
     "installSkill": {
       "name": "sdkwork-skills-app"
     },
     "stores": [],
-    "storeUrl": "https://sdkwork.com/apps/sdkwork-order-pc"
+    "storeUrl": "https://sdkwork.com/apps/sdkwork-order-h5"
   },
   "artifacts": {
     "installConfig": {
-      "defaultPackageId": "linux-x64-standalone-server-tar-gz",
-      "installCommand": "sdkwork install sdkwork-order-pc",
-      "launchCommand": "sdkwork open sdkwork-order-pc",
-      "uninstallCommand": "sdkwork uninstall sdkwork-order-pc",
+      "defaultPackageId": "web-universal-cloud-browser-zip",
+      "installCommand": "sdkwork install sdkwork-order-h5",
+      "launchCommand": "sdkwork open sdkwork-order-h5",
+      "uninstallCommand": "sdkwork uninstall sdkwork-order-h5",
       "packages": [
         {
-          "id": "linux-x64-standalone-server-tar-gz",
-          "name": "Sdkwork Order Pc standalone server archive",
-          "sourceType": "BINARY_URL",
-          "packageFormat": "TAR_GZ",
-          "platform": "API",
-          "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/STABLE/0.1.0/linux-x64-standalone-server-tar-gz-0.1.0.tar.gz",
-          "architecture": "x64",
-          "checksumAlgorithm": "SHA-256",
-          "checksum": "da90a2fffc945d947ea11f70405759d39cf8ea110b6dd2cbe2da6897c91a8408",
-          "deploymentProfile": "standalone",
-          "runtimeTarget": "server",
-          "profileBinding": "fixed",
+          "id": "web-universal-cloud-browser-zip",
+          "name": "SDKWork Order H5 Web Bundle",
+          "sourceType": "WEB_URL",
+          "packageFormat": "ZIP",
+          "platform": "WEB",
+          "url": "https://cdn.sdkwork.com/apps/sdkwork-order-h5/STABLE/0.1.0/web.zip",
           "enabled": true,
-          "metadata": {
-            "releaseBuildDeferred": false
-          }
-        },
-        {
-          "id": "linux-x64-cloud-server-tar-gz",
-          "name": "Sdkwork Order Pc cloud server archive",
-          "sourceType": "BINARY_URL",
-          "packageFormat": "TAR_GZ",
-          "platform": "API",
-          "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/STABLE/0.1.0/linux-x64-cloud-server-tar-gz-0.1.0.tar.gz",
-          "architecture": "x64",
+          "metadata": {},
           "checksumAlgorithm": "SHA-256",
-          "checksum": "8dc86056a04cc8988963c9827b419f165c676d6de857fefe4be37942bb2e7b73",
+          "checksum": "8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a8b4c7f1a",
+          "architecture": "universal",
           "deploymentProfile": "cloud",
-          "runtimeTarget": "server",
+          "runtimeTarget": "browser",
           "profileBinding": "fixed",
-          "enabled": true,
-          "metadata": {
-            "releaseBuildDeferred": false
-          }
+          "targetPlatform": "web",
+          "clientArchitecture": "h5"
         }
-      ]
+      ],
+      "metadata": {
+        "workspaceRoot": "apps/sdkwork-order-h5",
+        "framework": "react",
+        "packageManager": "pnpm@10.33.0"
+      }
     }
   },
   "release": {
@@ -190,19 +180,18 @@
       {
         "version": "0.1.0",
         "releaseChannel": "STABLE",
-        "title": "SDKWork Order PC 0.1.0",
-        "summary": "SDKWork Order PC initialized standard release.",
-        "content": "Initial SDKWork App Standard v3 manifest for SDKWork Order PC.",
+        "title": "SDKWork Order H5 0.1.0",
+        "summary": "SDKWork Order H5 initialized standard release.",
+        "content": "Initial SDKWork App Standard v3 manifest for SDKWork Order H5.",
         "highlights": [
           "SDKWork App Standard v3 configuration initialized",
           "platform_app projection metadata standardized",
           "Download package matrix normalized"
         ],
         "packageIds": [
-          "linux-x64-standalone-server-tar-gz",
-          "linux-x64-cloud-server-tar-gz"
+          "web-universal-cloud-browser-zip"
         ],
-        "publishedAt": "2026-05-07T00:00:00Z",
+        "publishedAt": "2026-10-03T00:00:00Z",
         "current": true,
         "forceUpdate": false,
         "minSupportedVersion": "0.1.0",
@@ -216,11 +205,14 @@
     "sbomRequired": false
   },
   "devApp": {
-    "sourceRoot": "apps/sdkwork-order-pc"
+    "build": {
+      "targets": []
+    },
+    "sourceRoot": "apps/sdkwork-order-h5"
   },
   "metadata": {
     "standardOwner": "sdkwork-order",
-    "initializedAt": "2026-06-24T00:00:00.000Z",
+    "initializedAt": "2026-10-03T00:00:00.000Z",
     "deploymentConfig": "etc/sdkwork.deployment.config.json"
   }
 }

@@ -37,7 +37,7 @@ const EXPECTED_PAGES = [
 ];
 
 test("order mini-program root is manifest-driven", () => {
-  const manifest = JSON.parse(read("sdkwork.app.config.json"));
+  const manifest = JSON.parse(read("agent.app.config.json"));
   assert.equal(manifest.app?.key, "sdkwork-order-mini-program");
   assert.equal(manifest.runtime?.family, "mini-program");
   assert.equal(manifest.runtime?.framework, "weixin-mini-program");

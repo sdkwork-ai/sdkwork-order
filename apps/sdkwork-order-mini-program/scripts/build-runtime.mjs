@@ -41,9 +41,9 @@ if (!environment) {
   process.exit(1);
 }
 
-const manifest = JSON.parse(readFileSync(path.join(appRoot, "sdkwork.app.config.json"), "utf8"));
+const manifest = JSON.parse(readFileSync(path.join(appRoot, "agent.app.config.json"), "utf8"));
 if (!manifest.environments?.[environment]) {
-  console.error(`[order-mp] manifest sdkwork.app.config.json has no environment: ${environment}`);
+  console.error(`[order-mp] manifest agent.app.config.json has no environment: ${environment}`);
   process.exit(1);
 }
 if (!manifest.runtime?.supportedDeploymentProfiles?.includes(deploymentProfile)) {

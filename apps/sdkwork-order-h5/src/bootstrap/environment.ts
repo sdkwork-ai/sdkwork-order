@@ -1,4 +1,4 @@
-import manifest from "../../sdkwork.app.config.json";
+import manifest from "../../agent.app.config.json";
 import { resolveSharedSdkApiBaseUrl } from "./resolveSdkApiBaseUrl";
 
 export type SdkworkOrderH5Environment =

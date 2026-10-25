@@ -100,7 +100,7 @@ const secretKeyPattern = /(secret|privatekey|password|accesstoken|refreshtoken|a
 const configFiles = [
   ...collectFiles(path.join(appRoot, "config"), [".json"]),
   path.join(appRoot, "project.config.json"),
-  path.join(appRoot, "sdkwork.app.config.json"),
+  path.join(appRoot, "agent.app.config.json"),
 ];
 for (const file of configFiles) {
   if (!existsSafe(file)) {

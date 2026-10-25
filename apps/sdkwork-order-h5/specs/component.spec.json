@@ -12,7 +12,7 @@
     "surface": "app",
     "languages": ["typescript", "react"],
     "generated": false,
-    "manifests": ["package.json", "sdkwork.app.config.json", "etc/sdkwork.deployment.config.json"]
+    "manifests": ["package.json", "agent.app.config.json", "etc/sdkwork.deployment.config.json"]
   },
   "canonicalSpecs": [
     { "file": "APP_H5_ARCHITECTURE_SPEC.md", "path": "../../../../sdkwork-specs/APP_H5_ARCHITECTURE_SPEC.md", "purpose": "H5 application root architecture." },

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
-  "kind": "sdkwork.app",
+  "kind": "agent.app",
   "app": {
-    "key": "sdkwork-order",
+    "key": "sdkwork-order-pc",
     "name": "SDKWork Order PC",
     "displayName": "SDKWork Order PC",
     "description": "Order capability PC surface for buyer and operator workflows.",
@@ -13,17 +13,15 @@
       "desktopAppId": "com.sdkwork.order.pc.desktop",
       "containerImage": "registry.sdkwork.com/apps/sdkwork-order-pc"
     },
-    "officialWebsiteUrl": "https://sdkwork.com/apps/sdkwork-order"
+    "officialWebsiteUrl": "https://sdkwork.com/apps/sdkwork-order-pc"
   },
   "backend": {
     "profileKey": "backend-root-admin",
-    "appId": "sdkwork-order",
-    "serviceId": "sdkwork-order",
     "ownerMode": "tenant",
     "grantMode": "current",
     "platform": "WEB",
-    "organizationId": "0",
-    "tenantId": "100001"
+    "tenantId": "100001",
+    "organizationId": "0"
   },
   "runtime": {
     "family": "web",
@@ -44,10 +42,10 @@
   "media": {
     "icons": {
       "primary": {
-        "id": "sdkwork-order-primary-icon",
+        "id": "sdkwork-order-pc-primary-icon",
         "type": "ICON",
         "purpose": "PRIMARY",
-        "url": "https://cdn.sdkwork.com/apps/sdkwork-order/assets/icon-1024.png",
+        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/assets/icon-1024.png",
         "platform": "APP",
         "locale": "en-US",
         "width": 1024,
@@ -68,10 +66,10 @@
     },
     "screenshots": [
       {
-        "id": "sdkwork-order-web-screenshot",
+        "id": "sdkwork-order-pc-web-screenshot",
         "type": "SCREENSHOT",
         "purpose": "CATALOG_SCREENSHOT",
-        "url": "https://cdn.sdkwork.com/apps/sdkwork-order/media/web-screenshot.png",
+        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/media/web-screenshot.png",
         "platform": "WEB",
         "locale": "en-US",
         "deviceClass": "BROWSER",
@@ -92,10 +90,10 @@
     ],
     "previews": [
       {
-        "id": "sdkwork-order-catalog-preview",
+        "id": "sdkwork-order-pc-catalog-preview",
         "type": "PREVIEW_IMAGE",
         "purpose": "CATALOG_PREVIEW",
-        "url": "https://cdn.sdkwork.com/apps/sdkwork-order/media/preview-cover.png",
+        "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/media/preview-cover.png",
         "platform": "WEB",
         "locale": "en-US",
         "width": 1600,
@@ -134,25 +132,25 @@
       "name": "sdkwork-skills-app"
     },
     "stores": [],
-    "storeUrl": "https://sdkwork.com/apps/sdkwork-order"
+    "storeUrl": "https://sdkwork.com/apps/sdkwork-order-pc"
   },
   "artifacts": {
     "installConfig": {
       "defaultPackageId": "linux-x64-standalone-server-tar-gz",
-      "installCommand": "sdkwork install sdkwork-order",
-      "launchCommand": "sdkwork open sdkwork-order",
-      "uninstallCommand": "sdkwork uninstall sdkwork-order",
+      "installCommand": "sdkwork install sdkwork-order-pc",
+      "launchCommand": "sdkwork open sdkwork-order-pc",
+      "uninstallCommand": "sdkwork uninstall sdkwork-order-pc",
       "packages": [
         {
           "id": "linux-x64-standalone-server-tar-gz",
-          "name": "Sdkwork Order standalone server archive",
+          "name": "Sdkwork Order Pc standalone server archive",
           "sourceType": "BINARY_URL",
           "packageFormat": "TAR_GZ",
           "platform": "API",
-          "url": "https://cdn.sdkwork.com/apps/sdkwork-order/STABLE/0.1.0/linux-x64-standalone-server-tar-gz-0.1.0.tar.gz",
+          "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/STABLE/0.1.0/linux-x64-standalone-server-tar-gz-0.1.0.tar.gz",
           "architecture": "x64",
           "checksumAlgorithm": "SHA-256",
-          "checksum": "b315a5ff0be43b307e1829ed9028809f322a6664a08878f8ac7895c4ead0f4fb",
+          "checksum": "da90a2fffc945d947ea11f70405759d39cf8ea110b6dd2cbe2da6897c91a8408",
           "deploymentProfile": "standalone",
           "runtimeTarget": "server",
           "profileBinding": "fixed",
@@ -163,14 +161,14 @@
         },
         {
           "id": "linux-x64-cloud-server-tar-gz",
-          "name": "Sdkwork Order cloud server archive",
+          "name": "Sdkwork Order Pc cloud server archive",
           "sourceType": "BINARY_URL",
           "packageFormat": "TAR_GZ",
           "platform": "API",
-          "url": "https://cdn.sdkwork.com/apps/sdkwork-order/STABLE/0.1.0/linux-x64-cloud-server-tar-gz-0.1.0.tar.gz",
+          "url": "https://cdn.sdkwork.com/apps/sdkwork-order-pc/STABLE/0.1.0/linux-x64-cloud-server-tar-gz-0.1.0.tar.gz",
           "architecture": "x64",
           "checksumAlgorithm": "SHA-256",
-          "checksum": "1c12876dbe76b26bc735ff9c549ae9c651987b813180d47e9a38021b199dfd7e",
+          "checksum": "8dc86056a04cc8988963c9827b419f165c676d6de857fefe4be37942bb2e7b73",
           "deploymentProfile": "cloud",
           "runtimeTarget": "server",
           "profileBinding": "fixed",
