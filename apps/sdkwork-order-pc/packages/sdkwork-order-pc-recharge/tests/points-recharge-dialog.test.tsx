@@ -48,21 +48,47 @@ describe("SDKWork points recharge surfaces", () => {
     fireEvent.click(await screen.findByRole("button", { name: /750/ }));
     fireEvent.click(screen.getByRole("button", { name: "同意并支付" }));
 
-    await waitFor(() => expect(createOrder).toHaveBeenCalledWith({
+    await waitFor(() => expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
       packageId: "recharge-750",
       paymentMethod: "wechat_pay",
-    }));
+    })));
     expect(await screen.findByRole("img", { name: "请扫码完成支付" })).toHaveAttribute(
       "src",
       "data:image/png;base64,recharge-qr",
     );
     expect(screen.getByRole("dialog", { name: "Buy Compute Credits" })).toBeInTheDocument();
-    expect(screen.getAllByText("CNY 75.00")).toHaveLength(1);
-    expect(document.querySelector(".sdkwork-points-recharge-dialog__payment")).not.toHaveTextContent("CNY 75.00");
+    expect(screen.getAllByText("¥75.00")).toHaveLength(1);
+    expect(document.querySelector(".sdkwork-points-recharge-dialog__payment")).not.toHaveTextContent("¥75.00");
     const qrAgreement = screen.getByText("您已同意《积分充值服务协议》");
     expect(qrAgreement).toBeInTheDocument();
     expect(qrAgreement.querySelector(".sdkwork-points-recharge-dialog__agreement-check svg")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "同意并支付" })).not.toBeInTheDocument();
+    view.unmount();
+  });
+
+  it("shows the package price in major currency units instead of dividing it again", async () => {
+    // `GET /app/v3/api/recharges/packages` already serializes the stored minor
+    // units as a major amount, so a 500-point package priced at 50.00 CNY (the
+    // platform 1 CNY = 10 points ratio) must render ¥50.00, never ¥0.50.
+    const service: SdkworkPointsRechargeService = {
+      listPackages: vi.fn().mockResolvedValue([
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
+        { id: "recharge-9000", bonusPoints: 10, currencyCode: "CNY", grantAmount: 9000, points: 9_000_000_000, priceAmount: 899 },
+      ]),
+      createOrder: vi.fn(),
+      getOrderStatus: vi.fn(),
+    };
+
+    const view = render(
+      <SdkworkThemeProvider defaultTheme="light">
+        <SdkworkPointsRechargeDialog isOpen onClose={vi.fn()} service={service} />
+      </SdkworkThemeProvider>,
+    );
+
+    expect(await screen.findByText("¥50.00")).toBeInTheDocument();
+    expect(screen.getByText("¥899.00")).toBeInTheDocument();
+    expect(screen.queryByText("¥0.50")).not.toBeInTheDocument();
+    expect(screen.queryByText("¥8.99")).not.toBeInTheDocument();
     view.unmount();
   });
 
@@ -147,10 +173,10 @@ describe("SDKWork points recharge surfaces", () => {
     const acceptedAgreement = screen.getByText("您已同意《积分充值服务协议》");
     expect(acceptedAgreement).toBeInTheDocument();
     expect(acceptedAgreement.querySelector(".sdkwork-points-recharge-dialog__agreement-check svg")).toBeInTheDocument();
-    await waitFor(() => expect(createOrder).toHaveBeenNthCalledWith(2, {
+    await waitFor(() => expect(createOrder).toHaveBeenNthCalledWith(2, expect.objectContaining({
       packageId: "recharge-500",
       paymentMethod: "wechat_pay",
-    }));
+    })));
     view.unmount();
   });
 
@@ -224,7 +250,7 @@ describe("SDKWork points recharge surfaces", () => {
 
       expect(screen.getByRole("timer")).toHaveTextContent("Order expires in00:02");
       expect(screen.getByRole("img", { name: "Scan to complete payment" })).toBeInTheDocument();
-      expect(screen.getAllByText("CNY 50.00")).toHaveLength(1);
+      expect(screen.getAllByText("¥50.00")).toHaveLength(1);
       fireEvent.click(screen.getByRole("button", { name: /500/ }));
       expect(createOrder).toHaveBeenCalledTimes(1);
 
@@ -360,10 +386,10 @@ describe("SDKWork points recharge surfaces", () => {
     await waitFor(() => expect(service.getOrderStatus).toHaveBeenCalledWith("recharge-order-750"));
 
     fireEvent.click(screen.getByRole("button", { name: /500/ }));
-    await waitFor(() => expect(service.createOrder).toHaveBeenLastCalledWith({
+    await waitFor(() => expect(service.createOrder).toHaveBeenLastCalledWith(expect.objectContaining({
       packageId: "recharge-500",
       paymentMethod: "wechat_pay",
-    }));
+    })));
     await act(async () => {
       resolveStatus({
         amountCny: 75,
@@ -414,10 +440,10 @@ describe("SDKWork points recharge surfaces", () => {
     fireEvent.click(screen.getByRole("button", { name: "同意并支付" }));
 
     expect(await screen.findByRole("img", { name: "请扫码完成支付" })).toBeInTheDocument();
-    expect(service.createOrder).toHaveBeenCalledWith({
+    expect(service.createOrder).toHaveBeenCalledWith(expect.objectContaining({
       packageId: "recharge-500",
       paymentMethod: "wechat_pay",
-    });
+    }));
     view.unmount();
   });
 });

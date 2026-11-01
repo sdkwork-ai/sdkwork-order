@@ -21,7 +21,7 @@ import {
   type SdkworkPointsRechargeService,
   createSdkworkIdempotencyParams,
 } from "@sdkwork/order-service";
-import { formatMoneyMinorUnits } from "@sdkwork/utils/money";
+import { formatMoney } from "@sdkwork/utils/money";
 import "./points-recharge-dialog.css";
 
 export interface SdkworkPointsRechargeDialogCopy {
@@ -398,7 +398,7 @@ function SdkworkPointsRechargeExperience({
                       type="button"
                     >
                       <span className="sdkwork-points-recharge-dialog__points"><Sparkles aria-hidden="true" />{sdkworkTokenBankPointsMicroToDecimal(item.points)} <small>{copy.pointsUnit}</small></span>
-                      <span className="sdkwork-points-recharge-dialog__price">{formatMoneyMinorUnits(item.priceAmount, item.currencyCode, "zh-CN", "symbol") ?? (item.currencyCode + " " + item.priceAmount.toFixed(2))}</span>
+                      <span className="sdkwork-points-recharge-dialog__price">{formatMoney(item.priceAmount, item.currencyCode, "zh-CN", "symbol") ?? (item.currencyCode + " " + item.priceAmount.toFixed(2))}</span>
                     </button>
                   );
                 })}

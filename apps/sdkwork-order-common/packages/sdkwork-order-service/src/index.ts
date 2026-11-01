@@ -135,10 +135,21 @@ export interface CreateSdkworkMembershipCheckoutServiceOptions {
 
 export interface SdkworkPointsRechargePackage {
   id: string;
+  /**
+   * Package price in **major** currency units (for example `50` for `¥50.00`),
+   * because `GET /app/v3/api/recharges/packages` serializes the stored minor
+   * units through the major-amount formatter. Render it with `formatMoney`;
+   * `formatMoneyMinorUnits` would divide by 100 a second time and turn a
+   * `¥50.00` package into `¥0.50`.
+   */
   priceAmount: number;
   currencyCode: string;
   bonusPoints: number;
   grantAmount: number;
+  /**
+   * Credited points in micro-points (1 point = 1e6), matching the Token Bank
+   * balance scale; convert for display instead of showing the raw value.
+   */
   points: number;
 }
 
