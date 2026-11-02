@@ -21,9 +21,24 @@
     "color": "#6b7280",
     "selectedColor": "#2f54eb",
     "list": [
-      { "pagePath": "pages/orders/index", "text": "订单" },
-      { "pagePath": "pages/recharge/index", "text": "充值" },
-      { "pagePath": "pages/profile/index", "text": "我的" }
+      {
+        "pagePath": "pages/orders/index",
+        "text": "订单",
+        "iconPath": "assets/tabbar/orders-outline.png",
+        "selectedIconPath": "assets/tabbar/orders-filled.png"
+      },
+      {
+        "pagePath": "pages/recharge/index",
+        "text": "充值",
+        "iconPath": "assets/tabbar/recharge-outline.png",
+        "selectedIconPath": "assets/tabbar/recharge-filled.png"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的",
+        "iconPath": "assets/tabbar/profile-outline.png",
+        "selectedIconPath": "assets/tabbar/profile-filled.png"
+      }
     ]
   },
   "sitemapLocation": "sitemap.json"

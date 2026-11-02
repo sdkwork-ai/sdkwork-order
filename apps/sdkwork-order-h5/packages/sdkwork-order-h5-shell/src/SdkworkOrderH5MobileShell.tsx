@@ -99,7 +99,11 @@ export function SdkworkOrderH5MobileShell({ children, runtime }: SdkworkOrderH5M
                 type="button"
               >
                 <span className="sdk-h5-tab-icon">
-                  <Icon aria-hidden="true" size={22} />
+                  <Icon
+                    aria-hidden="true"
+                    size={22}
+                    fill={active ? "currentColor" : "none"}
+                  />
                 </span>
                 {t(tab.labelKey, tab.label)}
               </button>
