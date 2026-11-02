@@ -1698,9 +1698,9 @@ async fn insert_account_value_order(
         r#"
         INSERT INTO commerce_order_item
             (id, tenant_id, order_id, sku_id, sku_snapshot_json, title, quantity, unit_price_amount,
-             total_amount, fulfillment_status, refund_status, created_at)
+             total_amount, fulfillment_status, refund_status, created_at, organization_id)
         VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, $7, $8, 'unfulfilled', 'none', $9)
+            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, $7, $8, 'unfulfilled', 'none', $9, $10)
         "#,
     )
     .bind(&command.order_item_id)
@@ -1716,6 +1716,7 @@ async fn insert_account_value_order(
     .bind(command.amount.as_str())
     .bind(command.amount.as_str())
     .bind(&command.requested_at)
+    .bind(&organization_id)
     .execute(&mut **tx)
     .await
     .map_err(|error| store_error("failed to insert account value order item", error))?;
@@ -1800,9 +1801,9 @@ async fn insert_coupon_recharge_order(
         r#"
         INSERT INTO commerce_order_item
             (id, tenant_id, order_id, sku_id, sku_snapshot_json, title, quantity, unit_price_amount,
-             total_amount, fulfillment_status, refund_status, created_at)
+             total_amount, fulfillment_status, refund_status, created_at, organization_id)
         VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, $7, $8, 'unfulfilled', 'none', $9)
+            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, $7, $8, 'unfulfilled', 'none', $9, $10)
         "#,
     )
     .bind(&command.order_item_id)
@@ -1814,6 +1815,7 @@ async fn insert_coupon_recharge_order(
     .bind(command.amount.as_str())
     .bind(command.amount.as_str())
     .bind(&now)
+    .bind(&organization_id)
     .execute(&mut **tx)
     .await
     .map_err(|error| store_error("failed to insert coupon recharge order item", error))?;
