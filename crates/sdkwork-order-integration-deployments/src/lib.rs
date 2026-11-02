@@ -80,7 +80,7 @@ async fn fulfill_postgres(
         .map_err(store_error("begin app template fulfillment"))?;
 
     let order = sqlx::query(
-        "SELECT owner_user_id, COALESCE(subject, '') AS subject,
+        "SELECT owner_user_id, organization_id, COALESCE(subject, '') AS subject,
                 COALESCE(payment_status, '') AS payment_status,
                 COALESCE(fulfillment_status, '') AS fulfillment_status
            FROM commerce_order
@@ -153,17 +153,24 @@ async fn fulfill_postgres(
     }
 
     let now = sdkwork_order_service::canonical_now_timestamp();
+    let order_organization_id = order
+        .try_get::<Option<String>, _>("organization_id")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "0".to_string());
     let transitioned = sqlx::query(
         "UPDATE commerce_order
             SET fulfillment_status = $1, updated_at = CAST($2 AS TIMESTAMPTZ)
           WHERE tenant_id = CAST($3 AS TEXT)
             AND id = CAST($4 AS TEXT)
+            AND organization_id = CAST($5 AS TEXT)
             AND COALESCE(fulfillment_status, '') IS DISTINCT FROM $1",
     )
     .bind(FULFILLED)
     .bind(&now)
     .bind(&request.tenant_id)
     .bind(&request.order_id)
+    .bind(&order_organization_id)
     .execute(&mut *tx)
     .await
     .map_err(store_error("advance app template order fulfillment"))?
@@ -173,11 +180,13 @@ async fn fulfill_postgres(
     sqlx::query(
         "UPDATE commerce_order_item
             SET fulfillment_status = $1
-          WHERE tenant_id = CAST($2 AS TEXT) AND order_id = CAST($3 AS TEXT)",
+          WHERE tenant_id = CAST($2 AS TEXT) AND order_id = CAST($3 AS TEXT)
+            AND organization_id = CAST($4 AS TEXT)",
     )
     .bind(FULFILLED)
     .bind(&request.tenant_id)
     .bind(&request.order_id)
+    .bind(&order_organization_id)
     .execute(&mut *tx)
     .await
     .map_err(store_error("advance app template order items"))?;

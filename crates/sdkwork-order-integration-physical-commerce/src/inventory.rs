@@ -123,9 +123,10 @@ pub(crate) async fn consume_order_inventory(
                 ));
             }
             consume_stock_postgres(&mut tx, row).await?;
-            sqlx::query("UPDATE commerce_inventory_reservation SET status = 'consumed', consumed_quantity = quantity, consumed_at = $1, updated_at = $2, idempotency_key = $3 WHERE id = $4 AND status = 'reserved'")
+            sqlx::query("UPDATE commerce_inventory_reservation SET status = 'consumed', consumed_quantity = quantity, consumed_at = $1, updated_at = $2, idempotency_key = $3 WHERE id = $4 AND organization_id = $5 AND status = 'reserved'")
                     .bind(now_string()).bind(now_string()).bind(idempotency_key)
                     .bind(text_postgres(row, "id"))
+                    .bind(text_postgres(row, "organization_id"))
                     .execute(&mut *tx).await.map_err(store_error("consume inventory reservation"))?;
         }
     }
@@ -175,8 +176,9 @@ async fn reserve_postgres(
             .map_err(store_error("select reservable inventory stock"))?
             .ok_or_else(|| CommerceServiceError::conflict("physical SKU inventory is insufficient"))?;
         let stock_id = text_postgres(&stock, "id");
-        let updated = sqlx::query("UPDATE commerce_inventory_stock SET available_quantity = available_quantity - $1, reserved_quantity = reserved_quantity + $1, version = version + 1, updated_at = $2 WHERE id = $3 AND available_quantity - safety_stock_quantity >= $1")
+        let updated = sqlx::query("UPDATE commerce_inventory_stock SET available_quantity = available_quantity - $1, reserved_quantity = reserved_quantity + $1, version = version + 1, updated_at = $2 WHERE id = $3 AND tenant_id = $4 AND organization_id = $5 AND available_quantity - safety_stock_quantity >= $1")
             .bind(line.quantity).bind(now_string()).bind(&stock_id)
+            .bind(&request.tenant_id).bind(&request.merchant_organization_id)
             .execute(&mut *tx).await.map_err(store_error("reserve inventory stock"))?;
         if updated.rows_affected() != 1 {
             return Err(CommerceServiceError::conflict(
@@ -230,8 +232,9 @@ async fn release_postgres(
                 ));
             }
             release_stock_postgres(&mut tx, row).await?;
-            sqlx::query("UPDATE commerce_inventory_reservation SET status = 'released', released_quantity = quantity, release_reason_code = $1, released_at = $2, updated_at = $3, idempotency_key = $4 WHERE id = $5 AND status = 'reserved'")
+            sqlx::query("UPDATE commerce_inventory_reservation SET status = 'released', released_quantity = quantity, release_reason_code = $1, released_at = $2, updated_at = $3, idempotency_key = $4 WHERE id = $5 AND organization_id = $6 AND status = 'reserved'")
                 .bind(&request.reason_code).bind(now_string()).bind(now_string()).bind(&request.idempotency_key).bind(text_postgres(row, "id"))
+                .bind(text_postgres(row, "organization_id"))
                 .execute(&mut *tx).await.map_err(store_error("release inventory reservation"))?;
         }
     }
@@ -282,8 +285,9 @@ async fn restock_postgres(
                 ));
             }
             restock_stock_postgres(&mut tx, row).await?;
-            sqlx::query("UPDATE commerce_inventory_reservation SET status = 'restocked', updated_at = $1, idempotency_key = $2 WHERE id = $3 AND status = 'consumed'")
+            sqlx::query("UPDATE commerce_inventory_reservation SET status = 'restocked', updated_at = $1, idempotency_key = $2 WHERE id = $3 AND organization_id = $4 AND status = 'consumed'")
                 .bind(now_string()).bind(&request.idempotency_key).bind(text_postgres(row, "id"))
+                .bind(text_postgres(row, "organization_id"))
                 .execute(&mut *tx).await.map_err(store_error("restock inventory reservation"))?;
         }
     }

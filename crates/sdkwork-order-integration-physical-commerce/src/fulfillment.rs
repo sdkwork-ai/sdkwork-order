@@ -98,14 +98,19 @@ async fn fulfill_postgres(
             .unwrap_or_default(),
     )?;
     let now = now_string();
+    let order_organization_id = order
+        .try_get::<Option<String>, _>("organization_id")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "0".to_string());
     sqlx::query("INSERT INTO commerce_fulfillment_order (id, tenant_id, organization_id, fulfillment_no, order_id, fulfillment_type, status, address_snapshot_id, provider_code, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, 'physical_shipment', 'awaiting_shipment', $6, 'merchant', $7, $7)")
-        .bind(&fulfillment_id).bind(&request.tenant_id).bind(order.try_get::<Option<String>, _>("organization_id").ok().flatten())
+        .bind(&fulfillment_id).bind(&request.tenant_id).bind(&order_organization_id)
         .bind(&fulfillment_id).bind(&request.order_id).bind(format!("address-{}", request.order_id)).bind(&now)
         .execute(&mut *tx).await.map_err(store_error("create physical fulfillment"))?;
-    sqlx::query("UPDATE commerce_order SET fulfillment_status = 'awaiting_shipment', updated_at = CAST($1 AS TIMESTAMPTZ) WHERE tenant_id = $2 AND id = $3 AND payment_status IN ('success', 'succeeded', 'paid')")
-        .bind(&now).bind(&request.tenant_id).bind(&request.order_id).execute(&mut *tx).await.map_err(store_error("advance physical order fulfillment"))?;
-    sqlx::query("UPDATE commerce_order_item SET fulfillment_status = 'awaiting_shipment' WHERE tenant_id = $1 AND order_id = $2")
-        .bind(&request.tenant_id).bind(&request.order_id).execute(&mut *tx).await.map_err(store_error("advance physical order items"))?;
+    sqlx::query("UPDATE commerce_order SET fulfillment_status = 'awaiting_shipment', updated_at = CAST($1 AS TIMESTAMPTZ) WHERE tenant_id = $2 AND id = $3 AND organization_id = $4 AND payment_status IN ('success', 'succeeded', 'paid')")
+        .bind(&now).bind(&request.tenant_id).bind(&request.order_id).bind(&order_organization_id).execute(&mut *tx).await.map_err(store_error("advance physical order fulfillment"))?;
+    sqlx::query("UPDATE commerce_order_item SET fulfillment_status = 'awaiting_shipment' WHERE tenant_id = $1 AND order_id = $2 AND organization_id = $3")
+        .bind(&request.tenant_id).bind(&request.order_id).bind(&order_organization_id).execute(&mut *tx).await.map_err(store_error("advance physical order items"))?;
     tx.commit()
         .await
         .map_err(store_error("commit physical fulfillment"))?;
