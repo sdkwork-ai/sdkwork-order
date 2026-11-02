@@ -704,12 +704,15 @@ impl PostgresCommerceOrderStore {
             UPDATE commerce_after_sales_request
             SET return_status = 'submitted', updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
+              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $5 IS NULL))
               AND id = CAST($3 AS TEXT)
            "#,
         )
         .bind(&now)
         .bind(&command.tenant_id)
         .bind(&command.after_sales_request_id)
+        .bind(&command.organization_id)
+        .bind(&command.organization_id)
         .execute(&mut *tx)
         .await
         .map_err(|error| store_error("failed to update after sales return status", error))?;
