@@ -12,6 +12,7 @@ import { OrderRechargesApi, createOrderRechargesApi } from './api/order-recharge
 import { OrderMembershipsApi, createOrderMembershipsApi } from './api/order-memberships';
 import { OrderWithdrawalsApi, createOrderWithdrawalsApi } from './api/order-withdrawals';
 import { OrderAppTemplatesApi, createOrderAppTemplatesApi } from './api/order-app-templates';
+import { OrderDemandClaimsApi, createOrderDemandClaimsApi } from './api/order-demand-claims';
 
 export class SdkworkAppClient {
   private httpClient: HttpClient;
@@ -26,6 +27,7 @@ export class SdkworkAppClient {
   public readonly orderMemberships: OrderMembershipsApi;
   public readonly orderWithdrawals: OrderWithdrawalsApi;
   public readonly orderAppTemplates: OrderAppTemplatesApi;
+  public readonly orderDemandClaims: OrderDemandClaimsApi;
 
   constructor(config: SdkworkAppConfig) {
     this.httpClient = createHttpClient(config);
@@ -48,6 +50,8 @@ export class SdkworkAppClient {
     this.orderWithdrawals = createOrderWithdrawalsApi(this.httpClient);
 
     this.orderAppTemplates = createOrderAppTemplatesApi(this.httpClient);
+
+    this.orderDemandClaims = createOrderDemandClaimsApi(this.httpClient);
   }
   setAuthToken(token: string): this {
     this.httpClient.setAuthToken(token);

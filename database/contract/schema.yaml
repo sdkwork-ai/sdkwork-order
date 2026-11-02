@@ -78,3 +78,12 @@ tables:
   - name: commerce_token_bank_plan
     write_owner: sdkwork-order
     reference_only: false
+  - name: commerce_idempotency_key
+    lifecycle_status: active
+    owner: sdkwork-order
+  - name: commerce_demand_claim
+    lifecycle_status: active
+    owner: sdkwork-order
+  - name: commerce_demand_claim_event
+    lifecycle_status: active
+    owner: sdkwork-order

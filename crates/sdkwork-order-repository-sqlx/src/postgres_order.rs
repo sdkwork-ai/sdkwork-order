@@ -884,7 +884,9 @@ impl PostgresCommerceOrderStore {
         )
         .bind(format!("{order_id}-amount"))
         .bind(&command.tenant_id)
-        .bind(normalize_organization_scope(command.organization_id.as_deref()))
+        .bind(normalize_organization_scope(
+            command.organization_id.as_deref(),
+        ))
         .bind(&order_id)
         .bind(&original_amount)
         .bind(&discount_amount)

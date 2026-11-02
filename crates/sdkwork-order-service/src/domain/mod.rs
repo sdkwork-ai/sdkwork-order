@@ -1,5 +1,6 @@
 mod account_value;
 mod app_template;
+mod demand_claim;
 mod fulfillment;
 mod membership;
 mod recharge;
@@ -14,6 +15,18 @@ pub use app_template::{
     app_template_order_status_label, CreateAppTemplateOrderOutcome,
     APP_TEMPLATE_ORDER_STATUS_CLOSED, APP_TEMPLATE_ORDER_STATUS_PAID,
     APP_TEMPLATE_ORDER_STATUS_PENDING_PAYMENT, APP_TEMPLATE_ORDER_SUBJECT,
+};
+pub use demand_claim::{
+    normalize_quote, parse_status_or_default, quote_major_to_minor, quote_minor_to_major,
+    validate_demand_claim_command, CreateDemandClaimCommand, DemandClaimAction,
+    DemandClaimActionCommand, DemandClaimActorType, DemandClaimEventInsert, DemandClaimEventView,
+    DemandClaimInsert, DemandClaimListPage, DemandClaimListQuery, DemandClaimMilestone,
+    DemandClaimStatisticsView, DemandClaimStatus, DemandClaimStatusGroup,
+    DemandClaimTransitionPatch, DemandClaimView, DemandClaimViewerRole,
+    DEMAND_CLAIM_PROPOSAL_MAX_LEN, DEMAND_CLAIM_QUOTE_MAX, DEMAND_CLAIM_STATUS_ACCEPTED,
+    DEMAND_CLAIM_STATUS_CANCELLED, DEMAND_CLAIM_STATUS_COMPLETED, DEMAND_CLAIM_STATUS_DELIVERED,
+    DEMAND_CLAIM_STATUS_IN_DELIVERY, DEMAND_CLAIM_STATUS_REJECTED, DEMAND_CLAIM_STATUS_SHORTLISTED,
+    DEMAND_CLAIM_STATUS_SUBMITTED, DEMAND_CLAIM_STATUS_WITHDRAWN,
 };
 pub use fulfillment::{FulfillPointsRechargeOrderOutcome, PointsRechargeFulfillmentContext};
 pub use membership::CreateMembershipOrderOutcome;

@@ -512,14 +512,21 @@ async fn insert_checkout_session(
     )
     .bind(session_id)
     .bind(&command.tenant_id)
-    .bind(normalize_organization_scope(command.organization_id.as_deref()))
+    .bind(normalize_organization_scope(
+        command.organization_id.as_deref(),
+    ))
     .bind(&command.request_no)
     .bind(&command.owner_user_id)
     .bind(&command.currency_code)
     .bind(&request_hash)
     .bind(&command.request_no)
     .bind(&command.idempotency_key)
-    .bind(command.physical_checkout.as_ref().map(|value| value.shop_id.as_str()))
+    .bind(
+        command
+            .physical_checkout
+            .as_ref()
+            .map(|value| value.shop_id.as_str()),
+    )
     .bind(
         command
             .physical_checkout

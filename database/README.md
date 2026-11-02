@@ -15,12 +15,14 @@ schema is provisioned from **baseline plus migrations** (`database.manifest.json
    `commerce_order_cancellation` are created by
    `migrations/postgres/0004_order_lifecycle_tables.up.sql`, not by the
    baseline — a fresh deployment runs both, in order.
-2. **Migrations** — `database/migrations/postgres/0004`–`0017` are applied
+2. **Migrations** — `database/migrations/postgres/0004`–`0020` are applied
    after the baseline on every fresh deployment. New schema changes land here
    as `00NN_<name>.up.sql` files with the `sdkwork:migration` header
    (`reversible: false` / forward-fix policy; there are no down migrations).
+   `0019_demand_claims` adds the demand-claim (抢单) record and its event
+   timeline; `0020_demand_claim_app_forms` adds the multi-form snapshot.
 3. **Contract** — `database/contract/table-registry.json` and
-   `database/contract/schema.yaml` register every order-owned table (23) and
+   `database/contract/schema.yaml` register every order-owned table (26) and
    are the DDL authority referenced by `TECH_ARCHITECTURE.md`.
 4. **Drift** — run `pnpm db:drift:check` before release.
 

@@ -139,6 +139,24 @@
       "owner": "sdkwork-order",
       "compliance_level": "L2",
       "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_idempotency_key",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_demand_claim",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_demand_claim_event",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
     }
   ]
 }

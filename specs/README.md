@@ -10,6 +10,7 @@ Local specification index for the order capability (unified `commerce_order`, in
 | [ACCOUNT_VALUE_ORDER_SPEC.md](./ACCOUNT_VALUE_ORDER_SPEC.md) | Order-owned Token Bank recharge, plans, coupon redemption, refund, and withdrawal orchestration |
 | [RECHARGE_ORDER_SPEC.md](./RECHARGE_ORDER_SPEC.md) | Recharge packages, recharge orders, unified order center |
 | [APP_TEMPLATE_ORDER_SPEC.md](./APP_TEMPLATE_ORDER_SPEC.md) | Published app-template purchase: order, payment, and the settled-order entitlement |
+| [DEMAND_CLAIM_SPEC.md](./DEMAND_CLAIM_SPEC.md) | Demand claim (抢单) lifecycle, delivery states, My Claims contract, and the demand → claim → order boundary |
 | [commerce-recharge.spec.json](./commerce-recharge.spec.json) | Machine-readable recharge contract + migration from payment |
 | [commerce-checkout-topology.spec.json](./commerce-checkout-topology.spec.json) | Order ↔ payment dependency and checkout flows |
 | [commerce-payment-webhook.spec.json](./commerce-payment-webhook.spec.json) | Order-owned PSP webhooks and in-process settlement |

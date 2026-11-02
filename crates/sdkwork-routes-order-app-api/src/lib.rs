@@ -3,6 +3,7 @@ pub mod api_response;
 pub mod app_template_router;
 pub mod checkout_router;
 pub mod command_headers;
+pub mod demand_claim_router;
 pub mod fulfillment_router;
 pub mod http_route_manifest;
 pub mod membership_router;
@@ -39,6 +40,7 @@ pub use checkout_router::{
     app_checkout_router_with_postgres_pool, build_app_checkout_router,
     build_app_checkout_router_with_integrations, CommerceCheckoutFuture, CommerceCheckoutStore,
 };
+pub use demand_claim_router::app_demand_claim_router_with_postgres_pool;
 pub use fulfillment_router::{
     app_fulfillment_router_with_postgres_pool, build_app_fulfillment_router,
     CommerceFulfillmentFuture, CommerceFulfillmentStore,

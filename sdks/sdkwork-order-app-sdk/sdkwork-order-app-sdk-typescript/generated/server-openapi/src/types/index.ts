@@ -46,6 +46,16 @@ export type { OrderPaymentSuccessResponse } from './order-payment-success-respon
 export type { SdkWorkListResponse } from './sdk-work-list-response';
 export type { RefundRequestCreateCommand } from './refund-request-create-command';
 export type { WithdrawalRequestCreateCommand } from './withdrawal-request-create-command';
+export type { DemandClaimCreateCommand } from './demand-claim-create-command';
+export type { DemandClaimActionCommand } from './demand-claim-action-command';
+export type { DemandClaim } from './demand-claim';
+export type { DemandClaimEvent } from './demand-claim-event';
+export type { DemandClaimStatistics } from './demand-claim-statistics';
+export type { DemandClaimResponse } from './demand-claim-response';
+export type { DemandClaimCreateResponse } from './demand-claim-create-response';
+export type { DemandClaimListResponse } from './demand-claim-list-response';
+export type { DemandClaimEventListResponse } from './demand-claim-event-list-response';
+export type { DemandClaimStatisticsResponse } from './demand-claim-statistics-response';
 export type { AfterSalesRequestsCreateResponse201 } from './after-sales-requests-create-response201';
 export type { AfterSalesRequestsRetrieveResponse } from './after-sales-requests-retrieve-response';
 export type { AfterSalesRequestsUpdateResponse } from './after-sales-requests-update-response';

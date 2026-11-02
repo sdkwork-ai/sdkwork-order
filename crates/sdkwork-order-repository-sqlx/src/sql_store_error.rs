@@ -10,7 +10,7 @@ pub fn map_sql_store_error(context: &str, error: impl std::fmt::Display) -> Comm
     CommerceServiceError::storage(message)
 }
 
-pub fn map_sqlx_store_error(context: &str, error: sqlx::Error) -> CommerceServiceError {
+pub(crate) fn map_sqlx_store_error(context: &str, error: sqlx::Error) -> CommerceServiceError {
     if is_sqlx_unique_violation(&error) {
         return CommerceServiceError::conflict(format!("{context}: duplicate request"));
     }

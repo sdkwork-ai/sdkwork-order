@@ -27,7 +27,7 @@ client.setAuthToken('your-auth-token');
 client.setAccessToken('your-access-token');
 
 // Use the SDK
-const result = await client.orderOrders.orders.statistics.retrieve();
+const result = await client.orderDemandClaims.demandClaims.statistics.retrieve();
 ```
 
 ## Authentication
@@ -64,6 +64,7 @@ const client = new SdkworkAppClient({
 - `client.orderMemberships` - order_memberships API
 - `client.orderWithdrawals` - order_withdrawals API
 - `client.orderAppTemplates` - order_app_templates API
+- `client.orderDemandClaims` - order_demand_claims API
 
 ## Usage Examples
 
@@ -175,13 +176,20 @@ const params = {
 const result = await client.orderAppTemplates.appTemplateOrders.list(params);
 ```
 
+### order_demand_claims
+
+```typescript
+// Demand claim tab counters
+const result = await client.orderDemandClaims.demandClaims.statistics.retrieve();
+```
+
 ## Error Handling
 
 ```typescript
 import { SdkworkAppClient, NetworkError, TimeoutError, AuthenticationError } from '@sdkwork/order-app-sdk';
 
 try {
-  const result = await client.orderOrders.orders.statistics.retrieve();
+  const result = await client.orderDemandClaims.demandClaims.statistics.retrieve();
 } catch (error) {
   if (error instanceof AuthenticationError) {
     console.error('Authentication failed:', error.message);

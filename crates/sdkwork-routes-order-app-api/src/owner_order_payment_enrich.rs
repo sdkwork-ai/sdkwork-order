@@ -138,7 +138,11 @@ fn should_use_development_cashier_fallback(
     error: &CommerceServiceError,
     environment: Option<String>,
 ) -> bool {
+    // Only a missing provider configuration may fall back to the development
+    // cashier; a configured provider whose transport failed must surface the
+    // real payment error instead of silently simulating a payment.
     error.code() == "provider-unavailable"
+        && error.message().contains("is not configured")
         && matches!(
             environment.as_deref(),
             Some("development" | "dev" | "local" | "test")

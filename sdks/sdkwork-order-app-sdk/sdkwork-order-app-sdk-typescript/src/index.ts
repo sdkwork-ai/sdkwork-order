@@ -30,6 +30,7 @@ export * from '../generated/server-openapi/src/auth';
 export class SdkworkAppClient extends GeneratedSdkworkAppClient {
   public readonly afterSales: GeneratedSdkworkAppClient["orderAfterSales"]["afterSales"];
   public readonly checkout: GeneratedSdkworkAppClient["orderCheckout"]["checkout"];
+  public readonly demandClaims: GeneratedSdkworkAppClient["orderDemandClaims"]["demandClaims"];
   public readonly fulfillments: GeneratedSdkworkAppClient["orderFulfillments"]["fulfillments"];
   public readonly memberships: GeneratedSdkworkAppClient["orderMemberships"]["memberships"];
   public readonly orders: GeneratedSdkworkAppClient["orderOrders"]["orders"];
@@ -42,6 +43,7 @@ export class SdkworkAppClient extends GeneratedSdkworkAppClient {
     super(config);
     this.afterSales = this.orderAfterSales.afterSales;
     this.checkout = this.orderCheckout.checkout;
+    this.demandClaims = this.orderDemandClaims.demandClaims;
     this.fulfillments = this.orderFulfillments.fulfillments;
     this.memberships = this.orderMemberships.memberships;
     this.orders = this.orderOrders.orders;

@@ -1,44 +1,28 @@
-name: verify
+name: Verify Application
 
+# Thin verification entrypoint. Runner setup, dependency checkouts, toolchain
+# versions, and the install command come from the reusable SDKWork CI workflow
+# and `agent.workflow.json`; this file only selects the triggers and the gate
+# scripts. Never add inline setup, install, or gate commands here — declare them
+# in `agent.workflow.json` or the repository's package scripts instead.
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: sdkwork_ai_test
-          POSTGRES_PASSWORD: order
-          POSTGRES_DB: sdkwork_ai_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U sdkwork_ai_test -d sdkwork_ai_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      SDKWORK_DATABASE_TEST_POSTGRES_URL: postgres://sdkwork_ai_test:order@localhost:5432/sdkwork_ai_test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Verify workspace
-        run: pnpm verify
-      - name: Postgres repository parity
-        run: pnpm test:postgres:required
+    uses: sdkwork-ai/sdkwork-github-workflow/.github/workflows/sdkwork-ci.yml@v1
+    with:
+      config_path: agent.workflow.json
+      scripts: verify
+      install_command: pnpm install --frozen-lockfile
+      os_matrix: '["ubuntu-24.04"]'
+      framework_ref: v1
+    secrets:
+      SDKWORK_RELEASE_TOKEN: ${{ secrets.SDKWORK_RELEASE_TOKEN }}

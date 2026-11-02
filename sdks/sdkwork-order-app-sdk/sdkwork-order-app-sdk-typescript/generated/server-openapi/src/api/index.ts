@@ -10,3 +10,4 @@ export { OrderRechargesApi, createOrderRechargesApi } from './order-recharges';
 export { OrderMembershipsApi, createOrderMembershipsApi } from './order-memberships';
 export { OrderWithdrawalsApi, createOrderWithdrawalsApi } from './order-withdrawals';
 export { OrderAppTemplatesApi, createOrderAppTemplatesApi } from './order-app-templates';
+export { OrderDemandClaimsApi, createOrderDemandClaimsApi } from './order-demand-claims';

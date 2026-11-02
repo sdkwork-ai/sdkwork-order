@@ -8,7 +8,7 @@ use crate::refund_webhook_router::app_refund_webhook_router_with_postgres_pool_a
 use crate::web_bootstrap::wrap_router_with_web_framework_from_env;
 use crate::{
     app_after_sales_router_with_postgres_pool, app_app_template_order_router_with_postgres_pool,
-    app_fulfillment_router_with_postgres_pool,
+    app_demand_claim_router_with_postgres_pool, app_fulfillment_router_with_postgres_pool,
     app_membership_order_router_with_postgres_pool_and_payments,
     app_order_router_with_postgres_pool_and_inventory,
     app_payment_webhook_router_with_postgres_pool_and_integrations,
@@ -74,6 +74,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
             pool.clone(),
         ))
         .merge(app_fulfillment_router_with_postgres_pool(pool.clone()))
+        .merge(app_demand_claim_router_with_postgres_pool(pool.clone()))
         .merge(app_shipment_router_with_postgres_pool(pool.clone()))
         .merge(app_after_sales_router_with_postgres_pool(pool.clone()))
         .merge(
