@@ -31,7 +31,7 @@ impl PostgresCommerceOrderStore {
             SELECT status, payment_status
             FROM commerce_order
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $2 IS NULL))
               AND owner_user_id = CAST($3 AS TEXT)
               AND id = CAST($4 AS TEXT)
             LIMIT 1
@@ -79,7 +79,7 @@ impl PostgresCommerceOrderStore {
                 paid_at = COALESCE(paid_at, CAST($1 AS TIMESTAMPTZ)),
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
             "#,
@@ -148,7 +148,7 @@ impl PostgresCommerceOrderStore {
             SELECT status, payment_status
             FROM commerce_order
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $2 IS NULL))
               AND owner_user_id = CAST($3 AS TEXT)
               AND id = CAST($4 AS TEXT)
             LIMIT 1
@@ -195,7 +195,7 @@ impl PostgresCommerceOrderStore {
                 cancelled_at = COALESCE(cancelled_at, CAST($2 AS TIMESTAMPTZ)),
                 updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($3 AS TEXT)
-              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
+              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
               AND id = CAST($6 AS TEXT)
               AND LOWER(COALESCE(status, '')) NOT IN (
@@ -295,7 +295,7 @@ async fn mark_owner_order_refund_status_postgres(
         SELECT refund_status
         FROM commerce_order
         WHERE tenant_id = CAST($1 AS TEXT)
-          AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+          AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $2 IS NULL))
           AND owner_user_id = CAST($3 AS TEXT)
           AND id = CAST($4 AS TEXT)
         LIMIT 1
@@ -333,7 +333,7 @@ async fn mark_owner_order_refund_status_postgres(
         SET refund_status = $1,
             updated_at = CAST($2 AS TIMESTAMPTZ)
         WHERE tenant_id = CAST($3 AS TEXT)
-          AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
+          AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
           AND owner_user_id = CAST($5 AS TEXT)
           AND id = CAST($6 AS TEXT)
         "#,

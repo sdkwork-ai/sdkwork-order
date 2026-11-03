@@ -100,16 +100,16 @@ SELECT
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
-   AND (pi.organization_id IS NULL OR o.organization_id IS NULL OR pi.organization_id = o.organization_id)
+   AND (pi.organization_id = o.organization_id)
    AND pi.owner_user_id = o.owner_user_id
    AND pi.order_id = o.id
 LEFT JOIN commerce_payment_attempt pa
     ON pa.tenant_id = o.tenant_id
-   AND (pa.organization_id IS NULL OR o.organization_id IS NULL OR pa.organization_id = o.organization_id)
+   AND (pa.organization_id = o.organization_id)
    AND pa.owner_user_id = o.owner_user_id
    AND pa.order_id = o.id
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND ($4 IS NULL OR o.status = $4)
   AND ($5 IS NULL OR o.subject = $5)
@@ -137,7 +137,7 @@ WHERE e.tenant_id = CAST($1 AS TEXT)
         FROM commerce_order o
         WHERE o.tenant_id = e.tenant_id
           AND o.id = e.order_id
-          AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id IS NULL AND $3 IS NULL) OR (o.organization_id = '0' AND $3 IS NULL))
+          AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id = '0' AND $3 IS NULL))
           AND o.owner_user_id = CAST($4 AS TEXT)
       )
 ORDER BY e.created_at DESC, e.id DESC
@@ -195,16 +195,16 @@ SELECT
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
-   AND (pi.organization_id IS NULL OR o.organization_id IS NULL OR pi.organization_id = o.organization_id)
+   AND (pi.organization_id = o.organization_id)
    AND pi.owner_user_id = o.owner_user_id
    AND pi.order_id = o.id
 LEFT JOIN commerce_payment_attempt pa
     ON pa.tenant_id = o.tenant_id
-   AND (pa.organization_id IS NULL OR o.organization_id IS NULL OR pa.organization_id = o.organization_id)
+   AND (pa.organization_id = o.organization_id)
    AND pa.owner_user_id = o.owner_user_id
    AND pa.order_id = o.id
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.id = CAST($4 AS TEXT)
 LIMIT 1
@@ -214,7 +214,7 @@ const RETRIEVE_OWNER_ORDER_PAYMENT_STATUS: &str = r#"
 SELECT o.status, o.payment_status
 FROM commerce_order o
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.id = CAST($4 AS TEXT)
 LIMIT 1
@@ -224,7 +224,7 @@ const RETRIEVE_OWNER_ORDER_FULFILLMENT_STATUS: &str = r#"
 SELECT o.fulfillment_status
 FROM commerce_order o
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.id = CAST($4 AS TEXT)
 LIMIT 1
@@ -300,7 +300,7 @@ FROM (
         ) AS payable
     FROM commerce_order o
     WHERE o.tenant_id = CAST($1 AS TEXT)
-      AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+      AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
       AND o.owner_user_id = CAST($3 AS TEXT)
 ) o
 "#;
@@ -316,11 +316,7 @@ SELECT
         SELECT STRING_AGG(DISTINCT c.scene_code, ',')
         FROM commerce_payment_channel c
         WHERE c.tenant_id = m.tenant_id
-          AND (
-                c.organization_id IS NULL
-                OR m.organization_id IS NULL
-                OR c.organization_id = m.organization_id
-              )
+          AND (c.organization_id = m.organization_id)
           AND (
                 c.method_id = m.id
                 OR (c.method_id IS NULL AND c.provider_code = m.provider_code)
@@ -404,7 +400,7 @@ impl PostgresCommerceOrderStore {
             FROM commerce_order o
             WHERE o.tenant_id = CAST($1 AS TEXT)
               AND o.id = CAST($2 AS TEXT)
-              AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id IS NULL AND $3 IS NULL) OR (o.organization_id = '0' AND $3 IS NULL))
+              AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id = '0' AND $3 IS NULL))
             LIMIT 1
             "#,
         )
@@ -711,7 +707,7 @@ impl PostgresCommerceOrderStore {
             FROM commerce_order o
             WHERE o.id = $1
               AND o.tenant_id = CAST($2 AS TEXT)
-              AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id IS NULL AND $4 IS NULL) OR (o.organization_id = '0' AND $4 IS NULL))
+              AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id = '0' AND $4 IS NULL))
               AND o.owner_user_id = CAST($5 AS TEXT)
             FOR UPDATE
             "#,
@@ -1006,7 +1002,7 @@ impl PostgresCommerceOrderStore {
             SELECT status
             FROM commerce_order
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $2 IS NULL))
               AND owner_user_id = CAST($3 AS TEXT)
               AND id = CAST($4 AS TEXT)
             "#,
@@ -1041,7 +1037,7 @@ impl PostgresCommerceOrderStore {
                 cancelled_at = CAST($1 AS TIMESTAMPTZ),
                 updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($3 AS TEXT)
-              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
+              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
               AND id = CAST($6 AS TEXT)
               AND LOWER(COALESCE(status, '')) IN ('draft', 'pending', 'pending_payment', 'unpaid')
@@ -1063,7 +1059,7 @@ impl PostgresCommerceOrderStore {
                 SELECT status
                 FROM commerce_order
                 WHERE tenant_id = CAST($1 AS TEXT)
-                  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+                  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $2 IS NULL))
                   AND owner_user_id = CAST($3 AS TEXT)
                   AND id = CAST($4 AS TEXT)
                 "#,
@@ -1141,7 +1137,7 @@ impl PostgresCommerceOrderStore {
             SELECT status
             FROM commerce_order
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
             FOR UPDATE
@@ -1176,7 +1172,7 @@ impl PostgresCommerceOrderStore {
                 fulfillment_status = 'delivered',
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
               AND id = CAST($6 AS TEXT)
               AND LOWER(COALESCE(status, '')) IN ('paid', 'fulfilled', 'shipped')
@@ -1361,7 +1357,7 @@ async fn load_checkout_session_for_order(
         FROM commerce_checkout_session
         WHERE id = $1
           AND tenant_id = CAST($2 AS TEXT)
-          AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
+          AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
           AND owner_user_id = CAST($5 AS TEXT)
           AND LOWER(COALESCE(status, '')) IN ('active', 'quoted', 'open')
         "#,

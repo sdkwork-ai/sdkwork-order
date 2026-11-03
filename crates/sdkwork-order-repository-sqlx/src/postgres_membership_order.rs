@@ -88,7 +88,7 @@ JOIN membership_package_group g
     ON g.id = p.package_group_id
 WHERE p.tenant_id = '__PLATFORM_TENANT__'
   AND (p.organization_id = '0' OR p.organization_id = '0')
-  AND (g.tenant_id = '__PLATFORM_TENANT__' OR g.tenant_id IS NULL)
+  AND (g.tenant_id = '__PLATFORM_TENANT__')
   AND (g.organization_id = '0' OR g.organization_id = '0')
   AND CAST(p.external_id AS TEXT) = $1
   AND p.status = 'active'
@@ -272,7 +272,7 @@ async fn load_membership_order_in_tx(
                AND CAST(mp.external_id AS TEXT) = $2
                AND mp.status = 'active'
             WHERE o.tenant_id = CAST($4 AS TEXT)
-              AND ((o.organization_id = CAST($5 AS TEXT)) OR (o.organization_id IS NULL AND $5 IS NULL) OR (o.organization_id = '0' AND $5 IS NULL))
+              AND ((o.organization_id = CAST($5 AS TEXT)) OR (o.organization_id = '0' AND $5 IS NULL))
               AND o.owner_user_id = CAST($6 AS TEXT)
               AND o.subject = 'membership'
               AND (

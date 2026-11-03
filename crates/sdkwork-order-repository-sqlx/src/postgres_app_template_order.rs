@@ -108,7 +108,6 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND (
         (o.organization_id = CAST($2 AS TEXT))
         OR (o.organization_id = '0' AND $2 IS NULL)
-        OR (o.organization_id IS NULL AND $2 IS NULL)
       )
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.subject = $4
@@ -157,7 +156,6 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND (
         (o.organization_id = CAST($2 AS TEXT))
         OR (o.organization_id = '0' AND $2 IS NULL)
-        OR (o.organization_id IS NULL AND $2 IS NULL)
       )
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.subject = $4
@@ -349,7 +347,6 @@ impl PostgresCommerceAppTemplateOrderStore {
               AND (
                     (o.organization_id = CAST($2 AS TEXT))
                     OR (o.organization_id = '0' AND $2 IS NULL)
-                    OR (o.organization_id IS NULL AND $2 IS NULL)
                   )
               AND o.owner_user_id = CAST($3 AS TEXT)
               AND o.subject = $4

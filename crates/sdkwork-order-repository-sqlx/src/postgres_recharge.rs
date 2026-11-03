@@ -348,14 +348,14 @@ SELECT
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
-   AND (pi.organization_id IS NULL OR o.organization_id IS NULL OR pi.organization_id = o.organization_id)
+   AND (pi.organization_id = o.organization_id)
    AND pi.order_id = o.id
 LEFT JOIN commerce_payment_attempt pa
     ON pa.tenant_id = o.tenant_id
-   AND (pa.organization_id IS NULL OR o.organization_id IS NULL OR pa.organization_id = o.organization_id)
+   AND (pa.organization_id = o.organization_id)
    AND pa.order_id = o.id
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND (
         o.id = $4
@@ -392,14 +392,14 @@ LEFT JOIN commerce_order_item oi
    AND oi.order_id = o.id
 LEFT JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
-   AND (pi.organization_id IS NULL OR o.organization_id IS NULL OR pi.organization_id = o.organization_id)
+   AND (pi.organization_id = o.organization_id)
    AND pi.order_id = o.id
 LEFT JOIN commerce_payment_attempt pa
     ON pa.tenant_id = o.tenant_id
-   AND (pa.organization_id IS NULL OR o.organization_id IS NULL OR pa.organization_id = o.organization_id)
+   AND (pa.organization_id = o.organization_id)
    AND pa.order_id = o.id
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.id = CAST($4 AS TEXT)
   AND o.subject = 'points_recharge'
@@ -458,14 +458,14 @@ LEFT JOIN commerce_order_item oi
    AND oi.order_id = o.id
 LEFT JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
-   AND (pi.organization_id IS NULL OR o.organization_id IS NULL OR pi.organization_id = o.organization_id)
+   AND (pi.organization_id = o.organization_id)
    AND pi.order_id = o.id
 LEFT JOIN commerce_payment_attempt pa
     ON pa.tenant_id = o.tenant_id
-   AND (pa.organization_id IS NULL OR o.organization_id IS NULL OR pa.organization_id = o.organization_id)
+   AND (pa.organization_id = o.organization_id)
    AND pa.order_id = o.id
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.id = CAST($4 AS TEXT)
   AND o.subject IN (
@@ -508,14 +508,14 @@ SELECT
 FROM commerce_order o
 JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
-   AND (pi.organization_id IS NULL OR o.organization_id IS NULL OR pi.organization_id = o.organization_id)
+   AND (pi.organization_id = o.organization_id)
    AND pi.order_id = o.id
 JOIN commerce_payment_attempt pa
     ON pa.tenant_id = o.tenant_id
-   AND (pa.organization_id IS NULL OR o.organization_id IS NULL OR pa.organization_id = o.organization_id)
+   AND (pa.organization_id = o.organization_id)
    AND pa.order_id = o.id
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.subject = 'points_recharge'
   AND CAST(COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') AS BIGINT)::TEXT IN ($4, $5, $6)
@@ -746,7 +746,7 @@ impl PostgresCommerceRechargeStore {
             SELECT id
             FROM commerce_order
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $2 IS NULL))
               AND owner_user_id = CAST($3 AS TEXT)
               AND idempotency_key = CAST($4 AS TEXT)
               AND subject = 'points_recharge'
@@ -828,7 +828,7 @@ impl PostgresCommerceRechargeStore {
             SELECT owner_user_id
             FROM commerce_order
             WHERE tenant_id = CAST($1 AS TEXT)
-              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $2 IS NULL))
               AND id = CAST($3 AS TEXT)
               AND subject = 'points_recharge'
             LIMIT 1
@@ -859,7 +859,7 @@ impl PostgresCommerceRechargeStore {
             SET fulfillment_status = 'processing',
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
               AND subject = 'points_recharge'
@@ -911,7 +911,7 @@ impl PostgresCommerceRechargeStore {
             SET fulfillment_status = 'processing',
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
               AND subject IN (
@@ -963,7 +963,7 @@ impl PostgresCommerceRechargeStore {
             SET fulfillment_status = 'unfulfilled',
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
               AND subject = 'points_recharge'
@@ -999,7 +999,7 @@ impl PostgresCommerceRechargeStore {
             SET fulfillment_status = 'unfulfilled',
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
               AND subject IN (
@@ -1058,7 +1058,7 @@ impl PostgresCommerceRechargeStore {
                 paid_at = COALESCE(paid_at, CAST($1 AS TIMESTAMPTZ)),
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
               AND subject = 'points_recharge'
@@ -1141,7 +1141,7 @@ impl PostgresCommerceRechargeStore {
                 paid_at = COALESCE(paid_at, CAST($1 AS TIMESTAMPTZ)),
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
               AND subject IN (
@@ -1207,7 +1207,7 @@ impl PostgresCommerceRechargeStore {
                 fulfillment_status = 'unfulfilled',
                 updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($3 AS TEXT)
-              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
+              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
               AND id = CAST($6 AS TEXT)
               AND subject = 'points_recharge'
@@ -1242,7 +1242,7 @@ impl PostgresCommerceRechargeStore {
             UPDATE commerce_payment_intent
             SET status = $1, updated_at = $2
             WHERE tenant_id = CAST($3 AS TEXT)
-              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
+              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
               AND order_id = CAST($6 AS TEXT)
               AND LOWER(COALESCE(status, '')) IN ('created', 'pending', 'processing')
@@ -1263,7 +1263,7 @@ impl PostgresCommerceRechargeStore {
             UPDATE commerce_payment_attempt
             SET status = $1, paid_at = $2, updated_at = $2
             WHERE tenant_id = CAST($3 AS TEXT)
-              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL) OR (organization_id = '0' AND $4 IS NULL))
+              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
               AND order_id = CAST($6 AS TEXT)
               AND LOWER(COALESCE(status, '')) IN ('created', 'pending', 'processing')
@@ -1285,7 +1285,7 @@ impl PostgresCommerceRechargeStore {
             SET payment_status = 'success',
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL) OR (organization_id = '0' AND $3 IS NULL))
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
               AND owner_user_id = CAST($4 AS TEXT)
               AND id = CAST($5 AS TEXT)
               AND subject = 'points_recharge'
@@ -1748,7 +1748,7 @@ async fn expire_stale_recharge_orders(
         UPDATE commerce_order
         SET status = 'expired', updated_at = CAST($4 AS TIMESTAMPTZ)
         WHERE tenant_id = CAST($1 AS TEXT)
-          AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL) OR (organization_id = '0' AND $2 IS NULL))
+          AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $2 IS NULL))
           AND owner_user_id = CAST($3 AS TEXT)
           AND subject = 'points_recharge'
           AND LOWER(COALESCE(NULLIF(status, ''), 'pending_payment')) IN ('draft', 'pending', 'pending_payment')
