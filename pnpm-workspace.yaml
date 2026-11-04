@@ -33,6 +33,7 @@ packages:
   - "../sdkwork-ui/sdkwork-ui-mobile-react"
   - "../sdkwork-app-topology"
   - "../sdkwork-membership/sdks/sdkwork-membership-app-sdk/sdkwork-membership-app-sdk-typescript"
+  - "../sdkwork-appbase/packages/common/foundation/sdkwork-appbase-component-core"
 
 catalog:
   "@tailwindcss/vite": ^4.3.3

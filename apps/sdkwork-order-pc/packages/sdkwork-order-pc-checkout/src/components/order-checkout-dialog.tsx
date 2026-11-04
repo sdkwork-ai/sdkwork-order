@@ -1,4 +1,4 @@
-/// <reference path="../styles.d.ts" />
+/// <reference path="../../styles.d.ts" />
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./order-checkout-dialog.css";
