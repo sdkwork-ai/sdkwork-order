@@ -21,24 +21,38 @@
     "ownerMode": "tenant",
     "grantMode": "current",
     "platform": "MP_WEIXIN",
-    "appId": null,
+    "appId": "sdkwork-order-mini-program",
     "organizationId": "0",
-    "tenantId": "100001"
+    "tenantId": "100001",
+    "accessTokenPermissionScope": [
+      "iam:self"
+    ]
   },
   "runtime": {
     "family": "mini-program",
     "framework": "weixin-mini-program",
-    "runtimes": ["MINI_PROGRAM"],
-    "deliveryModes": ["MINI_PROGRAM_PACKAGE"],
+    "runtimes": [
+      "MINI_PROGRAM"
+    ],
+    "deliveryModes": [
+      "MINI_PROGRAM_PACKAGE"
+    ],
     "defaultPlatform": "MP_WEIXIN",
     "defaultArchitecture": "universal",
-    "supportedDeploymentProfiles": ["standalone", "cloud"],
+    "supportedDeploymentProfiles": [
+      "standalone",
+      "cloud"
+    ],
     "defaultDeploymentProfile": "standalone"
   },
   "publish": {
     "status": "DRAFT",
-    "platforms": ["MP_WEIXIN"],
-    "installPlatforms": ["MP_WEIXIN"],
+    "platforms": [
+      "MP_WEIXIN"
+    ],
+    "installPlatforms": [
+      "MP_WEIXIN"
+    ],
     "config": {
       "workspaceRoot": "apps/sdkwork-order-mini-program",
       "managedBy": "sdkwork-order"

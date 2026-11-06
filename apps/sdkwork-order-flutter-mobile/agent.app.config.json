@@ -21,9 +21,12 @@
     "ownerMode": "tenant",
     "grantMode": "current",
     "platform": "APP_ANDROID",
-    "appId": null,
+    "appId": "sdkwork-order-flutter-mobile",
     "organizationId": "0",
-    "tenantId": "100001"
+    "tenantId": "100001",
+    "accessTokenPermissionScope": [
+      "iam:self"
+    ]
   },
   "runtime": {
     "family": "mobile",
