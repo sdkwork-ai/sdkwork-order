@@ -19,7 +19,8 @@
     "qrcode": "catalog:"
   },
   "devDependencies": {
-    "@types/qrcode": "catalog:"
+    "@types/qrcode": "catalog:",
+    "@types/react": "catalog:"
   },
   "peerDependencies": {
     "lucide-react": ">=1.0.0",
