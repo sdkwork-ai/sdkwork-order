@@ -48,16 +48,43 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_membership_order_active_purchase_intent
 CREATE TABLE IF NOT EXISTS commerce_order_item (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
     order_id TEXT NOT NULL,
+    product_id TEXT,
+    shop_id TEXT,
     sku_id TEXT,
-    sku_snapshot_json JSONB,
+    sku_snapshot_json TEXT,
     title TEXT,
-    quantity INTEGER NOT NULL DEFAULT 1,
+    quantity BIGINT NOT NULL DEFAULT 1,
     unit_price_amount NUMERIC(20,0),
+    discount_amount NUMERIC(20,0),
+    tax_amount NUMERIC(20,0),
     total_amount NUMERIC(20,0),
     fulfillment_status TEXT,
     refund_status TEXT,
     created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS commerce_recharge_package (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    external_id BIGINT NOT NULL,
+    package_no TEXT NOT NULL,
+    sku_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    price_amount NUMERIC(20,0) NOT NULL,
+    currency_code TEXT NOT NULL DEFAULT 'CNY',
+    bonus_points BIGINT NOT NULL DEFAULT 0,
+    discount BIGINT NOT NULL DEFAULT 100,
+    status TEXT NOT NULL DEFAULT 'active',
+    valid_from TEXT,
+    valid_to TEXT,
+    sort_weight BIGINT NOT NULL DEFAULT 0,
+    request_no TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS commerce_payment_intent (
@@ -91,6 +118,30 @@ CREATE TABLE IF NOT EXISTS commerce_payment_attempt (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
+
+-- Payment tables are owned by the payment module in production. The recharge
+-- store reads provider/attempt columns the order baseline does not define.
+-- Keep the test schema aligned so repository queries are exercised with the
+-- production column set (and remain additive for pre-existing test databases).
+ALTER TABLE commerce_payment_intent ADD COLUMN IF NOT EXISTS payment_intent_no TEXT;
+ALTER TABLE commerce_payment_intent ADD COLUMN IF NOT EXISTS provider_code TEXT;
+ALTER TABLE commerce_payment_intent ADD COLUMN IF NOT EXISTS provider TEXT;
+ALTER TABLE commerce_payment_intent ADD COLUMN IF NOT EXISTS merchant_order_no TEXT;
+ALTER TABLE commerce_payment_intent ADD COLUMN IF NOT EXISTS subject TEXT;
+ALTER TABLE commerce_payment_intent ADD COLUMN IF NOT EXISTS request_no TEXT;
+ALTER TABLE commerce_payment_intent ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE commerce_payment_intent ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE commerce_payment_intent ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS payment_intent_id TEXT;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS attempt_no TEXT;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS provider_code TEXT;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS channel_id TEXT;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS out_trade_no TEXT;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS request_no TEXT;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE commerce_payment_attempt ADD COLUMN IF NOT EXISTS provider TEXT;
 
 CREATE TABLE IF NOT EXISTS commerce_idempotency_key (
     id TEXT NOT NULL PRIMARY KEY,
@@ -237,7 +288,7 @@ CREATE TABLE IF NOT EXISTS commerce_order_amount_breakdown (
     discount_amount NUMERIC(20,0),
     payable_amount NUMERIC(20,0),
     currency_code TEXT,
-    created_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS commerce_fulfillment_order (
