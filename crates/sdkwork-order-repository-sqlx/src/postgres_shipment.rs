@@ -378,7 +378,7 @@ impl PostgresCommerceOrderStore {
                 (id, tenant_id, organization_id, shipment_id, package_no, package_type,
                  tracking_no, status, created_at)
             VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS TIMESTAMPTZ))
             "#,
         )
         .bind(&package_id)

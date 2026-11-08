@@ -72,8 +72,8 @@ impl PostgresCommerceOrderStore {
                  reason_code, description, requested_amount, approved_amount, currency_code,
                  requested_by_type, requested_by, request_no, idempotency_key, created_at, updated_at)
             VALUES
-                ($1, $2, $3, $4, $5, $6, $7, 'submitted', 'none', 'none', 'none', $8, $9, $10, '0', $11,
-                 'buyer', $12, $13, $14, $15, $16)
+                ($1, $2, $3, $4, $5, $6, $7, 'submitted', 'none', 'none', 'none', $8, $9, CAST($10 AS NUMERIC), '0', $11,
+                 'buyer', $12, $13, $14, CAST($15 AS TIMESTAMPTZ), CAST($16 AS TIMESTAMPTZ))
            "#,
         )
         .bind(&request_id)
@@ -116,7 +116,7 @@ impl PostgresCommerceOrderStore {
                     (id, tenant_id, organization_id, after_sales_id, order_item_id,
                      quantity, requested_amount, currency_code, created_at)
                 VALUES
-                    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    ($1, $2, $3, $4, $5, $6, CAST($7 AS NUMERIC), $8, CAST($9 AS TIMESTAMPTZ))
                "#,
             )
             .bind(&item_id)
@@ -455,7 +455,7 @@ impl PostgresCommerceOrderStore {
             UPDATE commerce_after_sales_request
             SET status = $1,
                 reason_code = COALESCE($2, reason_code),
-                approved_amount = COALESCE($3, approved_amount),
+                approved_amount = COALESCE(CAST($3 AS NUMERIC), approved_amount),
                 refund_status = COALESCE($4, refund_status),
                 return_status = COALESCE($5, return_status),
                 exchange_status = COALESCE($6, exchange_status),
@@ -681,7 +681,7 @@ impl PostgresCommerceOrderStore {
                 (id, tenant_id, organization_id, after_sales_id, return_shipment_no,
                  carrier_code, tracking_no, status, request_no, idempotency_key, created_at, updated_at)
             VALUES
-                ($1, $2, $3, $4, $5, $6, $7, 'submitted', $8, $9, $10, $11)
+                ($1, $2, $3, $4, $5, $6, $7, 'submitted', $8, $9, CAST($10 AS TIMESTAMPTZ), CAST($11 AS TIMESTAMPTZ))
            "#,
         )
         .bind(&shipment_id)
@@ -835,7 +835,7 @@ async fn insert_after_sales_event(
             (id, tenant_id, organization_id, after_sales_id, event_no, event_type,
              from_status, to_status, actor_type, actor_id, request_id, idempotency_key, created_at)
         VALUES
-            ($1, $2, $3, $4, $5, $6, NULL, $7, 'buyer', NULL, $8, $9, $10)
+            ($1, $2, $3, $4, $5, $6, NULL, $7, 'buyer', NULL, $8, $9, CAST($10 AS TIMESTAMPTZ))
        "#,
     )
     .bind(&event_id)

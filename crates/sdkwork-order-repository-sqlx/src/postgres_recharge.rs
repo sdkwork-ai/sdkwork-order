@@ -1240,7 +1240,7 @@ impl PostgresCommerceRechargeStore {
         sqlx::query(
             r#"
             UPDATE commerce_payment_intent
-            SET status = $1, updated_at = $2
+            SET status = $1, updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($3 AS TEXT)
               AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
@@ -1261,7 +1261,9 @@ impl PostgresCommerceRechargeStore {
         sqlx::query(
             r#"
             UPDATE commerce_payment_attempt
-            SET status = $1, paid_at = $2, updated_at = $2
+            SET status = $1,
+                paid_at = CAST($2 AS TIMESTAMPTZ),
+                updated_at = CAST($2 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($3 AS TEXT)
               AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
               AND owner_user_id = CAST($5 AS TEXT)
@@ -1807,7 +1809,7 @@ async fn insert_order_item(
         INSERT INTO commerce_order_item
             (id, tenant_id, order_id, sku_id, sku_snapshot_json, title, quantity, unit_price_amount, total_amount, fulfillment_status, refund_status, created_at)
         VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, CAST($7 AS NUMERIC), CAST($7 AS NUMERIC), 'unfulfilled', 'none', $8)
+            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, CAST($7 AS NUMERIC), CAST($7 AS NUMERIC), 'unfulfilled', 'none', CAST($8 AS TIMESTAMPTZ))
         "#,
     )
     .bind(&command.order_item_id)

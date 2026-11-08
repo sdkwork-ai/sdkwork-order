@@ -333,9 +333,9 @@ impl PostgresCommerceRechargeStore {
             UPDATE commerce_account_value_package
             SET display_name = $1,
                 target_asset = $2,
-                grant_amount = $3,
-                bonus_amount = $4,
-                price_amount = $5,
+                grant_amount = CAST($3 AS NUMERIC),
+                bonus_amount = CAST($4 AS NUMERIC),
+                price_amount = CAST($5 AS NUMERIC),
                 currency_code = $6,
                 status = $7,
                 sort_weight = $8,
@@ -344,7 +344,7 @@ impl PostgresCommerceRechargeStore {
                 request_no = $11,
                 idempotency_key = $12,
                 updated_at = CAST($13 AS TIMESTAMPTZ),
-                retired_at = CASE WHEN $14 = 'retired' THEN COALESCE(retired_at, $15) ELSE NULL END
+                retired_at = CASE WHEN $14 = 'retired' THEN COALESCE(retired_at, CAST($15 AS TIMESTAMPTZ)) ELSE NULL END
             WHERE tenant_id = CAST($16 AS TEXT)
               AND ((organization_id = CAST($17 AS TEXT)) OR (organization_id = '0' AND $17 IS NULL))
               AND (id = CAST($18 AS TEXT) OR package_code = CAST($19 AS TEXT))
@@ -383,9 +383,9 @@ impl PostgresCommerceRechargeStore {
                      valid_from, valid_to, request_no, idempotency_key, created_at, updated_at,
                      retired_at)
                 VALUES
-                    ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, $6, $7, $8, $9, $10, $11,
-                     $12, $13, $14, $15, $16, $17, $18,
-                     CASE WHEN $19 = 'retired' THEN $20 ELSE NULL END)
+                    ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, $6, CAST($7 AS NUMERIC), CAST($8 AS NUMERIC), CAST($9 AS NUMERIC), $10, $11,
+                     $12, $13, $14, $15, $16, CAST($17 AS TIMESTAMPTZ), CAST($18 AS TIMESTAMPTZ),
+                     CASE WHEN $19 = 'retired' THEN CAST($20 AS TIMESTAMPTZ) ELSE NULL END)
                 "#,
             )
             .bind(&package_id)
@@ -448,7 +448,7 @@ impl PostgresCommerceRechargeStore {
             SET status = 'retired',
                 request_no = $1,
                 idempotency_key = $2,
-                retired_at = COALESCE(retired_at, $3),
+                retired_at = COALESCE(retired_at, CAST($3 AS TIMESTAMPTZ)),
                 updated_at = CAST($4 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($5 AS TEXT)
               AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id = '0' AND $6 IS NULL))
@@ -526,9 +526,9 @@ impl PostgresCommerceRechargeStore {
             UPDATE commerce_token_bank_plan
             SET display_name = $1,
                 plan_period = $2,
-                grant_amount = $3,
-                bonus_amount = $4,
-                price_amount = $5,
+                grant_amount = CAST($3 AS NUMERIC),
+                bonus_amount = CAST($4 AS NUMERIC),
+                price_amount = CAST($5 AS NUMERIC),
                 currency_code = $6,
                 renewal_policy = $7,
                 status = $8,
@@ -536,7 +536,7 @@ impl PostgresCommerceRechargeStore {
                 request_no = $10,
                 idempotency_key = $11,
                 updated_at = CAST($12 AS TIMESTAMPTZ),
-                retired_at = CASE WHEN $13 = 'retired' THEN COALESCE(retired_at, $14) ELSE NULL END
+                retired_at = CASE WHEN $13 = 'retired' THEN COALESCE(retired_at, CAST($14 AS TIMESTAMPTZ)) ELSE NULL END
             WHERE tenant_id = CAST($15 AS TEXT)
               AND ((organization_id = CAST($16 AS TEXT)) OR (organization_id = '0' AND $16 IS NULL))
               AND plan_code = CAST($17 AS TEXT)
@@ -573,8 +573,8 @@ impl PostgresCommerceRechargeStore {
                      status, sort_weight, request_no, idempotency_key, created_at, updated_at,
                      retired_at)
                 VALUES
-                    ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, $6, $7, $8, $9, $10, $11,
-                     $12, $13, $14, $15, $16, $17, CASE WHEN $18 = 'retired' THEN $19 ELSE NULL END)
+                    ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, $6, CAST($7 AS NUMERIC), CAST($8 AS NUMERIC), CAST($9 AS NUMERIC), $10, $11,
+                     $12, $13, $14, $15, CAST($16 AS TIMESTAMPTZ), CAST($17 AS TIMESTAMPTZ), CASE WHEN $18 = 'retired' THEN CAST($19 AS TIMESTAMPTZ) ELSE NULL END)
                 "#,
             )
             .bind(Uuid::new_v4().to_string())
@@ -635,7 +635,7 @@ impl PostgresCommerceRechargeStore {
             SET status = 'retired',
                 request_no = $1,
                 idempotency_key = $2,
-                retired_at = COALESCE(retired_at, $3),
+                retired_at = COALESCE(retired_at, CAST($3 AS TIMESTAMPTZ)),
                 updated_at = CAST($4 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($5 AS TEXT)
               AND ((organization_id = CAST($6 AS TEXT)) OR (organization_id = '0' AND $6 IS NULL))
@@ -1698,7 +1698,7 @@ async fn insert_account_value_order(
             (id, tenant_id, order_id, sku_id, sku_snapshot_json, title, quantity, unit_price_amount,
              total_amount, fulfillment_status, refund_status, created_at, organization_id)
         VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, $7, $8, 'unfulfilled', 'none', $9, $10)
+            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, CAST($7 AS NUMERIC), CAST($8 AS NUMERIC), 'unfulfilled', 'none', CAST($9 AS TIMESTAMPTZ), $10)
         "#,
     )
     .bind(&command.order_item_id)
@@ -1801,7 +1801,7 @@ async fn insert_coupon_recharge_order(
             (id, tenant_id, order_id, sku_id, sku_snapshot_json, title, quantity, unit_price_amount,
              total_amount, fulfillment_status, refund_status, created_at, organization_id)
         VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, $7, $8, 'unfulfilled', 'none', $9, $10)
+            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, CAST($7 AS NUMERIC), CAST($8 AS NUMERIC), 'unfulfilled', 'none', CAST($9 AS TIMESTAMPTZ), $10)
         "#,
     )
     .bind(&command.order_item_id)
