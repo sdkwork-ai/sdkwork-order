@@ -779,6 +779,21 @@ impl AccountValueFulfillmentStore for UnsupportedAccountValueFulfillmentStore {
         })
     }
 
+    fn mark_coupon_redemption_fulfillment_failed<'a>(
+        &'a self,
+        _tenant_id: &'a str,
+        _organization_id: Option<&'a str>,
+        _owner_user_id: &'a str,
+        _order_id: &'a str,
+        _reason: &'a str,
+    ) -> AccountValueFulfillmentFuture<'a, bool> {
+        Box::pin(async {
+            Err(CommerceServiceError::unsupported_capability(
+                "account value failure evidence should not be called in orchestration tests",
+            ))
+        })
+    }
+
     fn release_account_value_fulfillment_reservation<'a>(
         &'a self,
         _command: &'a FulfillAccountValueOrderCommand,

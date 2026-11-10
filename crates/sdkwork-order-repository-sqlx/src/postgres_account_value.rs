@@ -1782,11 +1782,18 @@ async fn insert_coupon_recharge_order(
     .map_err(|error| store_error("failed to insert coupon recharge order", error))?;
 
     let title = account_value_order_title(command.subject);
+    // The cash wallet's ledger unit is its ISO currency; the asset enum has no
+    // intrinsic unit for cash, and an empty unit code made every cash coupon
+    // fail at `ledger_unit_code` *after* the coupon had been consumed.
+    let asset_unit_code = match command.target_asset {
+        AccountValueAssetCode::Cash => command.currency_code.as_str(),
+        other => other.default_unit_code(),
+    };
     let snapshot = serde_json::json!({
         "subject": command.subject.as_str(),
         "targetAsset": command.target_asset.as_str(),
         "assetCode": command.target_asset.as_str(),
-        "assetUnitCode": command.target_asset.default_unit_code(),
+        "assetUnitCode": asset_unit_code,
         "grantAmount": command.grant_amount.as_str(),
         "bonusAmount": "0",
         "couponCode": command.coupon_code,

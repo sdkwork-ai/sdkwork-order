@@ -53,6 +53,9 @@ const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
+/// Mirrors the `LEFT($1, 512)` bound in the store failure-evidence statement.
+const MAX_FULFILLMENT_FAILURE_REASON_CHARS: usize = 512;
+const DEFAULT_FULFILLMENT_FAILURE_REASON: &str = "coupon redemption fulfillment failed";
 
 /// Payment countdown in minutes, backed by the shared expiry window
 /// (`SDKWORK_ORDER_PAYMENT_EXPIRE_SECONDS`, default 30 minutes).
@@ -174,6 +177,17 @@ impl AccountValueFulfillmentStore for NoopAccountValueFulfillmentStore {
                 "account value fulfillment store is not configured",
             ))
         })
+    }
+
+    fn mark_coupon_redemption_fulfillment_failed<'a>(
+        &'a self,
+        _tenant_id: &'a str,
+        _organization_id: Option<&'a str>,
+        _owner_user_id: &'a str,
+        _order_id: &'a str,
+        _reason: &'a str,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, bool> {
+        Box::pin(async move { Ok(false) })
     }
 
     fn release_account_value_fulfillment_reservation<'a>(
@@ -1341,7 +1355,18 @@ async fn submit_recharge(
                         outcome.next_action = "completed".to_owned();
                         success_created_item(ctx, map_account_recharge_outcome(outcome))
                     }
-                    Err(error) => map_service_error(ctx, error),
+                    Err(error) => {
+                        record_coupon_redemption_failure(
+                            &*state.fulfillment_store,
+                            &subject.tenant_id,
+                            subject.organization_id.as_deref(),
+                            &subject.user_id,
+                            &outcome.order_id,
+                            &error,
+                        )
+                        .await;
+                        map_service_error(ctx, error)
+                    }
                 }
             }
             Err(error) => map_service_error(ctx, error),
@@ -1554,6 +1579,60 @@ fn validate_coupon_redemption_replay(
     Ok(())
 }
 
+fn truncate_fulfillment_failure_reason(message: &str) -> String {
+    let message = message.trim();
+    if message.is_empty() {
+        return DEFAULT_FULFILLMENT_FAILURE_REASON.to_owned();
+    }
+    message
+        .chars()
+        .take(MAX_FULFILLMENT_FAILURE_REASON_CHARS)
+        .collect()
+}
+
+fn coupon_fulfillment_failure_reason(error: &CommerceServiceError) -> String {
+    truncate_fulfillment_failure_reason(error.message())
+}
+
+/// Best-effort failure evidence for a coupon-redemption fulfilment error.
+///
+/// The marker result is deliberately swallowed and only logged: a storage
+/// failure here must never replace the business error that triggered it, and
+/// the caller keeps mapping the original `CommerceServiceError`.
+async fn record_coupon_redemption_failure(
+    fulfillment_store: &dyn AccountValueFulfillmentStore,
+    tenant_id: &str,
+    organization_id: Option<&str>,
+    owner_user_id: &str,
+    order_id: &str,
+    error: &CommerceServiceError,
+) {
+    let reason = coupon_fulfillment_failure_reason(error);
+    match fulfillment_store
+        .mark_coupon_redemption_fulfillment_failed(
+            tenant_id,
+            organization_id,
+            owner_user_id,
+            order_id,
+            &reason,
+        )
+        .await
+    {
+        Ok(true) => {}
+        Ok(false) => tracing::warn!(
+            target = "order.recharge",
+            order_id = %order_id,
+            "coupon redemption failure evidence did not match an order row"
+        ),
+        Err(marker_error) => tracing::warn!(
+            target = "order.recharge",
+            order_id = %order_id,
+            error = %marker_error.message(),
+            "failed to persist coupon redemption failure evidence"
+        ),
+    }
+}
+
 async fn fulfill_coupon_redemption_order(
     state: &AppRechargeCheckoutState,
     ctx: Option<&WebRequestContext>,
@@ -1564,7 +1643,7 @@ async fn fulfill_coupon_redemption_order(
         &*state.coupon_redemption_port,
         &*state.account_value_ledger_port,
         &*state.membership_fulfillment_port,
-        command,
+        command.clone(),
     )
     .await
     {
@@ -1578,7 +1657,18 @@ async fn fulfill_coupon_redemption_order(
                 benefit: map_coupon_fulfilled_benefit(outcome.benefit),
             },
         ),
-        Err(error) => map_service_error(ctx, error),
+        Err(error) => {
+            record_coupon_redemption_failure(
+                &*state.fulfillment_store,
+                &command.tenant_id,
+                command.organization_id.as_deref(),
+                &command.owner_user_id,
+                &command.order_id,
+                &error,
+            )
+            .await;
+            map_service_error(ctx, error)
+        }
     }
 }
 
@@ -2737,6 +2827,93 @@ mod tests {
             .expect("order replay lookup");
         let promotion_preview = handler.find(".preview_coupon").expect("Promotion preview");
         assert!(replay_lookup < promotion_preview);
+    }
+
+    fn top_level_function<'a>(source: &'a str, signature: &str) -> &'a str {
+        let start = source
+            .find(signature)
+            .unwrap_or_else(|| panic!("missing function {signature}"));
+        let rest = &source[start..];
+        let end = rest
+            .find("\n}\n")
+            .unwrap_or_else(|| panic!("unterminated function {signature}"))
+            + "\n}\n".len();
+        &rest[..end]
+    }
+
+    #[test]
+    fn fulfillment_failure_reason_truncates_to_512_chars_on_char_boundaries() {
+        let oversized = "错".repeat(MAX_FULFILLMENT_FAILURE_REASON_CHARS + 37);
+        let reason = truncate_fulfillment_failure_reason(&oversized);
+        assert_eq!(MAX_FULFILLMENT_FAILURE_REASON_CHARS, reason.chars().count());
+        assert!(reason.chars().all(|value| value == '错'));
+
+        let ascii = "x".repeat(MAX_FULFILLMENT_FAILURE_REASON_CHARS + 1);
+        assert_eq!(
+            MAX_FULFILLMENT_FAILURE_REASON_CHARS,
+            truncate_fulfillment_failure_reason(&ascii).len()
+        );
+        assert_eq!(
+            "card declined",
+            truncate_fulfillment_failure_reason("  card declined  ")
+        );
+        assert_eq!(
+            DEFAULT_FULFILLMENT_FAILURE_REASON,
+            truncate_fulfillment_failure_reason("   ")
+        );
+    }
+
+    #[test]
+    fn coupon_redemption_failure_evidence_is_best_effort_after_the_fulfilment_error() {
+        let source = include_str!("recharge_router.rs");
+
+        let recorder = top_level_function(source, "async fn record_coupon_redemption_failure");
+        let marker = recorder
+            .find("mark_coupon_redemption_fulfillment_failed(")
+            .expect("failure marker call");
+        let marker_await = recorder[marker..]
+            .find(".await")
+            .map(|offset| marker + offset)
+            .expect("marker await");
+        assert!(
+            !recorder[marker..marker_await].contains('?'),
+            "the failure marker result must not be ?-propagated"
+        );
+        assert!(
+            recorder[..marker_await].contains("match fulfillment_store"),
+            "the failure marker must be wrapped so its own error is contained"
+        );
+        assert!(recorder.contains("Err(marker_error)"));
+        assert!(recorder.contains("tracing::warn!"));
+        assert!(
+            !recorder.contains("-> Result"),
+            "recording failure evidence must never return the business error"
+        );
+
+        let fulfilment = top_level_function(source, "async fn fulfill_coupon_redemption_order(");
+        let fulfilment_call = fulfilment
+            .find("redeem_coupon_and_fulfill_order(")
+            .expect("coupon redemption fulfilment call");
+        let error_branch = fulfilment
+            .find("Err(error) =>")
+            .expect("fulfilment error branch");
+        let evidence_call = fulfilment
+            .find("record_coupon_redemption_failure(")
+            .expect("failure evidence call");
+        assert!(fulfilment_call < error_branch);
+        assert!(error_branch < evidence_call);
+        assert!(fulfilment[evidence_call..].contains("map_service_error(ctx, error)"));
+        assert!(!fulfilment.contains("map_service_error(ctx, marker_error)"));
+
+        let paid_handler = top_level_function(source, "async fn submit_recharge(");
+        let paid_call = paid_handler
+            .find("redeem_coupon_and_fulfill_account_value_order(")
+            .expect("paid coupon recharge fulfilment call");
+        let paid_evidence = paid_handler
+            .find("record_coupon_redemption_failure(")
+            .expect("paid coupon recharge failure evidence call");
+        assert!(paid_call < paid_evidence);
+        assert!(paid_handler[paid_evidence..].contains("map_service_error(ctx, error)"));
     }
 
     #[test]

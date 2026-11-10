@@ -447,6 +447,13 @@ SELECT
           NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'assetCode', ''),
           ''
         ) = 'points' THEN 'POINT'
+        WHEN COALESCE(
+          NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'targetAsset', ''),
+          NULLIF(COALESCE(NULLIF(pa.callback_payload::text, ''), '{}')::jsonb ->> 'assetCode', ''),
+          NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'targetAsset', ''),
+          NULLIF(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}')::jsonb ->> 'assetCode', ''),
+          ''
+        ) = 'cash' THEN COALESCE(NULLIF(o.currency_code, ''), 'CNY')
         ELSE ''
       END
     ) AS asset_unit_code,
@@ -477,6 +484,23 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   )
 ORDER BY COALESCE(CAST(pa.created_at AS TEXT), CAST(pi.created_at AS TEXT), CAST(o.created_at AS TEXT)) DESC, o.id DESC
 LIMIT 1
+"#;
+
+/// Failure evidence for a coupon-redemption fulfilment attempt. `failed` stays
+/// outside the `fulfilled|completed` reservation exclusions, so the same order
+/// can be reserved and retried again under the same idempotency key.
+const MARK_COUPON_REDEMPTION_FULFILLMENT_FAILED: &str = r#"
+UPDATE commerce_order
+SET fulfillment_status = 'failed',
+    fulfillment_failure_reason = LEFT($1, 512),
+    fulfillment_failed_at = CAST($2 AS TIMESTAMPTZ),
+    updated_at = CAST($2 AS TIMESTAMPTZ)
+WHERE tenant_id = CAST($3 AS TEXT)
+  AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
+  AND owner_user_id = CAST($5 AS TEXT)
+  AND id = CAST($6 AS TEXT)
+  AND subject = 'coupon_recharge'
+  AND LOWER(COALESCE(fulfillment_status, '')) NOT IN ('fulfilled', 'completed')
 "#;
 
 const LOAD_REUSABLE_RECHARGE_CHECKOUT: &str = r#"
@@ -950,6 +974,38 @@ impl PostgresCommerceRechargeStore {
         Ok(())
     }
 
+    /// Persists the failure evidence for a coupon-redemption fulfilment
+    /// attempt that already released its `processing` reservation.
+    ///
+    /// Returns whether an order row was updated. Orders that already reached
+    /// `fulfilled`/`completed` are never rewritten, and a `failed` order stays
+    /// reservable for a later retry.
+    pub async fn mark_coupon_redemption_fulfillment_failed(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        owner_user_id: &str,
+        order_id: &str,
+        reason: &str,
+    ) -> Result<bool, CommerceServiceError> {
+        let now = current_query_timestamp();
+        let organization_id = normalize_organization_scope(organization_id);
+        let updated = sqlx::query(MARK_COUPON_REDEMPTION_FULFILLMENT_FAILED)
+            .bind(reason)
+            .bind(&now)
+            .bind(tenant_id)
+            .bind(&organization_id)
+            .bind(owner_user_id)
+            .bind(order_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|error| {
+                store_error("failed to mark coupon redemption fulfillment failed", error)
+            })?;
+
+        Ok(updated.rows_affected() > 0)
+    }
+
     pub async fn release_points_recharge_fulfillment_reservation(
         &self,
         command: &FulfillPointsRechargeOrderCommand,
@@ -1138,6 +1194,8 @@ impl PostgresCommerceRechargeStore {
             SET status = 'paid',
                 payment_status = 'success',
                 fulfillment_status = 'fulfilled',
+                fulfillment_failure_reason = NULL,
+                fulfillment_failed_at = NULL,
                 paid_at = COALESCE(paid_at, CAST($1 AS TIMESTAMPTZ)),
                 updated_at = CAST($1 AS TIMESTAMPTZ)
             WHERE tenant_id = CAST($2 AS TEXT)
@@ -2607,6 +2665,27 @@ impl AccountValueFulfillmentStore for PostgresCommerceRechargeStore {
         })
     }
 
+    fn mark_coupon_redemption_fulfillment_failed<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+        reason: &'a str,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, bool> {
+        Box::pin(async move {
+            PostgresCommerceRechargeStore::mark_coupon_redemption_fulfillment_failed(
+                self,
+                tenant_id,
+                organization_id,
+                owner_user_id,
+                order_id,
+                reason,
+            )
+            .await
+        })
+    }
+
     fn release_account_value_fulfillment_reservation<'a>(
         &'a self,
         command: &'a FulfillAccountValueOrderCommand,
@@ -2692,5 +2771,55 @@ mod tests {
 
         assert!(!source.contains(&forbidden));
         assert!(source.contains("required_non_negative_integer_cell"));
+    }
+
+    #[test]
+    fn postgres_coupon_fulfillment_failure_marker_sets_evidence_and_stays_retryable() {
+        let statement = MARK_COUPON_REDEMPTION_FULFILLMENT_FAILED
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        assert!(statement.contains("SET fulfillment_status = 'failed',"));
+        assert!(statement.contains("fulfillment_failure_reason = LEFT($1, 512)"));
+        assert!(statement.contains("fulfillment_failed_at = CAST($2 AS TIMESTAMPTZ)"));
+        assert!(statement.contains("updated_at = CAST($2 AS TIMESTAMPTZ)"));
+        for scope in [
+            "tenant_id = CAST($3 AS TEXT)",
+            "((organization_id = CAST($4 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))",
+            "owner_user_id = CAST($5 AS TEXT)",
+            "id = CAST($6 AS TEXT)",
+            "subject = 'coupon_recharge'",
+        ] {
+            assert!(
+                statement.contains(scope),
+                "failure marker must stay scoped by {scope}"
+            );
+        }
+        assert!(statement
+            .contains("LOWER(COALESCE(fulfillment_status, '')) NOT IN ('fulfilled', 'completed')"));
+        assert!(
+            !statement.contains("'processing'"),
+            "a failed order must stay reservable so the same idempotency key can retry"
+        );
+    }
+
+    #[test]
+    fn postgres_account_value_commit_clears_coupon_failure_evidence() {
+        let source = include_str!("postgres_recharge.rs");
+        let commit = source
+            .split("pub async fn commit_account_value_fulfillment")
+            .nth(1)
+            .expect("account value fulfillment commit");
+        let statement_end = commit
+            .find("if updated.rows_affected() == 0")
+            .expect("commit rows-affected guard");
+        let statement = &commit[..statement_end];
+
+        assert!(statement.contains("fulfillment_status = 'fulfilled'"));
+        assert!(statement.contains("fulfillment_failure_reason = NULL"));
+        assert!(statement.contains("fulfillment_failed_at = NULL"));
+        assert!(statement
+            .contains("LOWER(COALESCE(fulfillment_status, '')) NOT IN ('fulfilled', 'completed')"));
     }
 }

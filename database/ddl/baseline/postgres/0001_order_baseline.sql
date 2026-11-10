@@ -720,3 +720,28 @@ CREATE INDEX IF NOT EXISTS idx_commerce_demand_claim_event_claim
 
 CREATE INDEX IF NOT EXISTS idx_commerce_demand_claim_event_tenant_type
     ON commerce_demand_claim_event(tenant_id, event_type, created_at DESC, id DESC);
+
+-- folded migration: migrations/postgres/0021_fulfillment_failure_evidence.up.sql
+-- sdkwork:migration
+-- id: 0021_fulfillment_failure_evidence
+-- engine: postgres
+-- module: sdkwork-order
+-- purpose: Record why a coupon-redemption fulfilment failed and when, so an
+--   order that was attempted and failed is distinguishable from one that was
+--   never attempted.
+-- reversible: false
+-- rollback: forward-fix (the evidence columns are additive and nullable)
+-- transactional: true
+-- lock: lightweight
+-- lock_timeout: 2s
+-- statement_timeout: 30s
+
+BEGIN;
+
+ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS fulfillment_failure_reason TEXT;
+ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS fulfillment_failed_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_commerce_order_failed_fulfillment
+  ON commerce_order (tenant_id, organization_id, subject, fulfillment_failed_at DESC)
+  WHERE fulfillment_status = 'failed';
+
+COMMIT;

@@ -344,6 +344,22 @@ pub trait AccountValueFulfillmentStore: Send + Sync {
         context: &'a AccountValueFulfillmentContext,
     ) -> AccountValueFulfillmentFuture<'a, ()>;
 
+    /// Persists failure evidence for a coupon-redemption fulfilment attempt
+    /// that already released its `processing` reservation, so an attempted and
+    /// failed order is distinguishable from one that was never attempted.
+    ///
+    /// Returns whether an order row was updated. Implementations must leave
+    /// `fulfilled`/`completed` orders untouched and must keep `failed` orders
+    /// reservable for a retry under the same idempotency key.
+    fn mark_coupon_redemption_fulfillment_failed<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+        reason: &'a str,
+    ) -> AccountValueFulfillmentFuture<'a, bool>;
+
     fn release_account_value_fulfillment_reservation<'a>(
         &'a self,
         command: &'a FulfillAccountValueOrderCommand,
