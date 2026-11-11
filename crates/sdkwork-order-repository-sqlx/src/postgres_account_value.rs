@@ -1108,7 +1108,33 @@ impl PostgresCommerceRechargeStore {
             .begin()
             .await
             .map_err(|error| store_error("failed to begin coupon recharge order", error))?;
-        insert_coupon_recharge_order(&mut tx, &command).await?;
+        match insert_coupon_recharge_order(&mut tx, &command).await {
+            Ok(()) => {}
+            Err(error)
+                if error.kind() == &sdkwork_contract_service::CommerceServiceErrorKind::Conflict =>
+            {
+                // A concurrent request with the same idempotency key won the
+                // unique `commerce_order` insert. Roll back this attempt and
+                // return the persisted winner instead of failing the replay:
+                // fulfilment then targets that order, whose coupon redemption
+                // idempotency key is the order id, so no second coupon can be
+                // consumed.
+                let _ = tx.rollback().await;
+                if let Some(outcome) = self
+                    .load_account_value_order_by_idempotency(
+                        &command.tenant_id,
+                        command.organization_id.as_deref(),
+                        &command.owner_user_id,
+                        &command.idempotency_key,
+                    )
+                    .await?
+                {
+                    return Ok(outcome);
+                }
+                return Err(error);
+            }
+            Err(error) => return Err(error),
+        }
         tx.commit()
             .await
             .map_err(|error| store_error("failed to commit coupon recharge order", error))?;

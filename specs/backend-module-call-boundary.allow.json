@@ -6,6 +6,10 @@
       "envVar": "SDKWORK_ACCOUNT_BACKEND_API_ORIGIN",
       "module": "account",
       "reason": "Opt-in split deployment only: SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER=http selects this adapter; the default is the in-process store adapter, and from_env() refuses to start without SDKWORK_ACCESS_TOKEN."
+    },
+    {
+      "file": "crates/sdkwork-order-integration-account/src/http_adapter.rs",
+      "reason": "Explicit HTTP opt-in, default is in-process, startup-validated. File-scoped entry for the second detection mode: the file builds the reqwest client and names /backend/v3/api while serving the SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER=http split-deployment adapter only. The default is the in-process store adapter, and from_env() refuses to start without SDKWORK_ACCOUNT_BACKEND_API_ORIGIN and SDKWORK_ACCESS_TOKEN, so the endpoint is never reached by default."
     }
   ]
 }

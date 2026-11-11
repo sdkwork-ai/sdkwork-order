@@ -13,7 +13,7 @@ pub use account_value_fulfillment::{
 pub use account_value_request_execution::execute_account_value_request_review;
 pub use coupon_recharge_fulfillment::{
     redeem_coupon_and_fulfill_account_value_order, redeem_coupon_and_fulfill_order,
-    CouponFulfilledBenefit, CouponFulfillmentOutcome,
+    CouponFulfilledBenefit, CouponFulfillmentError, CouponFulfillmentOutcome,
 };
 pub use order_payment_settlement::{
     settle_owner_order_after_payment_success,

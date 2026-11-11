@@ -1,6 +1,6 @@
 /// <reference path="../styles.d.ts" />
 
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { CalendarDays, CheckCircle2, Gift, LoaderCircle, TicketCheck, X } from "lucide-react";
 import {
   Button,
@@ -14,6 +14,7 @@ import {
 } from "@sdkwork/ui-pc-react";
 import {
   createSdkworkCouponRedemptionService,
+  createSdkworkIdempotencyParams,
   type SdkworkCouponRedemptionResult,
   type SdkworkCouponRedemptionService,
 } from "@sdkwork/order-service";
@@ -107,8 +108,28 @@ function CouponRedemptionExperience({
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [result, setResult] = useState<SdkworkCouponRedemptionResult | null>(null);
 
+  /**
+   * Idempotency intent for the redemption the customer confirmed: the key is
+   * derived once for the entered code and reused by every retry of that same
+   * code. A retry after the coupon was consumed but the benefit failed
+   * therefore replays the original redemption instead of consuming another
+   * coupon; a different code (or a completed redemption) starts a new intent.
+   */
+  const intentRef = useRef<{ code: string; idempotencyKey: string } | null>(null);
+
+  function idempotencyKeyFor(normalizedCode: string): string {
+    if (intentRef.current?.code !== normalizedCode) {
+      intentRef.current = {
+        code: normalizedCode,
+        idempotencyKey: createSdkworkIdempotencyParams().idempotencyKey,
+      };
+    }
+    return intentRef.current.idempotencyKey;
+  }
+
   useEffect(() => {
     if (!active) return;
+    intentRef.current = null;
     setCode(initialCode);
     setError(null);
     setIsRedeeming(false);
@@ -126,7 +147,8 @@ function CouponRedemptionExperience({
     setError(null);
     setIsRedeeming(true);
     try {
-      const next = await service.redeem(normalizedCode);
+      const next = await service.redeem(normalizedCode, idempotencyKeyFor(normalizedCode));
+      intentRef.current = null;
       setResult(next);
       await onCompleted?.(next);
     } catch (cause) {

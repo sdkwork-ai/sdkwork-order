@@ -4,22 +4,22 @@ use std::sync::{Arc, Mutex};
 use sdkwork_contract_service::{CommerceLedgerBusinessType, CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     default_fulfill_account_value_order_command, fulfill_account_value_order,
-    redeem_coupon_and_fulfill_account_value_order, settle_owner_order_after_payment_success,
-    AccountPointsCreditFuture, AccountPointsCreditPort, AccountValueAssetCode,
-    AccountValueFulfillmentContext, AccountValueFulfillmentFuture, AccountValueFulfillmentStore,
-    AccountValueFuture, AccountValueLedgerCommand, AccountValueLedgerOutcome,
-    AccountValueLedgerPort, AccountValueOrderSubject, ConfirmOwnerOrderPaymentOutcome,
-    CouponRedemptionBenefit, CouponRedemptionOutcome, CouponRedemptionPort,
-    CouponRedemptionRequest, CouponSubscriptionFulfillmentOutcome,
-    CouponSubscriptionFulfillmentRequest, FulfillAccountValueOrderCommand,
-    FulfillAccountValueOrderOutcome, FulfillPaidPhysicalOrderRequest,
-    FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
-    MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentFuture,
-    MembershipPurchaseFulfillmentOutcome, MembershipPurchaseFulfillmentPort,
-    MembershipPurchaseFulfillmentRequest, MembershipPurchaseSettlementSnapshot,
-    MembershipQuotaRechargeFulfillmentOutcome, MembershipQuotaRechargeFulfillmentRequest,
-    NoopAppTemplatePurchaseFulfillmentPort, NoopCouponRedemptionPort,
-    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationFuture,
+    redeem_coupon_and_fulfill_account_value_order, redeem_coupon_and_fulfill_order,
+    settle_owner_order_after_payment_success, AccountPointsCreditFuture, AccountPointsCreditPort,
+    AccountValueAssetCode, AccountValueFulfillmentContext, AccountValueFulfillmentFuture,
+    AccountValueFulfillmentStore, AccountValueFuture, AccountValueLedgerCommand,
+    AccountValueLedgerOutcome, AccountValueLedgerPort, AccountValueOrderSubject,
+    ConfirmOwnerOrderPaymentOutcome, CouponFulfillmentError, CouponRedemptionBenefit,
+    CouponRedemptionOutcome, CouponRedemptionPort, CouponRedemptionRequest,
+    CouponSubscriptionFulfillmentOutcome, CouponSubscriptionFulfillmentRequest,
+    FulfillAccountValueOrderCommand, FulfillAccountValueOrderOutcome,
+    FulfillPaidPhysicalOrderRequest, FulfillPointsRechargeOrderCommand,
+    FulfillPointsRechargeOrderOutcome, MarkPointsRechargePaymentSucceededCommand,
+    MembershipPurchaseFulfillmentFuture, MembershipPurchaseFulfillmentOutcome,
+    MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
+    MembershipPurchaseSettlementSnapshot, MembershipQuotaRechargeFulfillmentOutcome,
+    MembershipQuotaRechargeFulfillmentRequest, NoopAppTemplatePurchaseFulfillmentPort,
+    NoopCouponRedemptionPort, OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationFuture,
     OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStateOutcome, OwnerOrderPaymentStatePort,
     OwnerOrderSettlementPorts, PhysicalGoodsFulfillmentOutcome, PhysicalGoodsFulfillmentPort,
     PhysicalGoodsFuture, PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
@@ -457,6 +457,99 @@ async fn coupon_recharge_fails_closed_when_promotion_benefit_changes() {
     assert!(ledger.commands().is_empty());
 }
 
+fn coupon_command() -> FulfillAccountValueOrderCommand {
+    default_fulfill_account_value_order_command(
+        AccountValueOrderSubject::CouponRecharge,
+        "tenant-1",
+        Some("org-1"),
+        "user-1",
+        "order-coupon-1",
+        "request-coupon-1",
+    )
+    .expect("coupon fulfillment command")
+}
+
+#[tokio::test]
+async fn coupon_redemption_replay_returns_the_same_order_without_a_second_redemption() {
+    let store = MockAccountValueFulfillmentStore::default();
+    store.seed_context(coupon_context("50"));
+    let coupon = MockCouponRedemptionPort::new("50");
+    let ledger = MockAccountValueLedgerPort::default();
+    let membership = UnsupportedMembershipPurchaseFulfillmentPort;
+
+    let first = redeem_coupon_and_fulfill_order(&store, &coupon, &ledger, &membership, coupon_command())
+        .await
+        .expect("initial coupon redemption");
+    assert!(!first.replayed);
+    let replay = redeem_coupon_and_fulfill_order(&store, &coupon, &ledger, &membership, coupon_command())
+        .await
+        .expect("coupon redemption replay");
+
+    assert!(replay.replayed);
+    assert_eq!(first.order_id, replay.order_id);
+    assert_eq!(1, coupon.consumed_redemptions());
+    assert_eq!(1, ledger.commands().len());
+    assert_eq!(1, ledger.attempts());
+}
+
+#[tokio::test]
+async fn coupon_redemption_failure_is_typed_as_benefit_delivery_and_replay_redelivers() {
+    let store = MockAccountValueFulfillmentStore::default();
+    store.seed_context(coupon_context("50"));
+    let coupon = MockCouponRedemptionPort::new("50");
+    let ledger = MockAccountValueLedgerPort::default();
+    ledger.fail_next("SDKWORK_ACCESS_TOKEN is required for account value ledger commands");
+    let membership = UnsupportedMembershipPurchaseFulfillmentPort;
+
+    let error = redeem_coupon_and_fulfill_order(&store, &coupon, &ledger, &membership, coupon_command())
+        .await
+        .expect_err("benefit delivery must fail");
+    assert!(error.coupon_consumed());
+    assert!(matches!(error, CouponFulfillmentError::BenefitDelivery(_)));
+    assert_eq!(1, coupon.consumed_redemptions());
+
+    let marked = store
+        .mark_coupon_redemption_fulfillment_failed(
+            "tenant-1",
+            Some("org-1"),
+            "user-1",
+            "order-coupon-1",
+            error.service_error().message(),
+        )
+        .await
+        .expect("failure evidence");
+    assert!(marked);
+    assert!(store.failure_evidence("order-coupon-1").is_some());
+
+    let replay = redeem_coupon_and_fulfill_order(&store, &coupon, &ledger, &membership, coupon_command())
+        .await
+        .expect("retry must redeliver the benefit");
+    assert!(replay.replayed);
+    assert_eq!(1, coupon.consumed_redemptions());
+    assert_eq!(1, ledger.commands().len());
+    assert_eq!(2, ledger.attempts());
+    assert!(store.failure_evidence("order-coupon-1").is_none());
+}
+
+#[tokio::test]
+async fn concurrent_coupon_redemption_replay_cannot_double_consume() {
+    let store = MockAccountValueFulfillmentStore::default();
+    store.seed_context(coupon_context("50"));
+    let coupon = MockCouponRedemptionPort::new("50");
+    let ledger = MockAccountValueLedgerPort::default();
+    let membership = UnsupportedMembershipPurchaseFulfillmentPort;
+
+    let (first, second) = tokio::join!(
+        redeem_coupon_and_fulfill_order(&store, &coupon, &ledger, &membership, coupon_command()),
+        redeem_coupon_and_fulfill_order(&store, &coupon, &ledger, &membership, coupon_command()),
+    );
+    let first = first.expect("first concurrent attempt");
+    let second = second.expect("second concurrent attempt");
+    assert_eq!(first.order_id, second.order_id);
+    assert_eq!(1, coupon.consumed_redemptions());
+    assert_eq!(1, ledger.commands().len());
+}
+
 fn coupon_context(grant_amount: &str) -> AccountValueFulfillmentContext {
     AccountValueFulfillmentContext {
         order_id: "order-coupon-1".to_owned(),
@@ -479,6 +572,7 @@ fn coupon_context(grant_amount: &str) -> AccountValueFulfillmentContext {
 struct MockCouponRedemptionPort {
     grant_amount: CommerceMoney,
     requests: Mutex<Vec<CouponRedemptionRequest>>,
+    consumed_request_nos: Mutex<Vec<String>>,
 }
 
 impl MockCouponRedemptionPort {
@@ -486,11 +580,19 @@ impl MockCouponRedemptionPort {
         Self {
             grant_amount: CommerceMoney::new(grant_amount).expect("coupon grant"),
             requests: Mutex::new(Vec::new()),
+            consumed_request_nos: Mutex::new(Vec::new()),
         }
     }
 
     fn requests(&self) -> Vec<CouponRedemptionRequest> {
         self.requests.lock().expect("coupon requests lock").clone()
+    }
+
+    fn consumed_redemptions(&self) -> usize {
+        self.consumed_request_nos
+            .lock()
+            .expect("consumed locks")
+            .len()
     }
 }
 
@@ -509,12 +611,23 @@ impl CouponRedemptionPort for MockCouponRedemptionPort {
         self.requests
             .lock()
             .expect("coupon requests lock")
-            .push(request);
+            .push(request.clone());
+        let mut consumed = self
+            .consumed_request_nos
+            .lock()
+            .expect("consumed locks");
+        let replayed = consumed.iter().any(|value| value == &request.request_no);
+        if !replayed {
+            consumed.push(request.request_no);
+        }
         let grant_amount = self.grant_amount.clone();
         Box::pin(async move {
+            // Yield so a concurrent replay reaches redemption before this
+            // attempt finishes fulfilment.
+            tokio::task::yield_now().await;
             Ok(CouponRedemptionOutcome {
                 accepted: true,
-                replayed: false,
+                replayed,
                 benefit: CouponRedemptionBenefit::TokenBankCredit { grant_amount },
             })
         })
@@ -524,6 +637,7 @@ impl CouponRedemptionPort for MockCouponRedemptionPort {
 #[derive(Default)]
 struct MockAccountValueFulfillmentStore {
     contexts: Mutex<HashMap<String, AccountValueFulfillmentContext>>,
+    failure_evidence: Mutex<HashMap<String, String>>,
     reserve_calls: Mutex<u32>,
     commit_calls: Mutex<u32>,
     release_calls: Mutex<u32>,
@@ -543,6 +657,14 @@ impl MockAccountValueFulfillmentStore {
 
     fn commit_calls(&self) -> u32 {
         *self.commit_calls.lock().expect("commit lock")
+    }
+
+    fn failure_evidence(&self, order_id: &str) -> Option<String> {
+        self.failure_evidence
+            .lock()
+            .expect("failure evidence lock")
+            .get(order_id)
+            .cloned()
     }
 }
 
@@ -863,10 +985,22 @@ impl AccountValueFulfillmentStore for MockAccountValueFulfillmentStore {
         _tenant_id: &'a str,
         _organization_id: Option<&'a str>,
         _owner_user_id: &'a str,
-        _order_id: &'a str,
-        _reason: &'a str,
+        order_id: &'a str,
+        reason: &'a str,
     ) -> AccountValueFulfillmentFuture<'a, bool> {
-        Box::pin(async { Ok(false) })
+        let mut contexts = self.contexts.lock().expect("contexts lock");
+        let Some(context) = contexts.get_mut(order_id) else {
+            return Box::pin(async { Ok(false) });
+        };
+        if context.already_fulfilled() {
+            return Box::pin(async { Ok(false) });
+        }
+        context.fulfillment_status = "failed".to_owned();
+        self.failure_evidence
+            .lock()
+            .expect("failure evidence lock")
+            .insert(order_id.to_owned(), reason.to_owned());
+        Box::pin(async { Ok(true) })
     }
 
     fn release_account_value_fulfillment_reservation<'a>(
@@ -884,6 +1018,22 @@ impl AccountValueFulfillmentStore for MockAccountValueFulfillmentStore {
         context: &'a AccountValueFulfillmentContext,
     ) -> AccountValueFulfillmentFuture<'a, FulfillAccountValueOrderOutcome> {
         *self.commit_calls.lock().expect("commit lock") += 1;
+        let mut contexts = self.contexts.lock().expect("contexts lock");
+        let Some(current) = contexts.get_mut(&context.order_id) else {
+            return Box::pin(async {
+                Err(CommerceServiceError::not_found(
+                    "account value order was not found",
+                ))
+            });
+        };
+        if current.already_fulfilled() {
+            return Box::pin(async move { Ok(FulfillAccountValueOrderOutcome::replayed(context)) });
+        }
+        current.fulfillment_status = "fulfilled".to_owned();
+        self.failure_evidence
+            .lock()
+            .expect("failure evidence lock")
+            .remove(&context.order_id);
         Box::pin(async move { Ok(FulfillAccountValueOrderOutcome::fulfilled(context)) })
     }
 }
@@ -891,11 +1041,22 @@ impl AccountValueFulfillmentStore for MockAccountValueFulfillmentStore {
 #[derive(Default)]
 struct MockAccountValueLedgerPort {
     commands: Mutex<Vec<AccountValueLedgerCommand>>,
+    applied_keys: Mutex<Vec<String>>,
+    attempts: Mutex<u32>,
+    fail_next: Mutex<Option<String>>,
 }
 
 impl MockAccountValueLedgerPort {
     fn commands(&self) -> Vec<AccountValueLedgerCommand> {
         self.commands.lock().expect("commands lock").clone()
+    }
+
+    fn attempts(&self) -> u32 {
+        *self.attempts.lock().expect("attempts lock")
+    }
+
+    fn fail_next(&self, message: &str) {
+        *self.fail_next.lock().expect("fail next lock") = Some(message.to_owned());
     }
 }
 
@@ -904,11 +1065,26 @@ impl AccountValueLedgerPort for MockAccountValueLedgerPort {
         &'a self,
         command: AccountValueLedgerCommand,
     ) -> AccountValueFulfillmentFuture<'a, AccountValueLedgerOutcome> {
-        self.commands.lock().expect("commands lock").push(command);
-        Box::pin(async {
+        *self.attempts.lock().expect("attempts lock") += 1;
+        if let Some(message) = self.fail_next.lock().expect("fail next lock").take() {
+            return Box::pin(async move {
+                Err(CommerceServiceError::provider_unavailable(message))
+            });
+        }
+        Box::pin(async move {
+            // Yield so a concurrent replay reaches the idempotency guard too.
+            tokio::task::yield_now().await;
+            let mut applied_keys = self.applied_keys.lock().expect("applied keys lock");
+            let replayed = applied_keys
+                .iter()
+                .any(|key| key == &command.idempotency_key);
+            if !replayed {
+                applied_keys.push(command.idempotency_key.clone());
+                self.commands.lock().expect("commands lock").push(command);
+            }
             Ok(AccountValueLedgerOutcome {
                 accepted: true,
-                replayed: false,
+                replayed,
                 ledger_entry_id: Some("ledger-1".to_owned()),
                 account_effect_reference_id: None,
             })

@@ -3771,6 +3771,16 @@
               }
             }
           },
+          "503": {
+            "description": "Coupon consumed but benefit delivery failed. The coupon was consumed and the order was created, yet the benefit was not delivered. Retrying the same request with the same Idempotency-Key is safe: it returns the same order, re-attempts benefit delivery, and never consumes another coupon. `ProblemDetail.code` is `50302` (domain code, distinct from `50301` and `50001`) with `i18nKey` `orders.coupon_redemptions.benefit_delivery_failed`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error",
             "content": {

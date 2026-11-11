@@ -6,8 +6,14 @@
  * core public exports). This module keeps the package's public export
  * surface stable for existing consumers.
  */
-export { createSubscriptionPurchaseService } from "@sdkwork/order-h5-core/sdk";
+export {
+  COUPON_BENEFIT_DELIVERY_FAILED_I18N_KEY,
+  classifyCouponRedemptionFailure,
+  createSubscriptionPurchaseService,
+} from "@sdkwork/order-h5-core/sdk";
 export type {
+  CouponRedemptionFailure,
+  CouponRedemptionFailureKind,
   CreateSubscriptionPurchaseServiceOptions,
   CouponRedemptionResult,
   SubscriptionPurchasePort,

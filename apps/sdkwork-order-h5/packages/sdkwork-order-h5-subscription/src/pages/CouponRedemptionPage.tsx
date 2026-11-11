@@ -1,11 +1,14 @@
 import React, { useRef, useState } from "react";
 import { createSdkworkIdempotencyParams } from "@sdkwork/order-service";
 import { useTranslation } from "react-i18next";
-import { Ticket, CheckCircle2, Loader2 } from "lucide-react";
+import { Check, CheckCircle2, Copy, Loader2, RotateCw, Ticket } from "lucide-react";
 import { PageLayout } from "@sdkwork/ui-mobile-react";
 
 import {
+  classifyCouponRedemptionFailure,
   createSubscriptionPurchaseService,
+  type CouponRedemptionFailure,
+  type CouponRedemptionFailureKind,
   type CouponRedemptionResult,
   type SubscriptionPurchasePort,
 } from "../services/SubscriptionPurchaseService";
@@ -15,6 +18,30 @@ export interface CouponRedemptionPageProps {
   onBalanceChanged?: () => void;
 }
 
+/**
+ * One customer-visible message per failure family: a retryable post-consumption
+ * delivery failure, a bad/expired code, and an already-consumed coupon are
+ * never collapsed into one generic "redemption failed" line.
+ */
+const FAILURE_COPY: Record<CouponRedemptionFailureKind, { key: string; fallback: string }> = {
+  benefit_delivery_failed: {
+    key: "subscription.coupon_benefit_delivery_failed",
+    fallback: "券已核销，但权益发放失败；请重试，重试不会重复扣券。",
+  },
+  invalid_or_expired: {
+    key: "subscription.coupon_invalid_or_expired",
+    fallback: "兑换码无效或已过期，请检查兑换码。",
+  },
+  already_used: {
+    key: "subscription.coupon_already_used",
+    fallback: "该优惠券已被使用。",
+  },
+  request_failed: {
+    key: "subscription.coupon_request_failed",
+    fallback: "兑换请求未完成，请稍后重试。",
+  },
+};
+
 export function CouponRedemptionPage({
   service: serviceProp,
   onBalanceChanged,
@@ -22,46 +49,67 @@ export function CouponRedemptionPage({
   const { t } = useTranslation();
   const service = serviceProp ?? createSubscriptionPurchaseService();
   const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<CouponRedemptionFailure | null>(null);
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [result, setResult] = useState<CouponRedemptionResult | null>(null);
+  const [traceIdCopied, setTraceIdCopied] = useState(false);
 
   /**
-   * Idempotency key scoped to one redemption attempt of the currently
-   * entered code: retries of the same code dedupe server-side instead of
-   * re-consuming the coupon.
+   * Idempotency intent for the redemption the customer confirmed: the key is
+   * derived once for the entered code and kept for every retry of that same
+   * intent, so a retry after a post-consumption delivery failure replays the
+   * original redemption instead of consuming another coupon. A different code
+   * (or a completed redemption) starts a new intent and therefore a new key.
    */
-  const redeemKeyRef = useRef<{ code: string; key: string } | null>(null);
+  const intentRef = useRef<{ code: string; idempotencyKey: string } | null>(null);
 
-  async function handleRedeem() {
+  function idempotencyKeyFor(normalizedCode: string): string {
+    if (intentRef.current?.code !== normalizedCode) {
+      intentRef.current = {
+        code: normalizedCode,
+        idempotencyKey: createSdkworkIdempotencyParams().idempotencyKey,
+      };
+    }
+    return intentRef.current.idempotencyKey;
+  }
+
+  async function submit() {
     const normalizedCode = code.trim();
     if (!normalizedCode) {
-      setError(t("subscription.coupon_code_required", "请输入兑换码"));
+      setCodeError(t("subscription.coupon_code_required", "请输入兑换码"));
       return;
     }
     if (isRedeeming) {
       return;
     }
-    setError(null);
+    setCodeError(null);
+    setFailure(null);
+    setTraceIdCopied(false);
     setIsRedeeming(true);
     try {
-      if (!redeemKeyRef.current || redeemKeyRef.current.code !== normalizedCode) {
-        redeemKeyRef.current = {
-          code: normalizedCode,
-          key: createSdkworkIdempotencyParams().idempotencyKey,
-        };
-      }
-      const next = await service.redeemCoupon(normalizedCode, redeemKeyRef.current.key);
+      const next = await service.redeemCoupon(normalizedCode, idempotencyKeyFor(normalizedCode));
+      intentRef.current = null;
       setResult(next);
       onBalanceChanged?.();
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : t("subscription.coupon_redeem_failed", "兑换失败，请稍后重试"),
-      );
+      setFailure(classifyCouponRedemptionFailure(cause));
     } finally {
       setIsRedeeming(false);
+    }
+  }
+
+  async function copyTraceId(traceId: string) {
+    const clipboard = navigator.clipboard;
+    if (!clipboard) {
+      return;
+    }
+    try {
+      await clipboard.writeText(traceId);
+      setTraceIdCopied(true);
+      window.setTimeout(() => setTraceIdCopied(false), 2000);
+    } catch {
+      // Clipboard permission denied: the trace id stays visible and selectable.
     }
   }
 
@@ -117,17 +165,31 @@ export function CouponRedemptionPage({
               </label>
               <input
                 value={code}
-                onChange={(event) => setCode(event.target.value)}
+                onChange={(event) => {
+                  setCode(event.target.value);
+                  setCodeError(null);
+                  setFailure(null);
+                  setTraceIdCopied(false);
+                }}
                 placeholder={t("subscription.coupon_code_placeholder", "请输入兑换码")}
                 className="w-full rounded-xl border border-border-color bg-chat-other-bg px-4 py-3 text-[15px] text-text-main outline-none focus:border-primary-blue"
               />
-              {error && (
-                <p className="mt-2 text-[13px] text-red-500">{error}</p>
+              {codeError && (
+                <p className="mt-2 text-[13px] text-red-500">{codeError}</p>
+              )}
+              {failure && (
+                <CouponRedemptionFailureCard
+                  copied={traceIdCopied}
+                  failure={failure}
+                  isRetrying={isRedeeming}
+                  onCopy={() => void copyTraceId(failure.traceId ?? "")}
+                  onRetry={() => void submit()}
+                />
               )}
               <button
                 type="button"
                 disabled={isRedeeming || !code.trim()}
-                onClick={() => void handleRedeem()}
+                onClick={() => void submit()}
                 className="w-full mt-4 bg-primary-blue active:opacity-80 disabled:opacity-40 text-white font-medium text-[15px] py-3 rounded-xl flex items-center justify-center gap-2"
               >
                 {isRedeeming ? (
@@ -151,5 +213,70 @@ export function CouponRedemptionPage({
         )}
       </div>
     </PageLayout>
+  );
+}
+
+function CouponRedemptionFailureCard({
+  copied,
+  failure,
+  isRetrying,
+  onCopy,
+  onRetry,
+}: {
+  copied: boolean;
+  failure: CouponRedemptionFailure;
+  isRetrying: boolean;
+  onCopy: () => void;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  const copy = FAILURE_COPY[failure.kind];
+  return (
+    <div
+      role="alert"
+      className="mt-2 rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900/60 dark:bg-red-950/40"
+    >
+      <p className="text-[13px] font-medium leading-relaxed text-red-600 dark:text-red-300">
+        {t(copy.key, copy.fallback)}
+      </p>
+      {failure.retryable && (
+        <p className="mt-1 text-[12px] leading-relaxed text-red-500 dark:text-red-400">
+          {t("subscription.coupon_support_hint", "如多次失败，请联系客服并提供追踪号")}
+        </p>
+      )}
+      {failure.traceId && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-red-500 dark:text-red-400">
+          <span>{t("subscription.coupon_trace_id", "追踪号")}</span>
+          <code className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-[11px] text-text-main dark:bg-white/10">
+            {failure.traceId}
+          </code>
+          <button
+            type="button"
+            onClick={onCopy}
+            className="inline-flex items-center gap-1 underline"
+          >
+            {copied ? (
+              <Check className="w-3 h-3" strokeWidth={2.5} />
+            ) : (
+              <Copy className="w-3 h-3" strokeWidth={2.5} />
+            )}
+            {copied
+              ? t("subscription.coupon_trace_id_copied", "已复制")
+              : t("subscription.coupon_trace_id_copy", "复制")}
+          </button>
+        </div>
+      )}
+      {failure.retryable && (
+        <button
+          type="button"
+          disabled={isRetrying}
+          onClick={onRetry}
+          className="mt-3 inline-flex items-center gap-2 bg-primary-blue active:opacity-80 disabled:opacity-40 text-white font-medium text-[13px] px-3 py-2 rounded-lg"
+        >
+          <RotateCw className="w-3.5 h-3.5" strokeWidth={2.5} />
+          {t("subscription.coupon_retry", "重试")}
+        </button>
+      )}
+    </div>
   );
 }

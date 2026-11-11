@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use axum::extract::{Extension, Path, Query, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -22,7 +22,7 @@ use sdkwork_order_service::{
     CreateAccountRechargeOrderCommand, CreateAccountRechargeOrderOutcome,
     CreateCashWithdrawalRequestCommand, CreateCouponRechargeOrderCommand,
     CreateOrderRefundRequestCommand, CreatePointsRechargeOrderCommand,
-    CreatePointsRechargeOrderOutcome, FulfillAccountValueOrderCommand,
+    CreatePointsRechargeOrderOutcome, CouponFulfillmentError, FulfillAccountValueOrderCommand,
     MembershipPurchaseFulfillmentPort, NoopAccountValueLedgerPort, NoopCouponRedemptionPort,
     NoopMembershipPurchaseFulfillmentPort, OrderOwnerListQuery, PayOwnerOrderCommand,
     PayOwnerOrderCommandInput, PayOwnerOrderOutcome, RechargeGrantPreview, RechargePackageItem,
@@ -37,8 +37,8 @@ use sqlx::PgPool;
 
 use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query,
-    parse_offset_list_params_validated, success_command, success_created_item, success_item,
-    success_items, unauthorized, validation,
+    parse_offset_list_params_validated, problem_with_presentation, resolve_trace_id, success_command,
+    success_created_item, success_item, success_items, unauthorized, validation,
 };
 use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
@@ -56,6 +56,22 @@ const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
 /// Mirrors the `LEFT($1, 512)` bound in the store failure-evidence statement.
 const MAX_FULFILLMENT_FAILURE_REASON_CHARS: usize = 512;
 const DEFAULT_FULFILLMENT_FAILURE_REASON: &str = "coupon redemption fulfillment failed";
+/// Stable domain `ProblemDetail.code` for a coupon redemption that consumed the
+/// coupon but could not deliver the benefit.
+///
+/// Registered by the order app-api authority for
+/// `orders.couponRedemptions.create` (see the `503` response description in
+/// `apis/app-api/order/order-app-api.openapi.json`). Deliberately distinct from
+/// the generic platform `50001` and from `50301` so clients can branch on the
+/// retry-safe coupon outcome without parsing human text.
+const COUPON_BENEFIT_DELIVERY_FAILED_CODE: i32 = 50302;
+/// Client localization hook for [`COUPON_BENEFIT_DELIVERY_FAILED_CODE`].
+const COUPON_BENEFIT_DELIVERY_FAILED_I18N_KEY: &str =
+    "orders.coupon_redemptions.benefit_delivery_failed";
+const COUPON_BENEFIT_DELIVERY_FAILED_TITLE: &str = "Coupon redeemed but benefit not delivered";
+/// Client-safe outcome statement: no internal error text, and an explicit
+/// retry guarantee. The internal cause is logged with the trace id instead.
+const COUPON_BENEFIT_DELIVERY_FAILED_DETAIL: &str = "The coupon was consumed and the order was created, but the benefit was not delivered. Retrying the same request is safe and will not consume another coupon.";
 
 /// Payment countdown in minutes, backed by the shared expiry window
 /// (`SDKWORK_ORDER_PAYMENT_EXPIRE_SECONDS`, default 30 minutes).
@@ -148,6 +164,18 @@ struct AppRechargeCheckoutState {
     membership_fulfillment_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     orders: Arc<dyn CommerceOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
+}
+
+/// Ports used by the coupon-redemption command.
+///
+/// Borrowed so the HTTP handler, the idempotent replay path, and the tests all
+/// execute the same code instead of duplicating the fulfilment sequence.
+struct CouponRedemptionPorts<'a> {
+    store: &'a dyn CommerceRechargeCheckoutStore,
+    fulfillment_store: &'a dyn AccountValueFulfillmentStore,
+    coupon_redemption_port: &'a dyn CouponRedemptionPort,
+    account_value_ledger_port: &'a dyn AccountValueLedgerPort,
+    membership_fulfillment_port: &'a dyn MembershipPurchaseFulfillmentPort,
 }
 
 struct NoopAccountValueFulfillmentStore;
@@ -1427,14 +1455,41 @@ async fn create_coupon_redemption(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
+    let ports = CouponRedemptionPorts {
+        store: state.store.as_ref(),
+        fulfillment_store: state.fulfillment_store.as_ref(),
+        coupon_redemption_port: state.coupon_redemption_port.as_ref(),
+        account_value_ledger_port: state.account_value_ledger_port.as_ref(),
+        membership_fulfillment_port: state.membership_fulfillment_port.as_ref(),
+    };
+    create_coupon_redemption_order(&ports, ctx, &subject, &headers, request).await
+}
+
+/// Applies the coupon-redemption idempotency contract.
+///
+/// The same `Idempotency-Key` always resolves to one persisted order:
+/// - an existing order is re-fulfilled (never re-previewed) and the coupon code
+///   must still match the one recorded on that order;
+/// - a failed order is re-fulfilled in place, so a retry can deliver the
+///   benefit exactly once;
+/// - if a concurrent request won the unique order insert, the store returns
+///   that order and this request re-fulfils it instead of creating a second
+///   order or consuming a second coupon.
+async fn create_coupon_redemption_order(
+    ports: &CouponRedemptionPorts<'_>,
+    ctx: Option<&WebRequestContext>,
+    subject: &AppRuntimeSubject,
+    headers: &HeaderMap,
+    request: CouponRedemptionCreateBody,
+) -> Response {
     let coupon_code = request.coupon_code.trim();
     if coupon_code.is_empty() {
         return validation(ctx, "couponCode is required");
     }
     let zero = CommerceMoney::new("0").expect("zero must be valid commerce money");
-    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+    let write_headers = match required_app_write_command_headers(ctx, headers, |idempotency_key| {
         fallback_account_value_request_no(
-            &subject,
+            subject,
             AccountValueOrderSubject::CouponRecharge,
             zero.as_str(),
             None,
@@ -1444,7 +1499,7 @@ async fn create_coupon_redemption(
         Ok(value) => value,
         Err(response) => return *response,
     };
-    let existing_order = match state
+    let existing_order = match ports
         .store
         .load_account_value_order_by_idempotency(
             &subject.tenant_id,
@@ -1458,41 +1513,17 @@ async fn create_coupon_redemption(
         Err(error) => return map_service_error(ctx, error),
     };
     if let Some(existing_order) = existing_order {
-        let fulfill_command = match default_fulfill_account_value_order_command(
-            AccountValueOrderSubject::CouponRecharge,
-            &subject.tenant_id,
-            subject.organization_id.as_deref(),
-            &subject.user_id,
-            &existing_order.order_id,
-            &write_headers.request_no,
-        ) {
-            Ok(value) => value,
-            Err(error) => return map_service_error(ctx, error),
-        };
-        let context = match state
-            .fulfillment_store
-            .load_account_value_fulfillment_context(&fulfill_command)
-            .await
-        {
-            Ok(Some(value)) => value,
-            Ok(None) => {
-                return map_service_error(
-                    ctx,
-                    CommerceServiceError::not_found("coupon redemption order was not found"),
-                )
-            }
-            Err(error) => return map_service_error(ctx, error),
-        };
-        if let Err(error) = validate_coupon_redemption_replay(
-            existing_order.subject,
-            context.coupon_code.as_deref(),
+        return replay_coupon_redemption_order(
+            ports,
+            ctx,
+            subject,
+            existing_order,
             coupon_code,
-        ) {
-            return map_service_error(ctx, error);
-        }
-        return fulfill_coupon_redemption_order(&state, ctx, fulfill_command).await;
+            &write_headers.request_no,
+        )
+        .await;
     }
-    let preview = match state
+    let preview = match ports
         .coupon_redemption_port
         .preview_coupon(CouponRedemptionRequest {
             tenant_id: subject.tenant_id.clone(),
@@ -1522,7 +1553,7 @@ async fn create_coupon_redemption(
     let grant_amount = benefit.grant_amount();
     let command = match build_create_coupon_recharge_command(
         CreateAccountRechargeCommandInput {
-            subject: &subject,
+            subject,
             order_subject: AccountValueOrderSubject::CouponRecharge,
             target_asset,
             amount: zero,
@@ -1542,23 +1573,82 @@ async fn create_coupon_redemption(
         Ok(value) => value,
         Err(error) => return map_service_error(ctx, error),
     };
-    let order_id = command.order_id.clone();
-    match state.store.create_coupon_recharge_order(command).await {
-        Ok(_) => {}
+    let requested_order_id = command.order_id.clone();
+    let created = match ports.store.create_coupon_recharge_order(command).await {
+        Ok(outcome) => outcome,
         Err(error) => return map_service_error(ctx, error),
+    };
+    if created.order_id != requested_order_id {
+        // A concurrent request with the same idempotency key won the unique
+        // order insert; the store returned the persisted order. Fulfilment must
+        // target that order (and re-validate the coupon) so a replay never
+        // creates a second order or consumes a second coupon.
+        return replay_coupon_redemption_order(
+            ports,
+            ctx,
+            subject,
+            created,
+            coupon_code,
+            &write_headers.request_no,
+        )
+        .await;
     }
     let fulfill_command = match default_fulfill_account_value_order_command(
         AccountValueOrderSubject::CouponRecharge,
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &subject.user_id,
-        &order_id,
+        &created.order_id,
         &write_headers.request_no,
     ) {
         Ok(value) => value,
         Err(error) => return map_service_error(ctx, error),
     };
-    fulfill_coupon_redemption_order(&state, ctx, fulfill_command).await
+    fulfill_coupon_redemption_order(ports, ctx, fulfill_command).await
+}
+
+/// Re-fulfils a persisted coupon-redemption order for an idempotent replay.
+async fn replay_coupon_redemption_order(
+    ports: &CouponRedemptionPorts<'_>,
+    ctx: Option<&WebRequestContext>,
+    subject: &AppRuntimeSubject,
+    existing_order: CreateAccountRechargeOrderOutcome,
+    coupon_code: &str,
+    request_no: &str,
+) -> Response {
+    let fulfill_command = match default_fulfill_account_value_order_command(
+        AccountValueOrderSubject::CouponRecharge,
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &subject.user_id,
+        &existing_order.order_id,
+        request_no,
+    ) {
+        Ok(value) => value,
+        Err(error) => return map_service_error(ctx, error),
+    };
+    let context = match ports
+        .fulfillment_store
+        .load_account_value_fulfillment_context(&fulfill_command)
+        .await
+    {
+        Ok(Some(value)) => value,
+        Ok(None) => {
+            return map_service_error(
+                ctx,
+                CommerceServiceError::not_found("coupon redemption order was not found"),
+            )
+        }
+        Err(error) => return map_service_error(ctx, error),
+    };
+    if let Err(error) = validate_coupon_redemption_replay(
+        existing_order.subject,
+        context.coupon_code.as_deref(),
+        coupon_code,
+    ) {
+        return map_service_error(ctx, error);
+    }
+    fulfill_coupon_redemption_order(ports, ctx, fulfill_command).await
 }
 
 fn validate_coupon_redemption_replay(
@@ -1634,15 +1724,15 @@ async fn record_coupon_redemption_failure(
 }
 
 async fn fulfill_coupon_redemption_order(
-    state: &AppRechargeCheckoutState,
+    ports: &CouponRedemptionPorts<'_>,
     ctx: Option<&WebRequestContext>,
     command: FulfillAccountValueOrderCommand,
 ) -> Response {
     match redeem_coupon_and_fulfill_order(
-        &*state.fulfillment_store,
-        &*state.coupon_redemption_port,
-        &*state.account_value_ledger_port,
-        &*state.membership_fulfillment_port,
+        ports.fulfillment_store,
+        ports.coupon_redemption_port,
+        ports.account_value_ledger_port,
+        ports.membership_fulfillment_port,
         command.clone(),
     )
     .await
@@ -1659,17 +1749,63 @@ async fn fulfill_coupon_redemption_order(
         ),
         Err(error) => {
             record_coupon_redemption_failure(
-                &*state.fulfillment_store,
+                ports.fulfillment_store,
                 &command.tenant_id,
                 command.organization_id.as_deref(),
                 &command.owner_user_id,
                 &command.order_id,
-                &error,
+                error.service_error(),
             )
             .await;
-            map_service_error(ctx, error)
+            map_coupon_fulfillment_error(ctx, error)
         }
     }
+}
+
+/// Maps a staged coupon-fulfilment failure to its wire contract.
+///
+/// A `BenefitDelivery` failure means the coupon was already consumed and the
+/// order exists, so it becomes an actionable, retry-safe `503`. A
+/// `BeforeRedemption` failure never consumed anything and keeps its historical
+/// classification (validation/conflict/...), so no other behaviour changes.
+fn map_coupon_fulfillment_error(
+    ctx: Option<&WebRequestContext>,
+    error: CouponFulfillmentError,
+) -> Response {
+    match error {
+        CouponFulfillmentError::BenefitDelivery(internal) => {
+            coupon_benefit_delivery_failed_problem(ctx, &internal)
+        }
+        CouponFulfillmentError::BeforeRedemption(internal) => map_service_error(ctx, internal),
+    }
+}
+
+fn coupon_benefit_delivery_failed_problem(
+    ctx: Option<&WebRequestContext>,
+    internal: &CommerceServiceError,
+) -> Response {
+    let trace_id = resolve_trace_id(ctx);
+    let operation_id = ctx
+        .and_then(|context| context.operation.as_ref())
+        .map(|operation| operation.operation_id.as_str())
+        .unwrap_or("unknown");
+    tracing::error!(
+        target = "order.recharge",
+        trace_id = %trace_id,
+        operation_id,
+        error_code = internal.code(),
+        error = %internal.message(),
+        "coupon redemption consumed the coupon but benefit delivery failed; the same idempotency key can be retried safely"
+    );
+    problem_with_presentation(
+        ctx,
+        &trace_id,
+        StatusCode::SERVICE_UNAVAILABLE,
+        COUPON_BENEFIT_DELIVERY_FAILED_CODE,
+        COUPON_BENEFIT_DELIVERY_FAILED_TITLE,
+        COUPON_BENEFIT_DELIVERY_FAILED_DETAIL,
+        COUPON_BENEFIT_DELIVERY_FAILED_I18N_KEY,
+    )
 }
 
 fn map_coupon_fulfilled_benefit(
@@ -2675,6 +2811,19 @@ fn money_cents(amount: &str) -> Result<i64, ()> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    use axum::http::HeaderValue;
+    use sdkwork_order_service::{
+        AccountValueFulfillmentContext, AccountValueLedgerCommand, AccountValueLedgerOutcome,
+        CouponRedemptionOutcome, FulfillAccountValueOrderOutcome,
+    };
+    use sdkwork_web_core::{
+        ServerRequestId, WebApiSurface, WebAuthMode, WebOperationBinding, WebRequestContext,
+        WebTransportFacts,
+    };
+
     use super::*;
 
     #[test]
@@ -2819,7 +2968,7 @@ mod tests {
     fn coupon_redemption_restores_an_existing_order_before_promotion_preview() {
         let source = include_str!("recharge_router.rs");
         let handler = source
-            .split("async fn create_coupon_redemption")
+            .split("async fn create_coupon_redemption_order")
             .nth(1)
             .expect("coupon redemption handler");
         let replay_lookup = handler
@@ -2902,7 +3051,7 @@ mod tests {
             .expect("failure evidence call");
         assert!(fulfilment_call < error_branch);
         assert!(error_branch < evidence_call);
-        assert!(fulfilment[evidence_call..].contains("map_service_error(ctx, error)"));
+        assert!(fulfilment[evidence_call..].contains("map_coupon_fulfillment_error(ctx, error)"));
         assert!(!fulfilment.contains("map_service_error(ctx, marker_error)"));
 
         let paid_handler = top_level_function(source, "async fn submit_recharge(");
@@ -2942,6 +3091,731 @@ mod tests {
             payment_scene("wechat_native"),
             "native products retain provider channel routing"
         );
+    }
+
+    const COUPON_TRACE_ID: &str = "trace-coupon-redemption-1";
+    const COUPON_ORDER_IDEMPOTENCY_KEY: &str = "coupon-redemption-idempotency-1";
+
+    fn coupon_redemption_request(coupon_code: &str) -> CouponRedemptionCreateBody {
+        CouponRedemptionCreateBody {
+            coupon_code: coupon_code.to_owned(),
+        }
+    }
+
+    fn coupon_redemption_headers(idempotency_key: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            crate::command_headers::IDEMPOTENCY_KEY_HEADER,
+            HeaderValue::from_str(idempotency_key).expect("idempotency key header"),
+        );
+        headers
+    }
+
+    fn coupon_redemption_web_context() -> WebRequestContext {
+        WebRequestContext {
+            request_id: ServerRequestId("request-coupon-redemption-1".to_owned()),
+            api_surface: WebApiSurface::AppApi,
+            auth_mode: WebAuthMode::DualToken,
+            transport: WebTransportFacts {
+                path: "/app/v3/api/orders/coupon_redemptions".to_owned(),
+                method: "POST".to_owned(),
+                auth_token_present: true,
+                access_token_present: true,
+                api_key_present: false,
+                ingress_token_present: false,
+                oauth_bearer_present: false,
+                agent_token_present: false,
+            },
+            principal: None,
+            locale: None,
+            client_kind: None,
+            operation: Some(WebOperationBinding {
+                operation_id: "orders.couponRedemptions.create".to_owned(),
+                route_template: "/app/v3/api/orders/coupon_redemptions".to_owned(),
+                rate_limit_tier: None,
+                idempotent: true,
+            }),
+            trace_id: Some(COUPON_TRACE_ID.to_owned()),
+            idempotency_key: None,
+        }
+    }
+
+    async fn response_json(response: Response) -> serde_json::Value {
+        let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .expect("response body");
+        serde_json::from_slice(&body).expect("response json")
+    }
+
+    struct CouponRedemptionHarness {
+        store: Arc<MockRechargeCheckoutStore>,
+        fulfillment: Arc<MockAccountValueFulfillmentStore>,
+        coupon: Arc<MockCouponRedemptionPort>,
+        ledger: Arc<MockAccountValueLedgerPort>,
+    }
+
+    impl CouponRedemptionHarness {
+        fn new() -> Self {
+            let fulfillment = Arc::new(MockAccountValueFulfillmentStore::default());
+            Self {
+                store: Arc::new(MockRechargeCheckoutStore::new(fulfillment.clone())),
+                fulfillment,
+                coupon: Arc::new(MockCouponRedemptionPort::with_benefit("5000")),
+                ledger: Arc::new(MockAccountValueLedgerPort::default()),
+            }
+        }
+
+        fn ports(&self) -> CouponRedemptionPorts<'_> {
+            CouponRedemptionPorts {
+                store: self.store.as_ref(),
+                fulfillment_store: self.fulfillment.as_ref(),
+                coupon_redemption_port: self.coupon.as_ref(),
+                account_value_ledger_port: self.ledger.as_ref(),
+                membership_fulfillment_port: &NoopMembershipPurchaseFulfillmentPort,
+            }
+        }
+
+        async fn call(&self, idempotency_key: &str, coupon_code: &str) -> Response {
+            let ctx = coupon_redemption_web_context();
+            let ports = self.ports();
+            create_coupon_redemption_order(
+                &ports,
+                Some(&ctx),
+                &test_subject(),
+                &coupon_redemption_headers(idempotency_key),
+                coupon_redemption_request(coupon_code),
+            )
+            .await
+        }
+    }
+
+    #[tokio::test]
+    async fn coupon_redemption_success_replays_the_same_order_without_double_redemption() {
+        let harness = CouponRedemptionHarness::new();
+
+        let first = harness.call(COUPON_ORDER_IDEMPOTENCY_KEY, "WELCOME").await;
+        assert_eq!(first.status(), StatusCode::CREATED);
+        let first_body = response_json(first).await;
+
+        let second = harness.call(COUPON_ORDER_IDEMPOTENCY_KEY, "WELCOME").await;
+        assert_eq!(second.status(), StatusCode::CREATED);
+        let second_body = response_json(second).await;
+
+        let first_item = &first_body["data"]["item"];
+        let second_item = &second_body["data"]["item"];
+        assert_eq!(first_item["orderId"], second_item["orderId"]);
+        assert_eq!(first_item["orderNo"], second_item["orderNo"]);
+        assert_eq!(false, first_item["replayed"]);
+        assert_eq!(true, second_item["replayed"]);
+        assert_eq!(1, harness.store.insert_calls());
+        assert_eq!(1, harness.coupon.consumed_redemptions());
+        assert_eq!(1, harness.ledger.applied_commands());
+        assert_eq!(1, harness.coupon.preview_calls());
+
+        let redeem_requests = harness.coupon.redeem_requests();
+        assert_eq!(2, redeem_requests.len());
+        assert_eq!(
+            redeem_requests[0].idempotency_key,
+            redeem_requests[1].idempotency_key,
+            "both attempts must redeem under the same order-scoped idempotency key"
+        );
+        assert_eq!(
+            redeem_requests[0].request_no, redeem_requests[1].request_no,
+            "a replay must reuse the persisted order as the redemption target"
+        );
+    }
+
+    #[tokio::test]
+    async fn coupon_redemption_failure_returns_retryable_503_and_replays_fulfilment() {
+        let harness = CouponRedemptionHarness::new();
+        harness.ledger.fail_next(
+            "SDKWORK_ACCESS_TOKEN is required for account value ledger commands",
+        );
+
+        let failure = harness.call(COUPON_ORDER_IDEMPOTENCY_KEY, "WELCOME").await;
+        assert_eq!(failure.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            Some("application/problem+json"),
+            failure
+                .headers()
+                .get(axum::http::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+        );
+        let problem = response_json(failure).await;
+        assert_eq!(503, problem["status"]);
+        assert_eq!(COUPON_BENEFIT_DELIVERY_FAILED_CODE, problem["code"]);
+        assert_eq!(COUPON_BENEFIT_DELIVERY_FAILED_TITLE, problem["title"]);
+        assert_eq!(COUPON_BENEFIT_DELIVERY_FAILED_DETAIL, problem["detail"]);
+        assert_eq!(
+            COUPON_BENEFIT_DELIVERY_FAILED_I18N_KEY,
+            problem["i18nKey"]
+        );
+        assert_eq!(COUPON_TRACE_ID, problem["traceId"]);
+        assert_eq!("orders.couponRedemptions.create", problem["operationId"]);
+        assert_eq!(
+            "POST /app/v3/api/orders/coupon_redemptions",
+            problem["instance"]
+        );
+        assert!(
+            !problem["detail"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("SDKWORK_ACCESS_TOKEN"),
+            "the internal credential/environment cause must never reach the client"
+        );
+
+        let order_id = harness
+            .fulfillment
+            .only_order_id()
+            .expect("a coupon order must have been created");
+        let failed_context = harness
+            .fulfillment
+            .context(&order_id)
+            .expect("failed order context");
+        assert_eq!("failed", failed_context.fulfillment_status);
+        assert!(
+            harness.fulfillment.failure_evidence(&order_id).is_some(),
+            "failure evidence must be persisted before the response is mapped"
+        );
+
+        let replay = harness.call(COUPON_ORDER_IDEMPOTENCY_KEY, "WELCOME").await;
+        assert_eq!(replay.status(), StatusCode::CREATED);
+        let replay_body = response_json(replay).await;
+        assert_eq!(
+            order_id,
+            replay_body["data"]["item"]["orderId"],
+            "a retry must resolve to the same persisted order"
+        );
+        assert_eq!(true, replay_body["data"]["item"]["replayed"]);
+        assert_eq!(1, harness.store.insert_calls());
+        assert_eq!(1, harness.coupon.consumed_redemptions());
+        assert_eq!(1, harness.ledger.applied_commands());
+        assert_eq!(
+            2,
+            harness.ledger.attempts(),
+            "the retry must attempt benefit delivery again"
+        );
+
+        let fulfilled_context = harness
+            .fulfillment
+            .context(&order_id)
+            .expect("fulfilled order context");
+        assert_eq!("fulfilled", fulfilled_context.fulfillment_status);
+        assert!(
+            harness.fulfillment.failure_evidence(&order_id).is_none(),
+            "eventual success must clear the failure evidence"
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_coupon_redemption_replay_cannot_double_consume() {
+        let harness = CouponRedemptionHarness::new();
+
+        let (first, second) = tokio::join!(
+            harness.call(COUPON_ORDER_IDEMPOTENCY_KEY, "WELCOME"),
+            harness.call(COUPON_ORDER_IDEMPOTENCY_KEY, "WELCOME"),
+        );
+        assert_eq!(first.status(), StatusCode::CREATED);
+        assert_eq!(second.status(), StatusCode::CREATED);
+        let first_body = response_json(first).await;
+        let second_body = response_json(second).await;
+        assert_eq!(
+            first_body["data"]["item"]["orderId"],
+            second_body["data"]["item"]["orderId"],
+            "concurrent replays must converge on one order"
+        );
+        assert_eq!(1, harness.store.insert_calls());
+        assert_eq!(2, harness.store.create_attempts());
+        assert_eq!(1, harness.fulfillment.order_count());
+        assert_eq!(
+            1,
+            harness.coupon.consumed_redemptions(),
+            "a concurrent replay must never consume a second coupon"
+        );
+        assert_eq!(
+            1,
+            harness.ledger.applied_commands(),
+            "a concurrent replay must never credit the benefit twice"
+        );
+    }
+
+    #[tokio::test]
+    async fn coupon_redemption_pre_redemption_errors_keep_their_http_class() {
+        let response = map_coupon_fulfillment_error(
+            Some(&coupon_redemption_web_context()),
+            CouponFulfillmentError::BeforeRedemption(CommerceServiceError::conflict(
+                "coupon redemption preview was rejected",
+            )),
+        );
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = response_json(response).await;
+        assert_eq!(40901, body["code"]);
+    }
+
+    struct MockCouponRedemptionPort {
+        benefit: CouponRedemptionBenefit,
+        preview_calls: Mutex<u32>,
+        redeem_requests: Mutex<Vec<CouponRedemptionRequest>>,
+        consumed_request_nos: Mutex<Vec<String>>,
+    }
+
+    impl MockCouponRedemptionPort {
+        fn with_benefit(grant_amount: &str) -> Self {
+            Self {
+                benefit: CouponRedemptionBenefit::TokenBankCredit {
+                    grant_amount: CommerceMoney::new(grant_amount).expect("coupon benefit"),
+                },
+                preview_calls: Mutex::new(0),
+                redeem_requests: Mutex::new(Vec::new()),
+                consumed_request_nos: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn preview_calls(&self) -> u32 {
+            *self.preview_calls.lock().expect("preview lock")
+        }
+
+        fn redeem_requests(&self) -> Vec<CouponRedemptionRequest> {
+            self.redeem_requests
+                .lock()
+                .expect("redeem requests lock")
+                .clone()
+        }
+
+        fn consumed_redemptions(&self) -> usize {
+            self.consumed_request_nos
+                .lock()
+                .expect("consumed locks")
+                .len()
+        }
+
+        /// Mirrors Promotion's order-scoped redemption: the first request for an
+        /// order consumes the coupon, every later request for that order replays.
+        fn redeem(&self, request: CouponRedemptionRequest) -> CouponRedemptionOutcome {
+            self.redeem_requests
+                .lock()
+                .expect("redeem requests lock")
+                .push(request.clone());
+            let mut consumed = self.consumed_request_nos.lock().expect("consumed lock");
+            let replayed = consumed.iter().any(|value| value == &request.request_no);
+            if !replayed {
+                consumed.push(request.request_no.clone());
+            }
+            CouponRedemptionOutcome {
+                accepted: true,
+                replayed,
+                benefit: self.benefit.clone(),
+            }
+        }
+    }
+
+    impl CouponRedemptionPort for MockCouponRedemptionPort {
+        fn preview_coupon<'a>(
+            &'a self,
+            _request: CouponRedemptionRequest,
+        ) -> sdkwork_order_service::AccountValueFuture<'a, CouponRedemptionOutcome> {
+            *self.preview_calls.lock().expect("preview lock") += 1;
+            let benefit = self.benefit.clone();
+            Box::pin(async move {
+                // Yield so a concurrent replay genuinely interleaves between
+                // preview and order creation instead of completing serially.
+                tokio::task::yield_now().await;
+                Ok(CouponRedemptionOutcome {
+                    accepted: true,
+                    replayed: false,
+                    benefit,
+                })
+            })
+        }
+
+        fn redeem_coupon<'a>(
+            &'a self,
+            request: CouponRedemptionRequest,
+        ) -> sdkwork_order_service::AccountValueFuture<'a, CouponRedemptionOutcome> {
+            let outcome = self.redeem(request);
+            Box::pin(async move {
+                // Yield so a concurrent replay can reach fulfilment too.
+                tokio::task::yield_now().await;
+                Ok(outcome)
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct MockAccountValueFulfillmentStore {
+        contexts: Mutex<HashMap<String, AccountValueFulfillmentContext>>,
+        failure_evidence: Mutex<HashMap<String, String>>,
+        reserve_calls: Mutex<u32>,
+        release_calls: Mutex<u32>,
+        commit_calls: Mutex<u32>,
+    }
+
+    impl MockAccountValueFulfillmentStore {
+        fn seed(&self, context: AccountValueFulfillmentContext) {
+            self.contexts
+                .lock()
+                .expect("contexts lock")
+                .insert(context.order_id.clone(), context);
+        }
+
+        fn context(&self, order_id: &str) -> Option<AccountValueFulfillmentContext> {
+            self.contexts
+                .lock()
+                .expect("contexts lock")
+                .get(order_id)
+                .cloned()
+        }
+
+        fn only_order_id(&self) -> Option<String> {
+            let contexts = self.contexts.lock().expect("contexts lock");
+            if contexts.len() == 1 {
+                contexts.keys().next().cloned()
+            } else {
+                None
+            }
+        }
+
+        fn order_count(&self) -> usize {
+            self.contexts.lock().expect("contexts lock").len()
+        }
+
+        fn failure_evidence(&self, order_id: &str) -> Option<String> {
+            self.failure_evidence
+                .lock()
+                .expect("failure evidence lock")
+                .get(order_id)
+                .cloned()
+        }
+    }
+
+    impl AccountValueFulfillmentStore for MockAccountValueFulfillmentStore {
+        fn load_account_value_fulfillment_context<'a>(
+            &'a self,
+            command: &'a FulfillAccountValueOrderCommand,
+        ) -> sdkwork_order_service::AccountValueFulfillmentFuture<
+            'a,
+            Option<AccountValueFulfillmentContext>,
+        > {
+            let context = self.context(&command.order_id);
+            Box::pin(async move { Ok(context) })
+        }
+
+        fn reserve_account_value_fulfillment<'a>(
+            &'a self,
+            command: &'a FulfillAccountValueOrderCommand,
+            _context: &'a AccountValueFulfillmentContext,
+        ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, ()> {
+            *self.reserve_calls.lock().expect("reserve lock") += 1;
+            let mut contexts = self.contexts.lock().expect("contexts lock");
+            let Some(context) = contexts.get_mut(&command.order_id) else {
+                return Box::pin(async {
+                    Err(CommerceServiceError::not_found(
+                        "account value order was not found",
+                    ))
+                });
+            };
+            if !context.already_fulfilled() && !context.fulfillment_in_progress() {
+                context.fulfillment_status = "processing".to_owned();
+            }
+            Box::pin(async { Ok(()) })
+        }
+
+        fn mark_coupon_redemption_fulfillment_failed<'a>(
+            &'a self,
+            _tenant_id: &'a str,
+            _organization_id: Option<&'a str>,
+            _owner_user_id: &'a str,
+            order_id: &'a str,
+            reason: &'a str,
+        ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, bool> {
+            let mut contexts = self.contexts.lock().expect("contexts lock");
+            let Some(context) = contexts.get_mut(order_id) else {
+                return Box::pin(async { Ok(false) });
+            };
+            if context.already_fulfilled() {
+                return Box::pin(async { Ok(false) });
+            }
+            context.fulfillment_status = "failed".to_owned();
+            self.failure_evidence
+                .lock()
+                .expect("failure evidence lock")
+                .insert(order_id.to_owned(), reason.to_owned());
+            Box::pin(async { Ok(true) })
+        }
+
+        fn release_account_value_fulfillment_reservation<'a>(
+            &'a self,
+            command: &'a FulfillAccountValueOrderCommand,
+            _context: &'a AccountValueFulfillmentContext,
+        ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, ()> {
+            *self.release_calls.lock().expect("release lock") += 1;
+            let mut contexts = self.contexts.lock().expect("contexts lock");
+            if let Some(context) = contexts.get_mut(&command.order_id) {
+                if context.fulfillment_in_progress() {
+                    context.fulfillment_status = "unfulfilled".to_owned();
+                }
+            }
+            Box::pin(async { Ok(()) })
+        }
+
+        fn commit_account_value_fulfillment<'a>(
+            &'a self,
+            _command: FulfillAccountValueOrderCommand,
+            context: &'a AccountValueFulfillmentContext,
+        ) -> sdkwork_order_service::AccountValueFulfillmentFuture<
+            'a,
+            FulfillAccountValueOrderOutcome,
+        > {
+            *self.commit_calls.lock().expect("commit lock") += 1;
+            let mut contexts = self.contexts.lock().expect("contexts lock");
+            let Some(current) = contexts.get_mut(&context.order_id) else {
+                return Box::pin(async {
+                    Err(CommerceServiceError::not_found(
+                        "account value order was not found",
+                    ))
+                });
+            };
+            if current.already_fulfilled() {
+                return Box::pin(async move { Ok(FulfillAccountValueOrderOutcome::replayed(context)) });
+            }
+            current.fulfillment_status = "fulfilled".to_owned();
+            self.failure_evidence
+                .lock()
+                .expect("failure evidence lock")
+                .remove(&context.order_id);
+            Box::pin(async move { Ok(FulfillAccountValueOrderOutcome::fulfilled(context)) })
+        }
+    }
+
+    #[derive(Default)]
+    struct MockAccountValueLedgerPort {
+        applied: Mutex<Vec<AccountValueLedgerCommand>>,
+        applied_keys: Mutex<Vec<String>>,
+        attempts: Mutex<u32>,
+        fail_next: Mutex<Option<String>>,
+    }
+
+    impl MockAccountValueLedgerPort {
+        fn fail_next(&self, message: &str) {
+            *self.fail_next.lock().expect("fail next lock") = Some(message.to_owned());
+        }
+
+        fn applied_commands(&self) -> usize {
+            self.applied.lock().expect("applied lock").len()
+        }
+
+        fn attempts(&self) -> u32 {
+            *self.attempts.lock().expect("attempts lock")
+        }
+    }
+
+    impl AccountValueLedgerPort for MockAccountValueLedgerPort {
+        fn apply_account_value_ledger_command<'a>(
+            &'a self,
+            command: AccountValueLedgerCommand,
+        ) -> sdkwork_order_service::AccountValueFuture<'a, AccountValueLedgerOutcome> {
+            *self.attempts.lock().expect("attempts lock") += 1;
+            if let Some(message) = self.fail_next.lock().expect("fail next lock").take() {
+                return Box::pin(async move {
+                    Err(CommerceServiceError::provider_unavailable(message))
+                });
+            }
+            Box::pin(async move {
+                // Yield so a concurrent replay reaches the idempotency guard
+                // before this credit records, mirroring the real ledger.
+                tokio::task::yield_now().await;
+                let mut applied_keys = self.applied_keys.lock().expect("applied keys lock");
+                let replayed = applied_keys
+                    .iter()
+                    .any(|key| key == &command.idempotency_key);
+                if !replayed {
+                    applied_keys.push(command.idempotency_key.clone());
+                    self.applied.lock().expect("applied lock").push(command);
+                }
+                Ok(AccountValueLedgerOutcome {
+                    accepted: true,
+                    replayed,
+                    ledger_entry_id: Some("ledger-coupon-redemption-1".to_owned()),
+                    account_effect_reference_id: None,
+                })
+            })
+        }
+    }
+
+    struct MockRechargeCheckoutStore {
+        fulfillment: Arc<MockAccountValueFulfillmentStore>,
+        orders: Mutex<HashMap<String, CreateAccountRechargeOrderOutcome>>,
+        create_attempts: Mutex<u32>,
+        insert_calls: Mutex<u32>,
+    }
+
+    impl MockRechargeCheckoutStore {
+        fn new(fulfillment: Arc<MockAccountValueFulfillmentStore>) -> Self {
+            Self {
+                fulfillment,
+                orders: Mutex::new(HashMap::new()),
+                create_attempts: Mutex::new(0),
+                insert_calls: Mutex::new(0),
+            }
+        }
+
+        fn insert_calls(&self) -> u32 {
+            *self.insert_calls.lock().expect("insert calls lock")
+        }
+
+        fn create_attempts(&self) -> u32 {
+            *self.create_attempts.lock().expect("create attempts lock")
+        }
+    }
+
+    impl CommerceRechargeCheckoutStore for MockRechargeCheckoutStore {
+        fn list_recharge_packages<'a>(
+            &'a self,
+            _query: RechargePackageListQuery,
+        ) -> CommerceRechargeCheckoutFuture<'a, RechargePackageListPage> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn load_recharge_settings<'a>(
+            &'a self,
+            _query: RechargeSettingsQuery,
+        ) -> CommerceRechargeCheckoutFuture<'a, RechargeSettingsSnapshot> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn create_points_recharge_order<'a>(
+            &'a self,
+            _command: CreatePointsRechargeOrderCommand,
+        ) -> CommerceRechargeCheckoutFuture<'a, CreatePointsRechargeOrderOutcome> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn retrieve_checkout_status<'a>(
+            &'a self,
+            _query: CheckoutStatusQuery,
+        ) -> CommerceRechargeCheckoutFuture<'a, Option<CheckoutStatusSnapshot>> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn list_token_bank_plans<'a>(
+            &'a self,
+            _query: AccountValueCatalogListQuery,
+        ) -> CommerceRechargeCheckoutFuture<'a, TokenBankPlanListPage> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn create_account_recharge_order<'a>(
+            &'a self,
+            _command: CreateAccountRechargeOrderCommand,
+        ) -> CommerceRechargeCheckoutFuture<'a, CreateAccountRechargeOrderOutcome> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        /// Emulates the unique `commerce_order` idempotency index: the first
+        /// command for a key inserts, every later command returns the winner.
+        fn create_coupon_recharge_order<'a>(
+            &'a self,
+            command: CreateCouponRechargeOrderCommand,
+        ) -> CommerceRechargeCheckoutFuture<'a, CreateAccountRechargeOrderOutcome> {
+            *self.create_attempts.lock().expect("create attempts lock") += 1;
+            let mut orders = self.orders.lock().expect("orders lock");
+            if let Some(existing) = orders.get(&command.idempotency_key) {
+                let existing = existing.clone();
+                return Box::pin(async move { Ok(existing) });
+            }
+            let outcome = CreateAccountRechargeOrderOutcome {
+                success: true,
+                order_id: command.order_id.clone(),
+                order_no: command.order_no.clone(),
+                out_trade_no: command.out_trade_no.clone(),
+                subject: command.subject,
+                target_asset: command.target_asset,
+                amount: command.amount.clone(),
+                grant_amount: command.grant_amount.clone(),
+                currency_code: command.currency_code.clone(),
+                provider_code: String::new(),
+                payment_method: String::new(),
+                payment_product: String::new(),
+                status: "paid".to_owned(),
+                next_action: "completed".to_owned(),
+                cashier_url: String::new(),
+                qr_code_payload: String::new(),
+                request_payment_payload: None,
+            };
+            self.fulfillment.seed(AccountValueFulfillmentContext {
+                order_id: command.order_id.clone(),
+                order_no: command.order_no.clone(),
+                subject: command.subject,
+                target_asset: command.target_asset,
+                order_status: "paid".to_owned(),
+                fulfillment_status: "unfulfilled".to_owned(),
+                payment_status: "succeeded".to_owned(),
+                payment_attempt_status: "succeeded".to_owned(),
+                grant_amount: command.grant_amount.clone(),
+                asset_unit_code: command.target_asset.default_unit_code().to_owned(),
+                coupon_code: Some(command.coupon_code.clone()),
+                coupon_benefit: Some(command.benefit.clone()),
+            });
+            orders.insert(command.idempotency_key.clone(), outcome.clone());
+            *self.insert_calls.lock().expect("insert calls lock") += 1;
+            drop(orders);
+            Box::pin(async move { Ok(outcome) })
+        }
+
+        fn load_account_value_order_by_idempotency<'a>(
+            &'a self,
+            _tenant_id: &'a str,
+            _organization_id: Option<&'a str>,
+            _owner_user_id: &'a str,
+            idempotency_key: &'a str,
+        ) -> CommerceRechargeCheckoutFuture<'a, Option<CreateAccountRechargeOrderOutcome>> {
+            let outcome = self
+                .orders
+                .lock()
+                .expect("orders lock")
+                .get(idempotency_key)
+                .cloned();
+            Box::pin(async move { Ok(outcome) })
+        }
+
+        fn list_order_refund_requests<'a>(
+            &'a self,
+            _query: AccountValueRequestListQuery,
+        ) -> CommerceRechargeCheckoutFuture<'a, AccountValueRequestListPage> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn create_order_refund_request<'a>(
+            &'a self,
+            _command: CreateOrderRefundRequestCommand,
+        ) -> CommerceRechargeCheckoutFuture<'a, AccountValueRequestView> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn retrieve_order_refund_request<'a>(
+            &'a self,
+            _query: AccountValueRequestDetailQuery,
+        ) -> CommerceRechargeCheckoutFuture<'a, Option<AccountValueRequestView>> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn create_cash_withdrawal_request<'a>(
+            &'a self,
+            _command: CreateCashWithdrawalRequestCommand,
+        ) -> CommerceRechargeCheckoutFuture<'a, AccountValueRequestView> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn retrieve_cash_withdrawal_request<'a>(
+            &'a self,
+            _query: AccountValueRequestDetailQuery,
+        ) -> CommerceRechargeCheckoutFuture<'a, Option<AccountValueRequestView>> {
+            Box::pin(async { Err(mock_store_unsupported()) })
+        }
+    }
+
+    fn mock_store_unsupported() -> CommerceServiceError {
+        CommerceServiceError::unsupported_capability("mock coupon store only serves coupon redemptions")
     }
 
     fn test_subject() -> AppRuntimeSubject {

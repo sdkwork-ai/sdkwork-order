@@ -45,6 +45,42 @@ fn problem_for_context(
     attach_trace_header(response, &trace_id)
 }
 
+/// Builds a `ProblemDetail` for a registered domain-specific result code.
+///
+/// Unlike `problem_for_context` this keeps the caller-supplied `title`,
+/// `detail`, and `i18nKey` verbatim, so an actionable 503 can describe the
+/// exact business outcome instead of falling back to the generic platform
+/// text. The `code` MUST already be registered in the owning API authority.
+pub fn problem_with_presentation(
+    context: Option<&WebRequestContext>,
+    trace_id: &str,
+    status: StatusCode,
+    code: i32,
+    title: &str,
+    detail: impl Into<String>,
+    i18n_key: &str,
+) -> Response {
+    let routing = problem_routing(context);
+    let problem = SdkWorkProblemDetail {
+        problem_type: format!("https://docs.sdkwork.com/problems/{code}"),
+        title: title.to_owned(),
+        status: status.as_u16(),
+        detail: Some(detail.into()),
+        instance: routing.instance(),
+        code,
+        trace_id: trace_id.to_owned(),
+        operation_id: routing.operation_id,
+        i18n_key: Some(i18n_key.to_owned()),
+    };
+    let response = (
+        status,
+        [(axum::http::header::CONTENT_TYPE, "application/problem+json")],
+        Json(problem),
+    )
+        .into_response();
+    attach_trace_header(response, trace_id)
+}
+
 /// Returns a single resource as `{ code: 0, data: { item }, traceId }`.
 pub fn success_item<T: serde::Serialize>(context: Option<&WebRequestContext>, item: T) -> Response {
     let trace_id = resolve_trace_id(context);

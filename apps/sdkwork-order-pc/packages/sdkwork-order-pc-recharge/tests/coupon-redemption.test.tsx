@@ -33,9 +33,37 @@ describe("SDKWork coupon redemption surfaces", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
 
-    await waitFor(() => expect(redeem).toHaveBeenCalledWith("TOKEN-500"));
+    await waitFor(() => expect(redeem).toHaveBeenCalledWith("TOKEN-500", expect.any(String)));
     expect(await screen.findByText("Token Bank credited")).toBeInTheDocument();
     expect(screen.getByText("500")).toBeInTheDocument();
+  });
+
+  it("retries the same code with the same idempotency key", async () => {
+    const redeem = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("HTTP 503: Service Unavailable"))
+      .mockResolvedValueOnce({
+        benefitKind: "token_bank_credit" as const,
+        grantAmount: 500,
+        orderId: "order-token-bank",
+        orderNo: "CP1001",
+        replayed: true,
+        status: "completed" as const,
+        targetAsset: "token_bank" as const,
+      });
+
+    renderWithTheme(<SdkworkCouponRedemptionInline initialCode="TOKEN-500" service={{ redeem }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
+    expect(await screen.findByText("HTTP 503: Service Unavailable")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
+    expect(await screen.findByText("Token Bank credited")).toBeInTheDocument();
+
+    const keys = redeem.mock.calls.map((call) => call[1]);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toEqual(expect.any(String));
+    expect(keys[1]).toBe(keys[0]);
   });
 
   it("renders subscription quotas and invokes completion", async () => {
