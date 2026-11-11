@@ -7,6 +7,7 @@ use sdkwork_contract_service::{
     CommerceAccountAssetType, CommerceLedgerDirection, CommerceMoney, CommerceRequestHash,
     CommerceServiceError,
 };
+use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_order_service::{
     AccountPointsCreditFuture, AccountPointsCreditPort, AccountValueAssetCode, AccountValueFuture,
     AccountValueLedgerCommand, AccountValueLedgerOperation, AccountValueLedgerOutcome,
@@ -29,6 +30,20 @@ impl StoreAccountPointsCreditAdapter {
         Self {
             store: StoreKind::Postgres(PostgresCommerceAccountStore::new(pool)),
         }
+    }
+
+    /// Builds the adapter on the host pool.
+    ///
+    /// Authoritative server persistence is PostgreSQL only (`DATABASE_SPEC`),
+    /// so a non-PostgreSQL pool is reported to the caller instead of panicking
+    /// or opening a second pool.
+    pub fn from_database_pool(pool: &DatabasePool) -> Result<Self, String> {
+        let pool = pool.as_postgres().ok_or_else(|| {
+            "the account ledger store adapter requires a PostgreSQL pool \
+             (DATABASE_SPEC: authoritative-server)"
+                .to_owned()
+        })?;
+        Ok(Self::postgres(pool.clone()))
     }
 }
 
@@ -126,7 +141,7 @@ impl StoreAccountPointsCreditAdapter {
             command.organization_id.as_deref(),
             "",
             &command.owner_user_id,
-            asset_type_for_account_value(command.asset),
+            asset_type_for_account_value(command.asset)?,
             Some(&command.currency_code),
             command.direction,
             command.amount,
@@ -160,7 +175,7 @@ impl StoreAccountPointsCreditAdapter {
             command.organization_id.as_deref(),
             "",
             &command.owner_user_id,
-            asset_type_for_account_value(command.asset),
+            asset_type_for_account_value(command.asset)?,
             command.amount,
             &command.business_type,
             &command.resource_id,
@@ -253,14 +268,22 @@ fn account_value_transaction_no(command: &AccountValueLedgerCommand) -> String {
     format!("{}:{}", command.business_type, command.resource_id)
 }
 
-fn asset_type_for_account_value(asset: AccountValueAssetCode) -> CommerceAccountAssetType {
+/// Maps an order-side asset code onto the account store's asset type.
+///
+/// Subscription grants belong to the membership module, so a subscription
+/// ledger command is a caller error: return it instead of panicking inside the
+/// request path (`RUST_CODE_SPEC.md` §7).
+fn asset_type_for_account_value(
+    asset: AccountValueAssetCode,
+) -> Result<CommerceAccountAssetType, CommerceServiceError> {
     match asset {
-        AccountValueAssetCode::Cash => CommerceAccountAssetType::Cash,
-        AccountValueAssetCode::Points => CommerceAccountAssetType::Points,
-        AccountValueAssetCode::TokenBank => CommerceAccountAssetType::TokenBank,
-        AccountValueAssetCode::Subscription => {
-            unreachable!("subscription coupons are fulfilled by Membership")
-        }
+        AccountValueAssetCode::Cash => Ok(CommerceAccountAssetType::Cash),
+        AccountValueAssetCode::Points => Ok(CommerceAccountAssetType::Points),
+        AccountValueAssetCode::TokenBank => Ok(CommerceAccountAssetType::TokenBank),
+        AccountValueAssetCode::Subscription => Err(CommerceServiceError::validation(
+            "subscription entitlements are fulfilled by the membership adapter, \
+             not the account value ledger",
+        )),
     }
 }
 
@@ -326,4 +349,42 @@ fn stable_numeric_source_id(value: &str) -> String {
     let digest = sha256_hash(value.trim().as_bytes());
     let prefix = digest.get(..15).unwrap_or(digest.as_str());
     u64::from_str_radix(prefix, 16).unwrap_or(0).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::asset_type_for_account_value;
+    use sdkwork_order_service::AccountValueAssetCode;
+
+    #[test]
+    fn a_subscription_asset_is_rejected_instead_of_panicking() {
+        // The store adapter is the default account path, so a subscription
+        // command reaching it must be a validation error, not an abort in the
+        // middle of order settlement.
+        let error = asset_type_for_account_value(AccountValueAssetCode::Subscription)
+            .expect_err("subscription entitlements belong to the membership adapter");
+        assert_eq!(error.code(), "validation");
+        assert!(
+            error.message().contains("membership"),
+            "{}",
+            error.message()
+        );
+    }
+
+    #[test]
+    fn account_ledger_assets_still_map_to_their_store_type() {
+        use sdkwork_contract_service::CommerceAccountAssetType as StoreAsset;
+        assert_eq!(
+            asset_type_for_account_value(AccountValueAssetCode::Cash),
+            Ok(StoreAsset::Cash)
+        );
+        assert_eq!(
+            asset_type_for_account_value(AccountValueAssetCode::Points),
+            Ok(StoreAsset::Points)
+        );
+        assert_eq!(
+            asset_type_for_account_value(AccountValueAssetCode::TokenBank),
+            Ok(StoreAsset::TokenBank)
+        );
+    }
 }

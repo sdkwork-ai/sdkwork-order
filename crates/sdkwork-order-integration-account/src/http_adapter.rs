@@ -60,6 +60,19 @@ impl HttpAccountPointsCreditAdapter {
             .ok()
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
+        // Fail at startup rather than at the first redemption: an explicitly
+        // selected HTTP adapter without a service token can only produce a 500
+        // after a coupon has already been consumed. The in-process `store`
+        // adapter (the default) does not need any of this.
+        if auth_token.is_none()
+            && std::env::var("SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE").as_deref() != Ok("1")
+        {
+            return Err(
+                "the http account ledger adapter requires SDKWORK_ACCESS_TOKEN; \
+                 unset SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER to use the in-process store adapter"
+                    .to_owned(),
+            );
+        }
         Self::new(origin, auth_token).map_err(|error| format!("{error:?}"))
     }
 }

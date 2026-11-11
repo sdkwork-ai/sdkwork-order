@@ -109,8 +109,8 @@ Recharge SQL, routes, and lifecycle ownership belong exclusively to **sdkwork-or
 | PSP webhook | `POST .../orders/payments/webhooks/{providerCode}` | Order-owned public route; verify + ingest + settle |
 | Manual reconciliation | `POST .../orders/{orderId}/payment_confirmations` | Query PSP, verify the exact payment, then replay the shared settlement saga |
 | Webhook base URL | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | `{base}/app/v3/api/orders/payments/webhooks/{providerCode}` |
-| Account credit (HTTP) | `SDKWORK_ACCOUNT_BACKEND_API_ORIGIN`, `SDKWORK_ACCESS_TOKEN` | Default adapter: `POST .../wallet/adjustments/points` |
-| Account credit (store) | `SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER=store` | In-process ledger via shared ACCOUNT database pool |
+| Account credit (store, default) | `SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER` unset | In-process ledger on the host PostgreSQL pool (`MODULE_SPEC.md` §4.2) |
+| Account credit (HTTP, opt-in) | `SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER=http`, `SDKWORK_ACCOUNT_BACKEND_API_ORIGIN`, `SDKWORK_ACCESS_TOKEN` | Split deployment only: `POST .../wallet/adjustments/points`; fails at startup without a token |
 
 Permissions: `commerce.orders.fulfill` (order backend payment_confirmations).
 

@@ -85,7 +85,7 @@ impl OrderRuntimeWorkers {
 }
 
 pub async fn assemble_api_router(host: Arc<OrderServiceHost>) -> Result<ApiAssembly, String> {
-    start_runtime_workers(&host);
+    start_runtime_workers(&host).await;
     let router = Router::new()
         .merge(sdkwork_routes_order_app_api::gateway_mount(host.clone()).await)
         .merge(sdkwork_routes_order_backend_api::gateway_mount(host.clone()).await);
@@ -109,7 +109,7 @@ pub async fn assemble_api_router(host: Arc<OrderServiceHost>) -> Result<ApiAssem
 pub async fn assemble_api_router_with_runtime(
     host: Arc<OrderServiceHost>,
 ) -> Result<(ApiAssembly, OrderRuntimeWorkers), String> {
-    let workers = start_runtime_workers(&host);
+    let workers = start_runtime_workers(&host).await;
     let assembly = assemble_api_router_without_workers(host).await?;
     Ok((assembly, workers))
 }
@@ -151,7 +151,7 @@ pub async fn assemble_backend_business_router(
 /// Builds the raw Order App API for a gateway-owned Web Framework layer.
 pub async fn assemble_app_api_contribution() -> Result<ApiAssemblyContribution, String> {
     let host = Arc::new(OrderServiceHost::from_env().await?);
-    start_runtime_workers(&host);
+    start_runtime_workers(&host).await;
     assemble_app_api_contribution_with_host(host)
 }
 
@@ -159,11 +159,11 @@ pub async fn assemble_app_api_contribution_with_pool(
     pool: DatabasePool,
 ) -> Result<ApiAssemblyContribution, String> {
     let host = Arc::new(OrderServiceHost::from_database_pool(pool).await?);
-    start_runtime_workers(&host);
+    start_runtime_workers(&host).await;
     assemble_app_api_contribution_with_host(host)
 }
 
-fn start_runtime_workers(host: &Arc<OrderServiceHost>) -> OrderRuntimeWorkers {
+async fn start_runtime_workers(host: &Arc<OrderServiceHost>) -> OrderRuntimeWorkers {
     let mut workers = OrderRuntimeWorkers::default();
     if let Some(handle) = sdkwork_order_service_host::spawn_order_expiration_scheduler(host.clone())
     {
@@ -175,7 +175,7 @@ fn start_runtime_workers(host: &Arc<OrderServiceHost>) -> OrderRuntimeWorkers {
         workers.handles.push(handle);
     }
     if let Some(handle) =
-        sdkwork_order_service_host::spawn_course_entitlement_relay(host.clone())
+        sdkwork_order_service_host::spawn_course_entitlement_relay(host.clone()).await
     {
         workers.handles.push(handle);
     }

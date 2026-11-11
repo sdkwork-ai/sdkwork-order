@@ -14,15 +14,15 @@ name = "sdkwork_order_service_host"
 path = "src/lib.rs"
 
 [dependencies]
+async-trait.workspace = true
 sdkwork-database-sqlx.workspace = true
-reqwest.workspace = true
-serde_json.workspace = true
 sdkwork-database-spi.workspace = true
 sdkwork-database-id.workspace = true
 sdkwork-web-bootstrap.workspace = true
 sdkwork-web-core.workspace = true
 sdkwork_order_database_host.workspace = true
 sdkwork_order_integration_account.workspace = true
+sdkwork_order_integration_course.workspace = true
 sdkwork_order_integration_deployments.workspace = true
 sdkwork_order_integration_membership.workspace = true
 sdkwork_order_integration_promotion.workspace = true

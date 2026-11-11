@@ -1337,6 +1337,7 @@ version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1f111c8c41e7c61a49cd34e44c7619462967221a6443b0ec299e0ac30cfb9b1"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -2243,8 +2244,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkwork-content-course-repository-sqlx"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "sdkwork-content-course-service",
+ "sdkwork-course-database-host",
+ "sdkwork-database-config",
+ "sdkwork-database-sqlx",
+ "serde_json",
+ "sqlx",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "sdkwork-content-course-service"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "sqlx",
+]
+
+[[package]]
 name = "sdkwork-contract-service"
 version = "0.1.0"
+
+[[package]]
+name = "sdkwork-course-database-host"
+version = "0.1.0"
+dependencies = [
+ "dotenvy",
+ "sdkwork-database-config",
+ "sdkwork-database-lifecycle",
+ "sdkwork-database-spi",
+ "sdkwork-database-sqlx",
+]
 
 [[package]]
 name = "sdkwork-database-config"
@@ -2459,7 +2497,6 @@ name = "sdkwork-order-integration-account"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "dotenvy",
  "reqwest 0.12.28",
  "sdkwork-account-repository-sqlx",
  "sdkwork-account-service",
@@ -2474,6 +2511,16 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "sdkwork-order-integration-course"
+version = "0.1.0"
+dependencies = [
+ "sdkwork-content-course-repository-sqlx",
+ "sdkwork-content-course-service",
+ "sdkwork-database-sqlx",
+ "sqlx",
 ]
 
 [[package]]
@@ -2603,13 +2650,14 @@ dependencies = [
 name = "sdkwork-order-service-host"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "dotenvy",
- "reqwest 0.12.28",
  "sdkwork-database-id",
  "sdkwork-database-spi",
  "sdkwork-database-sqlx",
  "sdkwork-order-database-host",
  "sdkwork-order-integration-account",
+ "sdkwork-order-integration-course",
  "sdkwork-order-integration-deployments",
  "sdkwork-order-integration-membership",
  "sdkwork-order-integration-partner",
@@ -2622,7 +2670,6 @@ dependencies = [
  "sdkwork-payment-repository-sqlx",
  "sdkwork-web-bootstrap",
  "sdkwork-web-core",
- "serde_json",
  "sqlx",
  "tokio",
  "tracing",

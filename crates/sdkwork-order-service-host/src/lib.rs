@@ -1,7 +1,7 @@
 use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_order_database_host::{bootstrap_order_database_from_env, OrderDatabaseHost};
 use sdkwork_order_integration_account::{
-    account_points_credit_port_from_env, account_value_ledger_port_from_env,
+    account_points_credit_port_from_database_pool, account_value_ledger_port_from_database_pool,
 };
 use sdkwork_order_integration_deployments::app_template_purchase_fulfillment_port_from_database_pool;
 use sdkwork_order_integration_membership::membership_purchase_fulfillment_port_from_database_pool;
@@ -75,8 +75,9 @@ impl OrderServiceHost {
     async fn from_database_with_env_integrations(
         database: OrderDatabaseHost,
     ) -> Result<Self, String> {
-        let account_credit_port = account_points_credit_port_from_env().await?;
-        let account_value_ledger_port = account_value_ledger_port_from_env().await?;
+        let account_credit_port = account_points_credit_port_from_database_pool(database.pool())?;
+        let account_value_ledger_port =
+            account_value_ledger_port_from_database_pool(database.pool())?;
         let coupon_redemption_port =
             promotion_coupon_redemption_port_from_database_pool(database.pool());
         let membership_fulfillment_port =

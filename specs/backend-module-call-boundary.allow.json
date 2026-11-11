@@ -1,0 +1,11 @@
+{
+  "comment": "Deliberate exceptions to MODULE_SPEC.md §4.2. Every entry needs a written reason. The order module reaches the account module in-process by default; only a deliberate split deployment opts into HTTP, and that adapter fails at startup when its token is missing.",
+  "allow": [
+    {
+      "file": "crates/sdkwork-order-integration-account/src/http_adapter.rs",
+      "envVar": "SDKWORK_ACCOUNT_BACKEND_API_ORIGIN",
+      "module": "account",
+      "reason": "Opt-in split deployment only: SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER=http selects this adapter; the default is the in-process store adapter, and from_env() refuses to start without SDKWORK_ACCESS_TOKEN."
+    }
+  ]
+}
