@@ -117,7 +117,9 @@ describe("createSdkworkCouponRechargeService", () => {
           benefit: {
             kind: "token_bank_credit",
             targetAsset: "token_bank",
-            grantAmount: "50",
+            // The order API reports the Token Bank ledger's minor unit:
+            // 110 points travel as 110_000_000 micro-points.
+            grantAmount: "110000000",
           },
           orderId: "order-coupon-1",
           orderNo: "CP1001",
@@ -131,7 +133,7 @@ describe("createSdkworkCouponRechargeService", () => {
 
     await expect(service.redeem("  WELCOME  ")).resolves.toEqual({
       benefitKind: "token_bank_credit",
-      grantAmount: 50,
+      grantAmount: 110,
       orderId: "order-coupon-1",
       orderNo: "CP1001",
       replayed: false,
@@ -179,13 +181,14 @@ describe("createSdkworkCouponRechargeService", () => {
     configureSdkworkOrderSessionTokenProvider(null);
   });
 
-  it("maps a cash credit redemption in minor units", async () => {
+  it("maps a cash credit redemption with its own currency", async () => {
     const { appService } = createAppService({
       create: {
         item: {
           benefit: {
             kind: "cash_credit",
             grantAmount: "10050",
+            currencyCode: "USD",
           },
           orderId: "order-coupon-4",
           orderNo: "CP1004",
@@ -199,6 +202,7 @@ describe("createSdkworkCouponRechargeService", () => {
 
     await expect(service.redeem("CASH-100")).resolves.toEqual({
       benefitKind: "cash_credit",
+      currencyCode: "USD",
       grantAmount: 10050,
       orderId: "order-coupon-4",
       orderNo: "CP1004",

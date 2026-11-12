@@ -18,6 +18,19 @@ export function sdkworkTokenBankPointsMicroToDecimal(value: number): string {
   return microToDecimalString(BigInt(Math.round(value)));
 }
 
+/**
+ * String-preserving variant for int64 wire values: Token Bank micro-point
+ * amounts are serialized as decimal strings and may exceed 2^53, so parse the
+ * digits with `BigInt` instead of routing them through `Number`.
+ */
+export function sdkworkTokenBankPointsMicroStringToDecimal(value: string | number): string {
+  const raw = typeof value === "number" ? Math.round(value).toString() : value.trim();
+  if (!/^\d+$/u.test(raw)) {
+    return "0";
+  }
+  return microToDecimalString(BigInt(raw));
+}
+
 
 type PublicSdkPort<T> = {
   readonly [TKey in keyof T]: T[TKey] extends (...args: infer TArgs) => infer TResult
@@ -188,6 +201,12 @@ export interface CreateSdkworkPointsRechargeServiceOptions {
 
 export interface SdkworkCouponTokenBankRedemptionResult {
   benefitKind: "token_bank_credit";
+  /**
+   * Credited Compute Credits in **whole points** for display. The order API
+   * carries the account ledger's minor unit (integer micro-points, 1 point =
+   * 1e6); the service converts it exactly once here so every client renders a
+   * 110-point coupon as `110`, never `0.00011` or `110000000`.
+   */
   grantAmount: number;
   orderId: string;
   orderNo?: string;
@@ -207,8 +226,10 @@ export interface SdkworkCouponPointsRedemptionResult {
 
 export interface SdkworkCouponCashRedemptionResult {
   benefitKind: "cash_credit";
-  /** 现金发放金额（最小单位）。 */
+  /** Cash amount in the currency's minor unit (for example 1250 = 12.50). */
   grantAmount: number;
+  /** ISO currency of the cash wallet that was credited (from the coupon rule). */
+  currencyCode: string;
   orderId: string;
   orderNo?: string;
   replayed: boolean;
@@ -317,6 +338,62 @@ export function getSdkworkOrderService(): SdkworkOrderAppService {
     );
   }
   return sdkworkOrderAppServiceProvider();
+}
+
+export interface SdkworkOrderDiscountInput {
+  orderId: string;
+  userCouponId: string;
+  idempotencyKey?: string;
+}
+
+export interface SdkworkOrderDiscountResult {
+  orderId: string;
+  /** Integer minor units, matching the order amount breakdown. */
+  originalAmount: string;
+  discountAmount: string;
+  payableAmount: string;
+  currencyCode: string;
+}
+
+/**
+ * Applies a promotion-owned discount to a payable order through the order API.
+ * The promotion service validates the coupon and reserves budget; the order
+ * service reprices the amount breakdown, and reverses the reservation if the
+ * repricing fails.
+ */
+export async function applySdkworkOrderDiscount(
+  input: SdkworkOrderDiscountInput,
+): Promise<SdkworkOrderDiscountResult> {
+  const orderId = input.orderId.trim();
+  const userCouponId = input.userCouponId.trim();
+  if (!orderId || !userCouponId) {
+    throw new Error("Order id and user coupon id are required.");
+  }
+  requireSdkworkOrderSession();
+  const response = await getSdkworkOrderService().orders.discount.create(
+    orderId,
+    { userCouponId },
+    createSdkworkIdempotencyParams(input.idempotencyKey),
+  );
+  const item = unwrapSdkworkOrderResource<Record<string, unknown>>(
+    response,
+    "Unable to apply the order discount.",
+  );
+  return {
+    orderId: requiredOrderDiscountText(item["orderId"], "orderId"),
+    originalAmount: requiredOrderDiscountText(item["originalAmount"], "originalAmount"),
+    discountAmount: requiredOrderDiscountText(item["discountAmount"], "discountAmount"),
+    payableAmount: requiredOrderDiscountText(item["payableAmount"], "payableAmount"),
+    currencyCode: requiredOrderDiscountText(item["currencyCode"], "currencyCode"),
+  };
+}
+
+function requiredOrderDiscountText(value: unknown, field: string): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) {
+    throw new Error(`Order discount response is missing ${field}.`);
+  }
+  return text;
 }
 
 export function getSdkworkOrderSessionTokens(): SdkworkOrderSessionTokens {
@@ -767,14 +844,14 @@ function normalizeCouponRechargeResult(value: unknown): SdkworkCouponRedemptionR
     ? record.benefit as Record<string, unknown>
     : {};
   if (benefit.kind === "token_bank_credit") {
-    const grantAmount = toSdkworkOrderNumber(benefit.grantAmount);
-    if (grantAmount <= 0) {
+    const grantMicroPoints = String(benefit.grantAmount ?? "");
+    if (!/^\d+$/u.test(grantMicroPoints) || grantMicroPoints === "0") {
       throw new Error("Coupon redemption did not return a Token Bank grant.");
     }
     return {
       ...common,
       benefitKind: "token_bank_credit",
-      grantAmount,
+      grantAmount: Number(sdkworkTokenBankPointsMicroStringToDecimal(grantMicroPoints)),
       targetAsset: "token_bank",
     };
   }
@@ -798,6 +875,7 @@ function normalizeCouponRechargeResult(value: unknown): SdkworkCouponRedemptionR
       ...common,
       benefitKind: "cash_credit",
       grantAmount,
+      currencyCode: toSdkworkOrderOptionalString(benefit.currencyCode)?.toUpperCase() ?? "CNY",
     };
   }
   if (benefit.kind === "subscription") {

@@ -15,7 +15,7 @@ use sdkwork_order_service::{
     MembershipPurchaseFulfillmentFuture, MembershipPurchaseFulfillmentOutcome,
     MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
     MembershipQuotaRechargeFulfillmentOutcome, MembershipQuotaRechargeFulfillmentRequest,
-    NoopAppTemplatePurchaseFulfillmentPort, NoopCouponRedemptionPort,
+    NoopAppTemplatePurchaseFulfillmentPort, NoopCouponRedemptionPort, NoopPromotionDiscountPort,
     OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationFuture,
     OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStateOutcome, OwnerOrderPaymentStatePort,
     OwnerOrderSettlementPorts, PaymentNotifyAttemptContext, PaymentNotifyEvent,
@@ -198,6 +198,7 @@ fn settlement_ports<'a>(
         membership_port: &UnsupportedMembershipPurchaseFulfillmentPort,
         app_template_port: &NoopAppTemplatePurchaseFulfillmentPort,
         physical_goods_port: &UnavailablePhysicalGoodsFulfillmentPort,
+        promotion_discount_port: &NoopPromotionDiscountPort,
     }
 }
 

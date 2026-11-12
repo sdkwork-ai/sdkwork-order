@@ -10,6 +10,7 @@ use crate::{
     app_after_sales_router_with_postgres_pool, app_app_template_order_router_with_postgres_pool,
     app_demand_claim_router_with_postgres_pool, app_fulfillment_router_with_postgres_pool,
     app_membership_order_router_with_postgres_pool_and_payments,
+    app_order_discount_router_with_postgres_pool,
     app_order_router_with_postgres_pool_and_inventory,
     app_payment_webhook_router_with_postgres_pool_and_integrations,
     app_shipment_router_with_postgres_pool, build_app_checkout_router_with_integrations,
@@ -29,6 +30,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
     let credit_port = host.account_credit_port();
     let account_value_ledger_port = host.account_value_ledger_port();
     let coupon_redemption_port = host.coupon_redemption_port();
+    let promotion_discount_port = host.promotion_discount_port();
     let membership_port = host.membership_fulfillment_port();
     let app_template_port = host.app_template_fulfillment_port();
     let physical_checkout_resolver = host.physical_checkout_resolver_port();
@@ -56,6 +58,10 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
             Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
             physical_checkout_resolver.clone(),
             physical_inventory.clone(),
+        ))
+        .merge(app_order_discount_router_with_postgres_pool(
+            &pool,
+            promotion_discount_port.clone(),
         ))
         .merge(build_recharge_router_postgres(
             pool.clone(),
@@ -86,6 +92,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
                 membership_port,
                 app_template_port,
                 physical_goods,
+                promotion_discount_port,
             ),
         )
         .merge(app_refund_webhook_router_with_postgres_pool_and_handlers(

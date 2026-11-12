@@ -93,7 +93,7 @@ export function TokenBankPurchasePage({
   const selectedPlan = plans.find((plan) => plan.planCode === selectedCode) ?? null;
 
   return (
-    <PageLayout title={t("subscription.token_bank_title", "算力积分购买")} bgClass="bg-bg-color">
+    <PageLayout title={t("subscription.token_bank_title", "算力额度购买")} bgClass="bg-bg-color">
       <div className="flex-1 overflow-y-auto p-4 pb-28">
           {isLoading ? (
             <div className="flex items-center justify-center py-20 text-[14px] text-text-sub">
@@ -114,10 +114,10 @@ export function TokenBankPurchasePage({
                 <div className="bg-gradient-to-br from-blue-600 to-indigo-700 dark:from-blue-900/80 dark:to-indigo-950 rounded-2xl p-5 text-white mb-4">
                   <div className="flex items-center gap-2 text-white/90 mb-2">
                     <Wallet className="w-5 h-5" strokeWidth={1.5} />
-                    <span className="text-[15px] font-bold">{t("subscription.token_bank_balance", "我的算力积分")}</span>
+                    <span className="text-[15px] font-bold">{t("subscription.token_bank_balance", "我的算力额度")}</span>
                   </div>
                   <div className="text-[32px] font-bold font-mono leading-none">
-                    {Number(balance).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力积分")}
+                    {Number(balance).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力额度")}
                   </div>
                 </div>
               )}
@@ -143,16 +143,16 @@ export function TokenBankPurchasePage({
                         </span>
                       )}
                       <div className={`text-[15px] font-bold ${active ? "text-white" : "text-text-main"}`}>
-                        {t("subscription.points_display", "{{points}} 算力积分", {
+                        {t("subscription.points_display", "{{points}} 算力额度", {
                           points: Number(plan.displayName).toLocaleString(i18n.language),
                         })}
                       </div>
                       <div className={`mt-1 text-[13px] ${active ? "text-white opacity-70" : "text-text-sub"}`}>
-                        {t("subscription.grant", "到账")} {Number(plan.grantAmount).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力积分")}
+                        {t("subscription.grant", "到账")} {Number(plan.grantAmount).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力额度")}
                       </div>
                       {Number(plan.bonusAmount) > 0 && (
                         <div className={`mt-0.5 text-[12px] ${active ? "text-orange-200" : "text-orange-500"}`}>
-                          {t("subscription.bonus", "赠送")} {Number(plan.bonusAmount).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力积分")}
+                          {t("subscription.bonus", "赠送")} {Number(plan.bonusAmount).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力额度")}
                         </div>
                       )}
                       <div className={`mt-3 text-[18px] font-bold ${active ? "text-white" : "text-primary-blue"}`}>
@@ -172,12 +172,12 @@ export function TokenBankPurchasePage({
                   className="mt-0.5 accent-[#FA5151]"
                 />
                 <span className="text-[12px] text-text-sub leading-relaxed">
-                  {t("subscription.agreement", "支付前请阅读并同意《算力积分充值服务协议》")}
+                  {t("subscription.agreement", "支付前请阅读并同意《算力额度充值服务协议》")}
                 </span>
               </label>
 
               <p className="text-[12px] text-text-sub mt-3 text-center leading-relaxed">
-                {t("subscription.token_notice", "温馨提示：算力积分不可兑换现金、不可转赠；充值后有效期以平台规则为准。")}
+                {t("subscription.token_notice", "温馨提示：算力额度不可兑换现金、不可转赠；充值后有效期以平台规则为准。")}
               </p>
             </>
           )}
@@ -191,11 +191,11 @@ export function TokenBankPurchasePage({
                 {formatCatalogPrice(selectedPlan.priceAmount, selectedPlan.currencyCode)}
               </div>
                 <div className="mt-1 text-[12px] text-text-sub truncate">
-                  {t("subscription.points_display", "{{points}} 算力积分", {
+                  {t("subscription.points_display", "{{points}} 算力额度", {
                     points: Number(selectedPlan.displayName).toLocaleString(i18n.language),
                   })}
                   <span className="ml-1">
-                    {t("subscription.grant", "到账")} {Number(selectedPlan.grantAmount).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力积分")}
+                    {t("subscription.grant", "到账")} {Number(selectedPlan.grantAmount).toLocaleString(i18n.language)} {t("subscription.points_unit", "算力额度")}
                   </span>
                 </div>
             </>

@@ -28,6 +28,29 @@ function formatMinor(minorAmount, options) {
 }
 
 /**
+ * Formats a Token Bank micro-point integer string ("110000000") as whole
+ * Compute Credits ("110"), trimming trailing fractional zeros. Token Bank
+ * coupons cross the wire in the account ledger's minor unit (1 Compute Credit
+ * = 1_000_000 micro-points), so `formatMinor` (÷100) would overstate the grant
+ * by 1e4.
+ */
+function formatTokenBankPoints(microAmount) {
+  if (microAmount === undefined || microAmount === null || microAmount === "") {
+    return "--";
+  }
+  const raw = String(microAmount).trim();
+  const match = /^([+-]?)([0-9]+)$/.exec(raw);
+  if (!match) {
+    return raw;
+  }
+  const sign = match[1] === "-" ? "-" : "";
+  const digits = match[2].padStart(7, "0");
+  const whole = digits.slice(0, digits.length - 6).replace(/^0+(?=[0-9])/, "") || "0";
+  const fraction = digits.slice(digits.length - 6).replace(/0+$/, "");
+  return `${sign}${fraction ? `${whole}.${fraction}` : whole}`;
+}
+
+/**
  * Converts a yuan text input ("12.5", "12", "0.01") into a minor-unit integer
  * string ("1250", "1200", "1"). Returns null when the input is not a valid
  * positive amount with at most two decimals.
@@ -110,6 +133,7 @@ function assetLabel(asset) {
 
 module.exports = {
   formatMinor,
+  formatTokenBankPoints,
   yuanInputToMinor,
   isDigitString,
   formatTime,

@@ -13,6 +13,13 @@ import {
   type SubscriptionPurchasePort,
 } from "../services/SubscriptionPurchaseService";
 
+/** Cash grants are minor units of the coupon's own currency. */
+function formatCashGrant(minorUnits: number, currencyCode?: string): string {
+  const amount = (minorUnits / 100).toFixed(2);
+  const currency = (currencyCode ?? "CNY").trim().toUpperCase();
+  return currency === "CNY" ? `¥${amount}` : `${amount} ${currency}`;
+}
+
 export interface CouponRedemptionPageProps {
   service?: SubscriptionPurchasePort;
   onBalanceChanged?: () => void;
@@ -139,12 +146,20 @@ export function CouponRedemptionPage({
             </h3>
             <p className="text-[13px] text-text-sub text-center leading-relaxed">
               {result.benefitKind === "token_bank_credit" && result.grantAmount
-                ? t("subscription.coupon_token_bank_credited", "算力额度已存入 Token Bank：{{amount}} T", {
+                ? t("subscription.coupon_token_bank_credited", "算力额度已存入 Token Bank：{{amount}}", {
                     amount: Number(result.grantAmount).toLocaleString("zh-CN"),
                   })
-                : result.benefitKind === "subscription"
-                  ? t("subscription.coupon_subscription_activated", "会员订阅已激活")
-                  : t("subscription.coupon_credited", "权益已发放")}
+                : result.benefitKind === "points_credit" && result.grantAmount
+                  ? t("subscription.coupon_points_credited", "会员积分已发放：{{amount}}", {
+                      amount: Number(result.grantAmount).toLocaleString("zh-CN"),
+                    })
+                  : result.benefitKind === "cash_credit" && result.grantAmount
+                    ? t("subscription.coupon_cash_credited", "现金已发放：{{amount}}", {
+                        amount: formatCashGrant(Number(result.grantAmount), result.currencyCode),
+                      })
+                    : result.benefitKind === "subscription"
+                      ? t("subscription.coupon_subscription_activated", "会员订阅已激活")
+                      : t("subscription.coupon_credited", "权益已发放")}
             </p>
             <button
               type="button"

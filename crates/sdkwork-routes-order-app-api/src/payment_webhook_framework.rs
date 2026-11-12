@@ -33,7 +33,8 @@ use sdkwork_order_service::{
     is_refund_event_type, process_payment_notify_verified, process_refund_notify_verified,
     AccountPointsCreditPort, AccountValueLedgerPort, AppTemplatePurchaseFulfillmentPort,
     CouponRedemptionPort, MembershipPurchaseFulfillmentPort, OwnerOrderSettlementPorts,
-    PaymentNotifyHandlerRegistry, PhysicalGoodsFulfillmentPort, RefundNotifyHandlerRegistry,
+    PaymentNotifyHandlerRegistry, PhysicalGoodsFulfillmentPort, PromotionDiscountPort,
+    RefundNotifyHandlerRegistry,
 };
 use sdkwork_payment_providers::normalize_provider_code;
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
@@ -96,6 +97,7 @@ struct PaymentDispatchPorts {
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    promotion_discount_port: Arc<dyn PromotionDiscountPort>,
     payment_registry: Arc<dyn PaymentNotifyHandlerRegistry>,
 }
 
@@ -121,6 +123,7 @@ impl ProviderWebhookFramework {
         membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
         app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
         physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+        promotion_discount_port: Arc<dyn PromotionDiscountPort>,
         payment_registry: Arc<dyn PaymentNotifyHandlerRegistry>,
         refund_registry: Arc<dyn RefundNotifyHandlerRegistry>,
     ) -> Self {
@@ -134,6 +137,7 @@ impl ProviderWebhookFramework {
                 membership_port,
                 app_template_port,
                 physical_goods_port,
+                promotion_discount_port,
                 payment_registry,
             }),
             orders: Arc::new(PostgresCommerceOrderStore::new(pool)),
@@ -226,6 +230,7 @@ impl ProviderWebhookFramework {
                     membership_port: dispatch.membership_port.as_ref(),
                     app_template_port: dispatch.app_template_port.as_ref(),
                     physical_goods_port: dispatch.physical_goods_port.as_ref(),
+                    promotion_discount_port: dispatch.promotion_discount_port.as_ref(),
                 };
                 match process_payment_notify_verified(
                     event,

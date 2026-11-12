@@ -20,6 +20,7 @@ pub enum CouponFulfilledBenefit {
     },
     CashCredit {
         grant_amount: sdkwork_contract_service::CommerceMoney,
+        currency_code: String,
     },
     Subscription {
         product_id: String,
@@ -202,7 +203,10 @@ where
                 benefit: CouponFulfilledBenefit::PointsCredit { grant_amount },
             })
         }
-        CouponRedemptionBenefit::CashCredit { grant_amount } => {
+        CouponRedemptionBenefit::CashCredit {
+            grant_amount,
+            currency_code,
+        } => {
             let fulfilled = fulfill_coupon_asset_grant(
                 store,
                 ledger_port,
@@ -218,7 +222,10 @@ where
                 order_no: fulfilled.order_no,
                 replayed: fulfilled.replayed || redemption.replayed,
                 fulfillment_status: fulfilled.fulfillment_status,
-                benefit: CouponFulfilledBenefit::CashCredit { grant_amount },
+                benefit: CouponFulfilledBenefit::CashCredit {
+                    grant_amount,
+                    currency_code,
+                },
             })
         }
         CouponRedemptionBenefit::Subscription {

@@ -137,6 +137,10 @@ pub enum CouponRedemptionBenefit {
     },
     CashCredit {
         grant_amount: CommerceMoney,
+        /// ISO-4217 currency of the cash wallet the coupon credits. The cash
+        /// asset has no intrinsic unit, so this must travel from the coupon
+        /// rule through the order snapshot instead of defaulting to CNY.
+        currency_code: String,
     },
     Subscription {
         product_id: String,
@@ -195,9 +199,19 @@ impl CouponRedemptionBenefit {
         match self {
             Self::TokenBankCredit { grant_amount }
             | Self::PointsCredit { grant_amount }
-            | Self::CashCredit { grant_amount } => grant_amount.clone(),
+            | Self::CashCredit { grant_amount, .. } => grant_amount.clone(),
             Self::Subscription { total_quota, .. } => CommerceMoney::new(&total_quota.to_string())
                 .expect("validated subscription quota must be valid commerce money"),
+        }
+    }
+
+    /// ISO currency for a cash grant; `None` for assets whose unit is intrinsic.
+    pub fn cash_currency_code(&self) -> Option<&str> {
+        match self {
+            Self::CashCredit { currency_code, .. } if !currency_code.trim().is_empty() => {
+                Some(currency_code.as_str())
+            }
+            _ => None,
         }
     }
 }

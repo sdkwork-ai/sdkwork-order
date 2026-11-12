@@ -29,11 +29,14 @@ class ScriptedTransport implements OrderApiTransport {
 }
 
 void main() {
-  testWidgets('coupon screen blocks empty codes with a validation error',
-      (tester) async {
+  testWidgets('coupon screen blocks empty codes with a validation error', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: CouponRedemptionScreen(orderService: OrderService(ScriptedTransport({}))),
+        home: CouponRedemptionScreen(
+          orderService: OrderService(ScriptedTransport({})),
+        ),
       ),
     );
     await tester.tap(find.text('立即兑换'));
@@ -55,7 +58,8 @@ void main() {
                   'replayed': true,
                   'benefit': {
                     'kind': 'token_bank_credit',
-                    'grantAmount': '5000',
+                    // 110 Compute Credits travel as 110_000_000 micro-points.
+                    'grantAmount': '110000000',
                   },
                 },
               },
@@ -70,13 +74,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     expect(find.text('兑换成功'), findsOneWidget);
-    expect(find.textContaining('Token Bank 额度'), findsOneWidget);
-    expect(find.text('到账额度：¥50.00'), findsOneWidget);
+    expect(find.textContaining('算力券'), findsOneWidget);
+    expect(find.text('到账算力额度：110'), findsOneWidget);
     expect(find.text('兑换单号：RN-1'), findsOneWidget);
   });
 
-  testWidgets('coupon screen surfaces API failures as an error card',
-      (tester) async {
+  testWidgets('coupon screen surfaces API failures as an error card', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: CouponRedemptionScreen(

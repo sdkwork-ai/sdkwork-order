@@ -21,7 +21,7 @@ use sdkwork_order_repository_sqlx::postgres_expiration::{
 };
 use sdkwork_order_service::{
     physical_inventory_release_idempotency_key, physical_order_fulfillment_requires_release,
-    ReleasePhysicalOrderInventoryRequest,
+    PromotionDiscountSettlementRequest, ReleasePhysicalOrderInventoryRequest,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::close_expired_owner_order_provider_attempts_postgres;
@@ -116,6 +116,7 @@ async fn run_expiration_pass(host: &OrderServiceHost, batch_size: i64) -> Result
         }
         close_expired_payment_attempts(pool, &registry, &credentials, &record).await;
         release_physical_inventory(host, &record).await;
+        release_promotion_discount(host, &record).await;
         tracing::info!(
             target = "order.expiration",
             order_id = %record.order_id,
@@ -124,6 +125,36 @@ async fn run_expiration_pass(host: &OrderServiceHost, batch_size: i64) -> Result
     }
     sweep_expired_inventory_reservations(host, batch_size).await;
     Ok(())
+}
+
+/// Best-effort release of a promotion discount reservation for an order that
+/// expired before payment. The promotion stale sweeper remains the backstop;
+/// this makes the common unpaid-expiry path release immediately.
+async fn release_promotion_discount(host: &OrderServiceHost, record: &ExpiringOrderRecord) {
+    let request = PromotionDiscountSettlementRequest {
+        tenant_id: record.tenant_id.clone(),
+        organization_id: record.organization_id.clone(),
+        order_id: record.order_id.clone(),
+    };
+    match host.promotion_discount_port().release_discounts(request).await {
+        Ok(0) => {}
+        Ok(released) => {
+            tracing::info!(
+                target = "order.expiration",
+                order_id = %record.order_id,
+                released,
+                "released promotion discount reservations for the expired order"
+            );
+        }
+        Err(error) => {
+            tracing::warn!(
+                target = "order.expiration",
+                order_id = %record.order_id,
+                error = ?error,
+                "failed to release promotion discount reservations for the expired order"
+            );
+        }
+    }
 }
 
 /// Consistency backstop for physical inventory: releases any reservation

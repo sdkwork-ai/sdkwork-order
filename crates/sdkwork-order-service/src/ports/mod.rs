@@ -8,6 +8,7 @@ mod payment_notify;
 mod physical_goods;
 mod physical_purchase;
 mod points_recharge_fulfillment;
+mod promotion_discount;
 mod refund_notify;
 
 pub use partner_relation::{
@@ -38,6 +39,11 @@ pub use account_value::{
     PaymentRefundExecutionRequest, PaymentRefundExecutorPort, ACCOUNT_VALUE_LEDGER_PORT,
     COUPON_REDEMPTION_PORT, PAYMENT_PAYOUT_EXECUTOR_PORT, PAYMENT_REFUND_EXECUTOR_PORT,
 };
+pub use promotion_discount::{
+    NoopPromotionDiscountPort, PromotionDiscountFuture, PromotionDiscountOutcome,
+    PromotionDiscountPort, PromotionDiscountRequest, PromotionDiscountSettlementRequest,
+};
+
 pub use app_template_fulfillment::{
     app_template_purchase_fulfillment_idempotency_key, AppTemplatePurchaseFulfillmentFuture,
     AppTemplatePurchaseFulfillmentOutcome, AppTemplatePurchaseFulfillmentPort,

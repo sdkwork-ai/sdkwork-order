@@ -7,7 +7,6 @@ library;
 
 import '../logic/envelope.dart';
 
-
 /// Withdrawal / refund request view (`AccountValueRequestView`).
 class AccountValueRequest {
   const AccountValueRequest({
@@ -48,10 +47,12 @@ class AccountValueRequest {
     }
 
     return AccountValueRequest(
-      requestId: asString(
-        wire,
-        const ['withdrawalRequestId', 'refundRequestId', 'requestId', 'id'],
-      ),
+      requestId: asString(wire, const [
+        'withdrawalRequestId',
+        'refundRequestId',
+        'requestId',
+        'id',
+      ]),
       requestNo: asString(wire, const ['requestNo']),
       subject: asString(wire, const ['subject']),
       targetAsset: asString(wire, const ['targetAsset', 'asset']),
@@ -75,6 +76,7 @@ class CouponRedemptionResult {
     required this.completed,
     this.benefitKind,
     this.grantAmount,
+    this.currencyCode,
     this.durationDays,
   });
 
@@ -87,14 +89,21 @@ class CouponRedemptionResult {
   final bool completed;
   final String? benefitKind;
 
-  /// Minor-unit grant string (token bank / cash benefits).
+  /// Grant amount in the benefit's wire unit: Token Bank micro-points (1
+  /// Compute Credit = 1,000,000 micro), cash minor units, or whole membership
+  /// points. Format per benefit kind; never treat every value as currency.
   final String? grantAmount;
+
+  /// ISO currency for a cash grant; null for Token Bank / membership points.
+  final String? currencyCode;
   final int? durationDays;
 
   static CouponRedemptionResult fromWire(Map<String, dynamic> wire) {
     final benefit = asMap(wire['benefit']);
-    final rawStatus = asString(wire, const ['status', 'orderStatus'],
-        fallback: 'pending');
+    final rawStatus = asString(wire, const [
+      'status',
+      'orderStatus',
+    ], fallback: 'pending');
     final completed = rawStatus == 'completed' || rawStatus == 'succeeded';
     final duration = benefit['durationDays'];
     final grant = benefit['grantAmount'] ?? benefit['grantPoints'];
@@ -106,7 +115,10 @@ class CouponRedemptionResult {
       completed: completed,
       benefitKind: benefit['kind']?.toString(),
       grantAmount: grant?.toString(),
-      durationDays: duration is num ? duration.toInt() : int.tryParse('$duration'),
+      currencyCode: benefit['currencyCode']?.toString().trim().toUpperCase(),
+      durationDays: duration is num
+          ? duration.toInt()
+          : int.tryParse('$duration'),
     );
   }
 }

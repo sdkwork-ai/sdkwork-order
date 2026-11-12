@@ -11,7 +11,10 @@ const String defaultCurrencySymbol = '¥';
 ///
 /// Returns `'--'` for null/empty, and the raw input for malformed values so
 /// backend data stays visible instead of silently disappearing.
-String formatMinorAmount(String? minor, {String symbol = defaultCurrencySymbol}) {
+String formatMinorAmount(
+  String? minor, {
+  String symbol = defaultCurrencySymbol,
+}) {
   final value = minor?.trim() ?? '';
   if (value.isEmpty) {
     return '--';
@@ -27,6 +30,33 @@ String formatMinorAmount(String? minor, {String symbol = defaultCurrencySymbol})
   final fraction = (abs % cents).toString().padLeft(2, '0');
   final body = '$yuan.$fraction';
   return negative ? '-$symbol$body' : '$symbol$body';
+}
+
+/// Formats a Token Bank micro-point integer string (`"110000000"`) as whole
+/// Compute Credits (`"110"`), trimming trailing fractional zeros.
+///
+/// Token Bank coupons cross the order wire in the account ledger's minor unit
+/// (1 Compute Credit = 1,000,000 micro-points). `formatMinorAmount` divides by
+/// 100, which would overstate a coupon grant by 1e4.
+String formatTokenBankPoints(String? microAmount) {
+  final value = microAmount?.trim() ?? '';
+  if (value.isEmpty) {
+    return '--';
+  }
+  final parsed = BigInt.tryParse(value);
+  if (parsed == null) {
+    return value;
+  }
+  final negative = parsed.isNegative;
+  final abs = parsed.abs();
+  final micro = BigInt.from(1000000);
+  final whole = abs ~/ micro;
+  final fraction = (abs % micro)
+      .toString()
+      .padLeft(6, '0')
+      .replaceAll(RegExp(r'0+$'), '');
+  final body = fraction.isEmpty ? '$whole' : '$whole.$fraction';
+  return negative ? '-$body' : body;
 }
 
 /// Converts a user-entered major-unit amount (`"10"`, `"10.5"`, `"10.50"`)

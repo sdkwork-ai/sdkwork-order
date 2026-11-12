@@ -50,6 +50,13 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "orders",
         "orders.statistics.retrieve",
     ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/app/v3/api/orders/{orderId}/discount",
+        "orders",
+        "orders.discount.create",
+    )
+    .with_idempotent(true),
     // === Demand claims (抢单) ===
     HttpRoute::dual_token(
         HttpMethod::Get,

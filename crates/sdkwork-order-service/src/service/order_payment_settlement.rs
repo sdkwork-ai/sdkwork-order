@@ -11,6 +11,7 @@ use crate::service::payment_notify::{
 use crate::{
     MembershipPurchaseSettlementSnapshot, OrderPaymentSettlementAttempt,
     OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort,
+    PromotionDiscountSettlementRequest,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -197,6 +198,7 @@ pub struct OwnerOrderSettlementPorts<'a> {
     pub membership_port: &'a dyn crate::MembershipPurchaseFulfillmentPort,
     pub app_template_port: &'a dyn crate::AppTemplatePurchaseFulfillmentPort,
     pub physical_goods_port: &'a dyn crate::PhysicalGoodsFulfillmentPort,
+    pub promotion_discount_port: &'a dyn crate::PromotionDiscountPort,
 }
 
 /// Settles a confirmed successful owner order payment with the standard
@@ -272,6 +274,28 @@ pub async fn settle_owner_order_after_payment_success_with_registry(
         event_type,
     )
     .await?;
+
+    // A paid order must move its promotion discount reservation from
+    // `reserved` to `used`. The order is already paid and fulfilled at this
+    // point, so a promotion outage is logged rather than turning a successful
+    // payment into a webhook failure; the reconciliation job can retry by order
+    // id (`settle_promotion_discounts_for_order` is idempotent).
+    if let Err(error) = ports
+        .promotion_discount_port
+        .settle_discounts(PromotionDiscountSettlementRequest {
+            tenant_id: attempt.tenant_id.clone(),
+            organization_id: attempt.organization_id.clone(),
+            order_id: attempt.order_id.clone(),
+        })
+        .await
+    {
+        tracing::error!(
+            target = "order.settlement",
+            order_id = %attempt.order_id,
+            error = ?error,
+            "failed to settle the order promotion discount after payment"
+        );
+    }
 
     Ok(OwnerOrderSettlementOutcome {
         payment_confirmed: true,

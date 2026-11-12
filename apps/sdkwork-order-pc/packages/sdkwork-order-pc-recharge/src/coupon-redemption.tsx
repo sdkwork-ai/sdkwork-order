@@ -60,15 +60,15 @@ const DEFAULT_COPY: SdkworkCouponRedemptionCopy = {
   codeLabel: "Coupon code",
   codePlaceholder: "Enter your coupon code",
   dailyQuota: "Daily quota",
-  description: "Redeem Token Bank credit or activate a quota-limited subscription.",
+  description: "Redeem Compute Credits, membership points, cash, or activate a quota-limited subscription.",
   expiresAt: "Valid until",
   invalidCode: "Enter a valid coupon code.",
-  pointsCredited: "Points credited",
+  pointsCredited: "Membership points credited",
   redeem: "Redeem",
   redeeming: "Redeeming...",
   subscriptionActivated: "Subscription activated",
   title: "Redeem coupon",
-  tokenBankCredited: "Token Bank credited",
+  tokenBankCredited: "Compute Credits added to Token Bank",
   totalQuota: "Total quota",
 };
 
@@ -77,6 +77,13 @@ function minorUnitsToYuan(value: number): string {
   const padded = String(value).padStart(3, "0");
   const whole = padded.slice(0, -2).replace(/^0+(?=\d)/, "") || "0";
   return `${whole}.${padded.slice(-2)}`;
+}
+
+/** Cash grant in the coupon's own currency (the cash wallet is currency-denominated). */
+function formatCashGrant(minorUnits: number, currencyCode: string): string {
+  const amount = minorUnitsToYuan(minorUnits);
+  const currency = currencyCode.trim().toUpperCase();
+  return currency === "CNY" ? `¥${amount}` : `${amount} ${currency}`;
 }
 
 interface CouponRedemptionExperienceProps extends SdkworkCouponRedemptionProps {
@@ -276,7 +283,7 @@ function CouponRedemptionResult({
         <CheckCircle2 aria-hidden="true" />
         <div>
           <strong>{copy.cashCredited}</strong>
-          <span>{minorUnitsToYuan(result.grantAmount)}</span>
+          <span>{formatCashGrant(result.grantAmount, result.currencyCode)}</span>
         </div>
       </div>
     );

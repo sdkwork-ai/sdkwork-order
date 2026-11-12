@@ -1,5 +1,5 @@
 const ordersService = require("../../services/order-service");
-const { formatMinor } = require("../../utils/format");
+const { formatMinor, formatTokenBankPoints } = require("../../utils/format");
 
 Page({
   data: {
@@ -27,6 +27,8 @@ Page({
       const result = await ordersService.redeemCoupon(code);
       const benefit = result.benefit || {};
       const isTokenBank = benefit.kind === "token_bank_credit";
+      const cashCurrency = String(benefit.currencyCode || "CNY").trim().toUpperCase();
+      const cashSymbol = cashCurrency === "CNY" ? "¥" : `${cashCurrency} `;
       this.setData({
         submitting: false,
         result: {
@@ -34,10 +36,14 @@ Page({
           replayed: result.replayed,
           orderNo: result.orderNo,
           benefitText: isTokenBank
-            ? `Token Bank 额度 ${formatMinor(benefit.grantAmount, { symbol: "" })}`
-            : benefit.kind === "subscription"
-              ? `会员权益 ${benefit.durationDays || ""} 天`
-              : "权益已发放",
+            ? `Token Bank 算力额度 ${formatTokenBankPoints(benefit.grantAmount)}`
+            : benefit.kind === "points_credit"
+              ? `会员积分 ${benefit.grantPoints || "0"}`
+              : benefit.kind === "cash_credit"
+                ? `现金 ${formatMinor(benefit.grantAmount, { symbol: cashSymbol })}`
+                : benefit.kind === "subscription"
+                  ? `会员权益 ${benefit.durationDays || ""} 天`
+                  : "权益已发放",
         },
       });
       if (result.status === "completed") {

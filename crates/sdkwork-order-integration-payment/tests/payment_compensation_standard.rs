@@ -17,8 +17,9 @@ use sdkwork_order_repository_sqlx::{
 use sdkwork_order_service::{
     AccountPointsCreditFuture, AccountPointsCreditPort, NoopAccountValueLedgerPort,
     NoopAppTemplatePurchaseFulfillmentPort, NoopCouponRedemptionPort,
-    NoopMembershipPurchaseFulfillmentPort, OwnerOrderSettlementPorts, PointsRechargeCreditOutcome,
-    PointsRechargeCreditRequest, UnavailablePhysicalGoodsFulfillmentPort,
+    NoopMembershipPurchaseFulfillmentPort, NoopPromotionDiscountPort, OwnerOrderSettlementPorts,
+    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
+    UnavailablePhysicalGoodsFulfillmentPort,
 };
 use sdkwork_payment_providers::ProviderCredentialBundle;
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
@@ -249,6 +250,7 @@ impl TestSettlement {
             membership_port: &NoopMembershipPurchaseFulfillmentPort,
             app_template_port: &NoopAppTemplatePurchaseFulfillmentPort,
             physical_goods_port: &UnavailablePhysicalGoodsFulfillmentPort,
+            promotion_discount_port: &NoopPromotionDiscountPort,
         }
     }
 }

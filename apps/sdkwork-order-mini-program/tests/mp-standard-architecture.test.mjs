@@ -198,6 +198,17 @@ test("amounts stay minor-unit strings and ids stay strings end to end", () => {
   const formatSource = read("src/utils/format.js");
   assert.match(formatSource, /formatMinor/u, "format.js must expose the minor-unit formatter");
   assert.match(formatSource, /yuanInputToMinor/u, "format.js must expose yuan-to-minor input conversion");
+  assert.match(
+    formatSource,
+    /formatTokenBankPoints/u,
+    "format.js must expose the Token Bank micro-point formatter",
+  );
+  const couponPageSource = read("src/pages/coupon/index.js");
+  assert.match(
+    couponPageSource,
+    /Token Bank 算力额度 \$\{formatTokenBankPoints\(benefit\.grantAmount\)\}/u,
+    "coupon redemption must render Token Bank grants in whole Compute Credits",
+  );
   const orderServiceSource = read("src/services/order-service.js");
   assert.match(orderServiceSource, /String\(record\.orderId/u, "orderId must map through String()");
   assert.match(orderServiceSource, /Idempotency-Key/u, "write commands must send Idempotency-Key");

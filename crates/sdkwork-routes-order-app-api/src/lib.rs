@@ -9,6 +9,7 @@ pub mod http_route_manifest;
 pub mod membership_router;
 pub mod openapi_contract;
 pub mod order_router;
+pub mod order_discount_router;
 pub use payment_webhook_framework::{
     classify_webhook_event, collect_webhook_intake, ProviderWebhookFramework, WebhookEventFamily,
     WebhookFamilyPolicy, WEBHOOK_BODY_MAX_BYTES,
@@ -55,6 +56,10 @@ pub use order_router::{
     app_order_router_with_postgres_pool, app_order_router_with_postgres_pool_and_inventory,
     build_app_order_router, build_app_order_router_with_inventory, CommerceOrderFuture,
     CommerceOrderStore, OwnerOrderPaymentStore,
+};
+pub use order_discount_router::{
+    app_order_discount_router_with_postgres_pool, build_app_order_discount_router,
+    CommerceOrderDiscountStore, OrderDiscountFuture,
 };
 pub use payment_webhook_router::{
     app_payment_webhook_router_with_postgres_pool,

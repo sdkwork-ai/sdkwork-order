@@ -26,6 +26,26 @@ void main() {
     });
   });
 
+  group('formatTokenBankPoints', () {
+    test('converts ledger micro-points into whole Compute Credits', () {
+      expect(formatTokenBankPoints('110000000'), '110');
+      expect(formatTokenBankPoints('130000000'), '130');
+      expect(formatTokenBankPoints('1500000'), '1.5');
+      expect(formatTokenBankPoints('1'), '0.000001');
+      expect(formatTokenBankPoints('0'), '0');
+    });
+
+    test('keeps int64-scale precision and falls back for bad input', () {
+      expect(
+        formatTokenBankPoints('9007199254740993000000'),
+        '9007199254740993',
+      );
+      expect(formatTokenBankPoints(null), '--');
+      expect(formatTokenBankPoints(''), '--');
+      expect(formatTokenBankPoints('abc'), 'abc');
+    });
+  });
+
   group('toMinorUnitString', () {
     test('converts major-unit input to minor units', () {
       expect(toMinorUnitString('10'), '1000');

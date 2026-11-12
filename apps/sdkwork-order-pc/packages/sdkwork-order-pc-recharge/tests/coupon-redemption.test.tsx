@@ -15,10 +15,10 @@ function renderWithTheme(node: ReactNode) {
 afterEach(cleanup);
 
 describe("SDKWork coupon redemption surfaces", () => {
-  it("trims the code and renders a Token Bank credit", async () => {
+  it("trims the code and renders a Token Bank credit in whole Compute Credits", async () => {
     const redeem = vi.fn().mockResolvedValue({
       benefitKind: "token_bank_credit" as const,
-      grantAmount: 500,
+      grantAmount: 110,
       orderId: "order-token-bank",
       orderNo: "CP1001",
       replayed: false,
@@ -29,13 +29,13 @@ describe("SDKWork coupon redemption surfaces", () => {
     renderWithTheme(<SdkworkCouponRedemptionInline service={{ redeem }} />);
 
     fireEvent.change(screen.getByLabelText("Coupon code"), {
-      target: { value: "  TOKEN-500  " },
+      target: { value: "  TOKEN-110  " },
     });
     fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
 
-    await waitFor(() => expect(redeem).toHaveBeenCalledWith("TOKEN-500", expect.any(String)));
-    expect(await screen.findByText("Token Bank credited")).toBeInTheDocument();
-    expect(screen.getByText("500")).toBeInTheDocument();
+    await waitFor(() => expect(redeem).toHaveBeenCalledWith("TOKEN-110", expect.any(String)));
+    expect(await screen.findByText("Compute Credits added to Token Bank")).toBeInTheDocument();
+    expect(screen.getByText("110")).toBeInTheDocument();
   });
 
   it("retries the same code with the same idempotency key", async () => {
@@ -58,7 +58,7 @@ describe("SDKWork coupon redemption surfaces", () => {
     expect(await screen.findByText("HTTP 503: Service Unavailable")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
-    expect(await screen.findByText("Token Bank credited")).toBeInTheDocument();
+    expect(await screen.findByText("Compute Credits added to Token Bank")).toBeInTheDocument();
 
     const keys = redeem.mock.calls.map((call) => call[1]);
     expect(keys).toHaveLength(2);
@@ -137,9 +137,10 @@ describe("SDKWork coupon redemption surfaces", () => {
     expect(screen.getByText("1,000")).toBeInTheDocument();
   });
 
-  it("renders a cash credit redemption in yuan", async () => {
+  it("renders a cash credit redemption in the coupon's own currency", async () => {
     const redeem = vi.fn().mockResolvedValue({
       benefitKind: "cash_credit" as const,
+      currencyCode: "USD",
       grantAmount: 10050,
       orderId: "order-cash",
       replayed: false,
@@ -157,7 +158,7 @@ describe("SDKWork coupon redemption surfaces", () => {
     fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
 
     expect(await screen.findByText("Cash balance credited")).toBeInTheDocument();
-    expect(screen.getByText("100.50")).toBeInTheDocument();
+    expect(screen.getByText("100.50 USD")).toBeInTheDocument();
   });
 
   it("renders service errors and clears them when the code changes", async () => {
@@ -205,13 +206,13 @@ describe("SDKWork coupon redemption surfaces", () => {
 
     expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
-    expect(await screen.findByText("Token Bank credited")).toBeInTheDocument();
+    expect(await screen.findByText("Compute Credits added to Token Bank")).toBeInTheDocument();
 
     view.rerender(dialog(false));
     view.rerender(dialog(true));
 
     await waitFor(() => {
-      expect(screen.queryByText("Token Bank credited")).not.toBeInTheDocument();
+      expect(screen.queryByText("Compute Credits added to Token Bank")).not.toBeInTheDocument();
       expect(screen.getByLabelText("Coupon code")).toHaveValue("WELCOME");
     });
   });

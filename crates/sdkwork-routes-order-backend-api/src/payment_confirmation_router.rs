@@ -13,7 +13,8 @@ use sdkwork_order_repository_sqlx::{
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
     AppTemplatePurchaseFulfillmentPort, CouponRedemptionPort, MembershipPurchaseFulfillmentPort,
-    NoopCouponRedemptionPort, OwnerOrderPaymentReconciliationPort, OwnerOrderSettlementPorts,
+    NoopCouponRedemptionPort, NoopPromotionDiscountPort, OwnerOrderPaymentReconciliationPort,
+    OwnerOrderSettlementPorts,
     PhysicalGoodsFulfillmentPort, ReconcileOwnerOrderPaymentRequest,
     UnavailableOwnerOrderPaymentReconciliationPort, UnavailablePhysicalGoodsFulfillmentPort,
 };
@@ -185,6 +186,7 @@ async fn confirm_order_payment(
             ref recharge,
             ref orders,
         } => {
+            let promotion_discount_port = NoopPromotionDiscountPort;
             confirm_order_payment_inner(
                 ctx,
                 &subject,
@@ -203,6 +205,7 @@ async fn confirm_order_payment(
                     membership_port: membership_port.as_ref(),
                     app_template_port: app_template_port.as_ref(),
                     physical_goods_port: physical_goods_port.as_ref(),
+                    promotion_discount_port: &promotion_discount_port,
                 },
             )
             .await

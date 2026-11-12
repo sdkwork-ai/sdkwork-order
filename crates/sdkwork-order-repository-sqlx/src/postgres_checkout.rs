@@ -14,9 +14,9 @@ fn normalize_organization_scope(organization_id: Option<&str>) -> String {
 }
 
 use sdkwork_order_service::{
-    checkout_quote_request_hash, checkout_session_request_hash, CheckoutQuoteView,
-    CheckoutSessionDetailQuery, CheckoutSessionView, CreateCheckoutQuoteCommand,
-    CreateCheckoutSessionCommand,
+    checkout_quote_request_hash, checkout_session_request_hash, ApplyOrderDiscountCommand,
+    CheckoutQuoteView, CheckoutSessionDetailQuery, CheckoutSessionView, CreateCheckoutQuoteCommand,
+    CreateCheckoutSessionCommand, OrderDiscountView,
 };
 use sqlx::{Postgres, Row, Transaction};
 
@@ -42,6 +42,103 @@ struct ResolvedCheckoutLine {
 }
 
 impl PostgresCommerceOrderStore {
+    /// Reprices a payable order after a promotion discount has been applied.
+    ///
+    /// The discount is incremental: combinable coupons accumulate on the same
+    /// `order_total` breakdown, and the payable amount is always recomputed from
+    /// the original amount. Both the order row and its breakdown are locked so a
+    /// concurrent payment cannot read a half-applied discount.
+    pub async fn apply_order_discount(
+        &self,
+        command: ApplyOrderDiscountCommand,
+    ) -> Result<OrderDiscountView, CommerceServiceError> {
+        let mut tx =
+            self.pool().begin().await.map_err(|error| {
+                store_error("failed to begin order discount transaction", error)
+            })?;
+        let row = sqlx::query(
+            r#"
+            SELECT o.status,
+                   COALESCE(o.currency_code, 'CNY') AS currency_code,
+                   CAST(b.id AS TEXT) AS breakdown_id,
+                   CAST(b.original_amount AS TEXT) AS original_amount,
+                   CAST(COALESCE(b.discount_amount, '0') AS TEXT) AS discount_amount
+            FROM commerce_order o
+            JOIN commerce_order_amount_breakdown b
+              ON b.tenant_id = o.tenant_id
+             AND b.order_id = o.id
+             AND b.allocation_type = 'order_total'
+            WHERE o.tenant_id = CAST($1 AS TEXT)
+              AND o.organization_id = CAST($2 AS TEXT)
+              AND o.owner_user_id = CAST($3 AS TEXT)
+              AND o.id = CAST($4 AS TEXT)
+            ORDER BY b.id ASC
+            LIMIT 1
+            FOR UPDATE OF o, b
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(normalize_organization_scope(command.organization_id.as_deref()))
+        .bind(&command.owner_user_id)
+        .bind(&command.order_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to load order for discount", error))?
+        .ok_or_else(|| CommerceServiceError::not_found("order amount is not available"))?;
+
+        let status = string_cell(&row, "status").to_ascii_lowercase();
+        if !matches!(
+            status.as_str(),
+            "draft" | "pending" | "pending_payment" | "unpaid" | "wait_pay"
+        ) {
+            return Err(CommerceServiceError::conflict(
+                "order is not open for a discount",
+            ));
+        }
+        let original_amount = parse_minor_units(&string_cell(&row, "original_amount"))?;
+        let existing_discount = parse_minor_units(&string_cell(&row, "discount_amount"))?;
+        let new_discount = existing_discount
+            .checked_add(command.discount_amount_minor)
+            .ok_or_else(|| CommerceServiceError::validation("order discount amount overflow"))?;
+        if new_discount > original_amount {
+            return Err(CommerceServiceError::conflict(
+                "order discount exceeds the order amount",
+            ));
+        }
+        let payable_amount = original_amount - new_discount;
+        let updated = sqlx::query(
+            r#"
+            UPDATE commerce_order_amount_breakdown
+            SET discount_amount = CAST($1 AS NUMERIC),
+                payable_amount = CAST($2 AS NUMERIC)
+            WHERE tenant_id = CAST($3 AS TEXT)
+              AND id = CAST($4 AS TEXT)
+            "#,
+        )
+        .bind(new_discount.to_string())
+        .bind(payable_amount.to_string())
+        .bind(&command.tenant_id)
+        .bind(string_cell(&row, "breakdown_id"))
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to update order amount breakdown", error))?;
+        if updated.rows_affected() != 1 {
+            return Err(CommerceServiceError::conflict(
+                "order amount breakdown was not updated",
+            ));
+        }
+        tx.commit().await.map_err(|error| {
+            store_error("failed to commit order discount transaction", error)
+        })?;
+        Ok(OrderDiscountView {
+            order_id: command.order_id,
+            original_amount_minor: original_amount.to_string(),
+            discount_amount_minor: new_discount.to_string(),
+            payable_amount_minor: payable_amount.to_string(),
+            currency_code: string_cell(&row, "currency_code"),
+        })
+    }
+
     pub async fn create_checkout_session(
         &self,
         command: CreateCheckoutSessionCommand,
@@ -1059,4 +1156,16 @@ fn optional_string_cell(row: &sqlx::postgres::PgRow, column: &str) -> Option<Str
 
 fn string_cell(row: &sqlx::postgres::PgRow, column: &str) -> String {
     optional_string_cell(row, column).unwrap_or_default()
+}
+
+fn parse_minor_units(value: &str) -> Result<i64, CommerceServiceError> {
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        return Ok(0);
+    }
+    normalized.parse::<i64>().map_err(|_| {
+        CommerceServiceError::storage(format!(
+            "order amount is not integer minor units: {normalized}"
+        ))
+    })
 }

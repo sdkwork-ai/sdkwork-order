@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
+import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, OrdersDiscountCreateRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
 
 export interface OrderOrdersOrdersReceiptsCreateParams {
@@ -210,6 +210,30 @@ export class OrderOrdersOrdersPaymentsApi {
   }
 }
 
+export interface OrderOrdersOrdersDiscountCreateParams {
+  idempotencyKey: string;
+}
+
+export class OrderOrdersOrdersDiscountApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Orders discount create. */
+  async create(orderId: string, body: OrdersDiscountCreateRequest, params: OrderOrdersOrdersDiscountCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/discount`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
+  }
+}
+
 export interface OrderOrdersOrdersListParams {
   status?: string;
   page?: number;
@@ -218,6 +242,7 @@ export interface OrderOrdersOrdersListParams {
 
 export class OrderOrdersOrdersApi {
   private client: HttpClient;
+  public readonly discount: OrderOrdersOrdersDiscountApi;
   public readonly payments: OrderOrdersOrdersPaymentsApi;
   public readonly events: OrderOrdersOrdersEventsApi;
   public readonly cancellations: OrderOrdersOrdersCancellationsApi;
@@ -230,6 +255,7 @@ export class OrderOrdersOrdersApi {
 
   constructor(client: HttpClient) {
     this.client = client;
+    this.discount = new OrderOrdersOrdersDiscountApi(client);
     this.payments = new OrderOrdersOrdersPaymentsApi(client);
     this.events = new OrderOrdersOrdersEventsApi(client);
     this.cancellations = new OrderOrdersOrdersCancellationsApi(client);

@@ -28,6 +28,7 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final grantLine = _grantLine();
     return Scaffold(
       appBar: AppBar(title: const Text('券码兑换')),
       body: ListView(
@@ -88,8 +89,7 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
                       ),
                     const SizedBox(height: 8),
                     Text('权益：${benefitKindLabel(_result!.benefitKind)}'),
-                    if (_result!.grantAmount != null)
-                      Text('到账额度：${formatMinorAmount(_result!.grantAmount)}'),
+                    if (grantLine != null) Text(grantLine),
                     if (_result!.durationDays != null)
                       Text('有效天数：${_result!.durationDays} 天'),
                     if (_result!.orderNo.isNotEmpty)
@@ -102,6 +102,30 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
         ],
       ),
     );
+  }
+
+  /// Per-benefit grant line: Token Bank uses the account's micro-point wire
+  /// unit, membership points are whole integers, and cash is a currency minor
+  /// unit. Formatting every benefit with `formatMinorAmount` would divide both
+  /// Token Bank and membership-point grants by 100.
+  String? _grantLine() {
+    final result = _result;
+    final amount = result?.grantAmount;
+    if (result == null || amount == null) {
+      return null;
+    }
+    switch (result.benefitKind) {
+      case 'token_bank_credit':
+        return '到账算力额度：${formatTokenBankPoints(amount)}';
+      case 'points_credit':
+        return '到账会员积分：$amount';
+      case 'cash_credit':
+        final currency = (result.currencyCode ?? 'CNY').toUpperCase();
+        final symbol = currency == 'CNY' ? '¥' : '$currency ';
+        return '到账现金：${formatMinorAmount(amount, symbol: symbol)}';
+      default:
+        return '到账额度：$amount';
+    }
   }
 
   Future<void> _redeem() async {

@@ -113,9 +113,9 @@ String paymentMethodLabel(String method) =>
 /// 券码权益标签.
 String benefitKindLabel(String? kind) =>
     const <String, String>{
-      'token_bank_credit': 'Token Bank 额度',
-      'points_credit': '积分',
-      'cash_credit': '现金',
+      'token_bank_credit': '算力券',
+      'points_credit': '会员积分券',
+      'cash_credit': '现金券',
       'subscription': '会员权益',
     }[kind] ??
     (kind ?? '权益');
@@ -138,7 +138,7 @@ String payoutMethodLabel(String method) {
 /// 退款资产标签.
 String refundAssetLabel(String asset) =>
     const <String, String>{
-      'points': '积分',
+      'points': '会员积分',
       'token_bank': 'Token Bank',
       'cash': '现金',
     }[asset] ??

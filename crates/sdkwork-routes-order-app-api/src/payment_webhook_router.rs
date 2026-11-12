@@ -18,8 +18,9 @@ use sdkwork_order_integration_payment::StorePaymentNotifyPorts;
 use sdkwork_order_service::{
     default_payment_notify_handler_registry, AccountPointsCreditPort, AccountValueLedgerPort,
     AppTemplatePurchaseFulfillmentPort, CouponRedemptionPort, MembershipPurchaseFulfillmentPort,
-    NoopCouponRedemptionPort, PaymentNotifyHandlerRegistry, PhysicalGoodsFulfillmentPort,
-    RefundNotifyHandlerRegistry, UnavailablePhysicalGoodsFulfillmentPort,
+    NoopCouponRedemptionPort, NoopPromotionDiscountPort, PaymentNotifyHandlerRegistry,
+    PhysicalGoodsFulfillmentPort, PromotionDiscountPort, RefundNotifyHandlerRegistry,
+    UnavailablePhysicalGoodsFulfillmentPort,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
@@ -71,6 +72,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_coupon(
         membership_port,
         app_template_port,
         Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
+        Arc::new(NoopPromotionDiscountPort),
     )
 }
 
@@ -82,6 +84,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations(
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    promotion_discount_port: Arc<dyn PromotionDiscountPort>,
 ) -> Router {
     app_payment_webhook_router_with_postgres_pool_and_integrations_and_registries(
         pool,
@@ -91,6 +94,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations(
         membership_port,
         app_template_port,
         physical_goods_port,
+        promotion_discount_port,
         None,
         None,
     )
@@ -108,6 +112,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    promotion_discount_port: Arc<dyn PromotionDiscountPort>,
     payment_notify_handler_registry: Option<Arc<dyn PaymentNotifyHandlerRegistry>>,
     refund_notify_handler_registry: Option<Arc<dyn RefundNotifyHandlerRegistry>>,
 ) -> Router {
@@ -138,6 +143,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
         membership_port,
         app_template_port,
         physical_goods_port,
+        promotion_discount_port,
         payment_notify_handler_registry.unwrap_or_else(default_payment_notify_handler_registry),
         refund_registry,
     ));

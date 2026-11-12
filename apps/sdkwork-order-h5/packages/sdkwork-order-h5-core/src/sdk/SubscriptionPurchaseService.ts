@@ -2,6 +2,7 @@ import { createClient as createOrderAppClient, type SdkworkAppClient as SdkworkO
 import {
   createSdkworkIdempotencyParams,
   createSdkworkOrderAppService,
+  sdkworkTokenBankPointsMicroStringToDecimal,
   unwrapSdkworkOrderResource,
   type SdkworkMembershipCheckoutPayment,
   type SdkworkOrderAppService,
@@ -49,6 +50,8 @@ export interface CouponRedemptionResult {
   status: "completed" | "pending";
   benefitKind?: string;
   grantAmount?: string;
+  /** ISO currency for a cash grant; absent for Token Bank / membership points. */
+  currencyCode?: string;
   durationDays?: number;
   [key: string]: unknown;
 }
@@ -189,6 +192,16 @@ function normalizeCouponRedemptionResult(response: unknown): CouponRedemptionRes
     : {};
   const rawStatus = String(source.status ?? source.orderStatus ?? "pending");
   const completed = rawStatus === "completed" || rawStatus === "succeeded";
+  const benefitKind = benefit.kind != null ? String(benefit.kind) : undefined;
+  const rawGrantAmount = benefit.grantAmount ?? benefit.grantPoints;
+  // Token Bank coupon grants cross the order wire in the account ledger's
+  // minor unit (micro-points, 1 point = 1e6). Every other benefit kind already
+  // reports its own display unit, so only Token Bank is scaled here.
+  const grantAmount = rawGrantAmount == null
+    ? undefined
+    : benefitKind === "token_bank_credit"
+      ? sdkworkTokenBankPointsMicroStringToDecimal(String(rawGrantAmount))
+      : String(rawGrantAmount);
   return {
     ...source,
     // 归一化字段放在展开之后:原始 status("succeeded")等不得覆盖契约字段。
@@ -196,9 +209,10 @@ function normalizeCouponRedemptionResult(response: unknown): CouponRedemptionRes
     orderNo: source.orderNo != null ? String(source.orderNo) : undefined,
     replayed: source.replayed === true,
     status: completed ? "completed" : "pending",
-    benefitKind: benefit.kind != null ? String(benefit.kind) : undefined,
-    grantAmount: benefit.grantAmount != null || benefit.grantPoints != null
-      ? String(benefit.grantAmount ?? benefit.grantPoints)
+    benefitKind,
+    grantAmount,
+    currencyCode: benefit.currencyCode != null
+      ? String(benefit.currencyCode).trim().toUpperCase()
       : undefined,
     durationDays: benefit.durationDays != null ? Number(benefit.durationDays) : undefined,
   };

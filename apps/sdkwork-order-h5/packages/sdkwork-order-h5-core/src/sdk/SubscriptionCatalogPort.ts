@@ -134,7 +134,7 @@ export function createDefaultSubscriptionCatalogPort(
     },
 
     async listTokenBankPlans(): Promise<TokenBankPlan[]> {
-      // Token Bank 充值套餐与 CloudRouter 控制台"算力积分购买"同源：
+      // Token Bank 充值套餐与 CloudRouter 控制台"算力额度购买"同源：
       // 读积分包目录（`recharges/packages`），由后端按充值 settings
       // 计算每档到账算力积分（grant_amount / points）。
       const response = await orderClient.recharges.packages.list({ page: 1, pageSize: 200 });

@@ -150,6 +150,7 @@ async fn registry_seam_variants_are_constructible() {
             Arc::new(NoopMembershipPurchaseFulfillmentPort),
             Arc::new(NoopAppTemplatePurchaseFulfillmentPort),
             Arc::new(sdkwork_order_service::UnavailablePhysicalGoodsFulfillmentPort),
+            Arc::new(sdkwork_order_service::NoopPromotionDiscountPort),
             Some(default_payment_notify_handler_registry()),
             None,
         );

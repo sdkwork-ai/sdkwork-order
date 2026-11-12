@@ -11,17 +11,20 @@ use sdkwork_order_integration_payment::{
     payment_refund_executor_port_from_database_pool,
 };
 use sdkwork_order_integration_physical_commerce::physical_commerce_ports_from_env;
-use sdkwork_order_integration_promotion::promotion_coupon_redemption_port_from_database_pool;
+use sdkwork_order_integration_promotion::{
+    promotion_coupon_redemption_port_from_database_pool,
+    promotion_discount_port_from_database_pool,
+};
 pub use sdkwork_order_service::order_service_contract;
 use sdkwork_order_service::{
     AccountPointsCreditPort, AccountValueLedgerPort, AppTemplatePurchaseFulfillmentPort,
     CouponRedemptionPort, MembershipPurchaseFulfillmentPort,
     NoopAppTemplatePurchaseFulfillmentPort, NoopCouponRedemptionPort,
-    NoopPaymentPayoutExecutorPort, OrderPartnerRelationPort, OwnerOrderPaymentReconciliationPort,
-    PaymentPayoutExecutorPort, PaymentRefundExecutorPort, PhysicalCheckoutResolverPort,
-    PhysicalGoodsFulfillmentPort, PhysicalInventoryReservationPort,
-    UnavailablePhysicalCheckoutResolverPort, UnavailablePhysicalGoodsFulfillmentPort,
-    UnavailablePhysicalInventoryReservationPort,
+    NoopPaymentPayoutExecutorPort, NoopPromotionDiscountPort, OrderPartnerRelationPort,
+    OwnerOrderPaymentReconciliationPort, PaymentPayoutExecutorPort, PaymentRefundExecutorPort,
+    PhysicalCheckoutResolverPort, PhysicalGoodsFulfillmentPort,
+    PhysicalInventoryReservationPort, PromotionDiscountPort, UnavailablePhysicalCheckoutResolverPort,
+    UnavailablePhysicalGoodsFulfillmentPort, UnavailablePhysicalInventoryReservationPort,
 };
 use std::sync::Arc;
 
@@ -43,6 +46,7 @@ pub struct OrderServiceHost {
     account_credit_port: Arc<dyn AccountPointsCreditPort>,
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    promotion_discount_port: Arc<dyn PromotionDiscountPort>,
     membership_fulfillment_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     app_template_fulfillment_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     owner_order_payment_reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
@@ -80,6 +84,8 @@ impl OrderServiceHost {
             account_value_ledger_port_from_database_pool(database.pool())?;
         let coupon_redemption_port =
             promotion_coupon_redemption_port_from_database_pool(database.pool());
+        let promotion_discount_port =
+            promotion_discount_port_from_database_pool(database.pool());
         let membership_fulfillment_port =
             membership_purchase_fulfillment_port_from_database_pool(database.pool())?;
         let app_template_fulfillment_port =
@@ -102,6 +108,7 @@ impl OrderServiceHost {
             account_credit_port,
             account_value_ledger_port,
             coupon_redemption_port,
+            promotion_discount_port,
             membership_fulfillment_port,
             app_template_fulfillment_port,
             owner_order_payment_reconciliation_port,
@@ -151,6 +158,7 @@ impl OrderServiceHost {
             account_credit_port,
             account_value_ledger_port,
             coupon_redemption_port,
+            promotion_discount_port: Arc::new(NoopPromotionDiscountPort),
             membership_fulfillment_port,
             app_template_fulfillment_port: Arc::new(NoopAppTemplatePurchaseFulfillmentPort),
             owner_order_payment_reconciliation_port,
@@ -183,6 +191,10 @@ impl OrderServiceHost {
 
     pub fn coupon_redemption_port(&self) -> Arc<dyn CouponRedemptionPort> {
         self.coupon_redemption_port.clone()
+    }
+
+    pub fn promotion_discount_port(&self) -> Arc<dyn PromotionDiscountPort> {
+        self.promotion_discount_port.clone()
     }
 
     pub fn membership_fulfillment_port(&self) -> Arc<dyn MembershipPurchaseFulfillmentPort> {

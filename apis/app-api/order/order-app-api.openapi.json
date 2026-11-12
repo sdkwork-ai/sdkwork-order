@@ -715,6 +715,132 @@
         "x-sdkwork-api-surface": "app-api"
       }
     },
+    "/app/v3/api/orders/{orderId}/discount": {
+      "post": {
+        "tags": [
+          "orderOrders"
+        ],
+        "summary": "Orders discount create.",
+        "operationId": "orders.discount.create",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "userCouponId"
+                ],
+                "properties": {
+                  "userCouponId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "orders.discount",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api",
+        "x-sdkwork-idempotent": true
+      }
+    },
     "/app/v3/api/orders/{orderId}/payments": {
       "post": {
         "tags": [
@@ -7803,8 +7929,53 @@
             "const": "token_bank"
           },
           "grantAmount": {
+            "description": "Credited Token Bank Compute Credits in integer micro-points (1 Compute Credit = 1,000,000 micro-points). Convert to whole credits for display.",
             "type": "string",
             "pattern": "^[1-9][0-9]*$"
+          }
+        }
+      },
+      "CouponPointsBenefit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "grantPoints"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "points_credit"
+          },
+          "grantPoints": {
+            "description": "Granted membership points as whole integer points.",
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        }
+      },
+      "CouponCashBenefit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "grantAmount",
+          "currencyCode"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "cash_credit"
+          },
+          "grantAmount": {
+            "description": "Cash grant in the currency's minor unit (for example 1250 = 12.50).",
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "currencyCode": {
+            "description": "ISO-4217 currency of the cash wallet that was credited.",
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
           }
         }
       },
@@ -7901,6 +8072,12 @@
                 "$ref": "#/components/schemas/CouponTokenBankBenefit"
               },
               {
+                "$ref": "#/components/schemas/CouponPointsBenefit"
+              },
+              {
+                "$ref": "#/components/schemas/CouponCashBenefit"
+              },
+              {
                 "$ref": "#/components/schemas/CouponSubscriptionBenefit"
               }
             ],
@@ -7908,6 +8085,8 @@
               "propertyName": "kind",
               "mapping": {
                 "token_bank_credit": "#/components/schemas/CouponTokenBankBenefit",
+                "points_credit": "#/components/schemas/CouponPointsBenefit",
+                "cash_credit": "#/components/schemas/CouponCashBenefit",
                 "subscription": "#/components/schemas/CouponSubscriptionBenefit"
               }
             }

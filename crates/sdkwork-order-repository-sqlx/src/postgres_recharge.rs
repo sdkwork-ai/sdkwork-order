@@ -2532,6 +2532,11 @@ fn parse_coupon_benefit_snapshot(
         "cash_credit" => Ok(Some(CouponRedemptionBenefit::CashCredit {
             grant_amount: CommerceMoney::new(&required_json_text(benefit, "grantAmount")?)
                 .map_err(CommerceServiceError::storage)?,
+            // Legacy coupon snapshots predate the currency column; they were
+            // always credited as CNY, so keep that behaviour for old rows while
+            // every new row carries the offer's ISO currency.
+            currency_code: optional_json_text(benefit, "currencyCode")
+                .unwrap_or_else(|| "CNY".to_owned()),
         })),
         "subscription" => Ok(Some(CouponRedemptionBenefit::Subscription {
             product_id: required_json_text(benefit, "productId")?,
@@ -2564,6 +2569,15 @@ fn required_json_text(
         .ok_or_else(|| {
             CommerceServiceError::storage(format!("coupon order snapshot {field} is missing"))
         })
+}
+
+fn optional_json_text(value: &serde_json::Value, field: &str) -> Option<String> {
+    value
+        .get(field)
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
 }
 
 fn required_json_integer(
@@ -2717,6 +2731,36 @@ fn store_error(context: &str, error: sqlx::Error) -> CommerceServiceError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn coupon_snapshot_preserves_cash_currency_and_defaults_legacy_rows_to_cny() {
+        let usd = parse_coupon_benefit_snapshot(
+            r#"{"couponBenefit":{"kind":"cash_credit","grantAmount":"1250","currencyCode":"USD"}}"#,
+        )
+        .expect("cash snapshot")
+        .expect("cash benefit");
+        assert_eq!(
+            usd,
+            CouponRedemptionBenefit::CashCredit {
+                grant_amount: CommerceMoney::new("1250").expect("amount"),
+                currency_code: "USD".to_owned(),
+            }
+        );
+
+        // Rows written before the currency field existed were always CNY.
+        let legacy = parse_coupon_benefit_snapshot(
+            r#"{"couponBenefit":{"kind":"cash_credit","grantAmount":"1250"}}"#,
+        )
+        .expect("legacy cash snapshot")
+        .expect("legacy cash benefit");
+        assert_eq!(
+            legacy,
+            CouponRedemptionBenefit::CashCredit {
+                grant_amount: CommerceMoney::new("1250").expect("amount"),
+                currency_code: "CNY".to_owned(),
+            }
+        );
+    }
 
     #[test]
     fn postgres_recharge_points_math_uses_currency_rate_and_bonus() {

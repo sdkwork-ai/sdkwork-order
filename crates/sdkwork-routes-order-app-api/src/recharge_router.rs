@@ -1307,6 +1307,13 @@ async fn submit_recharge(
                 Err(error) => return map_service_error(ctx, error),
             }
         };
+    // Cash coupons must use the offer's currency, never the client-supplied
+    // order currency: the cash asset is currency-denominated. Token Bank and
+    // membership points keep the request currency as an inert order field.
+    let currency_code = match coupon_benefit.as_ref() {
+        Some(CouponRedemptionBenefit::CashCredit { currency_code, .. }) => currency_code.clone(),
+        _ => currency_code,
+    };
     let plan_period = match request
         .plan_period()
         .map(TokenBankPlanPeriod::parse)
@@ -1551,6 +1558,13 @@ async fn create_coupon_redemption_order(
     let benefit = preview.benefit;
     let target_asset = benefit.target_asset();
     let grant_amount = benefit.grant_amount();
+    // A cash coupon credits a currency-denominated cash wallet; the offer's
+    // currency is the only correct unit. Token Bank and membership points have
+    // intrinsic ledger units, so the order currency is irrelevant for them.
+    let coupon_currency_code = benefit
+        .cash_currency_code()
+        .map(str::to_owned)
+        .unwrap_or_else(|| "CNY".to_owned());
     let command = match build_create_coupon_recharge_command(
         CreateAccountRechargeCommandInput {
             subject,
@@ -1558,7 +1572,7 @@ async fn create_coupon_redemption_order(
             target_asset,
             amount: zero,
             grant_amount,
-            currency_code: "CNY",
+            currency_code: &coupon_currency_code,
             method: None,
             request_no: &write_headers.request_no,
             idempotency_key: &write_headers.idempotency_key,
@@ -1825,10 +1839,14 @@ fn map_coupon_fulfilled_benefit(
                 "grantPoints": grant_amount.as_str(),
             })
         }
-        sdkwork_order_service::CouponFulfilledBenefit::CashCredit { grant_amount } => {
+        sdkwork_order_service::CouponFulfilledBenefit::CashCredit {
+            grant_amount,
+            currency_code,
+        } => {
             serde_json::json!({
                 "kind": "cash_credit",
                 "grantAmount": grant_amount.as_str(),
+                "currencyCode": currency_code,
             })
         }
         sdkwork_order_service::CouponFulfilledBenefit::Subscription {
@@ -2893,6 +2911,39 @@ mod tests {
         assert_eq!(Some(TokenBankPlanPeriod::Monthly), command.plan_period);
         assert!(command.order_no.starts_with("AV"));
         assert!(command.out_trade_no.starts_with("ACCOUNT"));
+    }
+
+    #[test]
+    fn coupon_recharge_cash_order_uses_the_coupon_currency() {
+        let subject = test_subject();
+        let benefit = CouponRedemptionBenefit::CashCredit {
+            grant_amount: CommerceMoney::new("10050").unwrap(),
+            currency_code: "USD".to_owned(),
+        };
+        let command = build_create_coupon_recharge_command(
+            CreateAccountRechargeCommandInput {
+                subject: &subject,
+                order_subject: AccountValueOrderSubject::CouponRecharge,
+                target_asset: AccountValueAssetCode::Cash,
+                amount: CommerceMoney::new("0").unwrap(),
+                grant_amount: CommerceMoney::new("10050").unwrap(),
+                currency_code: "USD",
+                method: None,
+                request_no: "REQ-COUPON-USD",
+                idempotency_key: "IDEMP-COUPON-USD",
+                package_id: None,
+                plan_code: None,
+                plan_period: None,
+                coupon_code: Some("CASH-USD-100"),
+                client_request_no: None,
+            },
+            benefit,
+        )
+        .expect("cash coupon recharge command");
+
+        assert_eq!(AccountValueAssetCode::Cash, command.target_asset);
+        assert_eq!("USD", command.currency_code);
+        assert_eq!("10050", command.grant_amount.as_str());
     }
 
     #[test]
