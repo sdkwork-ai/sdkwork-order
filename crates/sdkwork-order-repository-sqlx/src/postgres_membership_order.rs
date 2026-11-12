@@ -1,6 +1,6 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{CreateMembershipOrderCommand, CreateMembershipOrderOutcome};
-use sdkwork_utils_rust::{build_commerce_cashier_url, commerce_cashier_scene};
+use sdkwork_utils_rust::{build_commerce_cashier_url_with_base, commerce_cashier_scene};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::membership_order_identity::{
@@ -122,6 +122,14 @@ impl PostgresCommerceMembershipOrderStore {
         &self,
         command: CreateMembershipOrderCommand,
     ) -> Result<CreateMembershipOrderOutcome, CommerceServiceError> {
+        // Resolve the operator-configured H5 payment domain (支付设置 → 域名设置)
+        // before opening the transaction so the cashier deep-link follows it.
+        let cashier_base_url = crate::payment_domain_bridge::resolve_h5_cashier_base_url(
+            &self.pool,
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+        )
+        .await?;
         let mut tx =
             self.pool.begin().await.map_err(|error| {
                 store_error("failed to begin membership order transaction", error)
@@ -145,7 +153,7 @@ impl PostgresCommerceMembershipOrderStore {
         );
 
         if let Some(outcome) =
-            load_membership_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None)
+            load_membership_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None, cashier_base_url.as_deref())
                 .await?
         {
             ensure_membership_request_fingerprint_matches(
@@ -160,7 +168,7 @@ impl PostgresCommerceMembershipOrderStore {
 
         expire_stale_membership_orders(&mut tx, &command, &purchase_intent_key).await?;
         if let Some(outcome) =
-            load_membership_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key)).await?
+            load_membership_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key), cashier_base_url.as_deref()).await?
         {
             tx.commit().await.map_err(|error| {
                 store_error("failed to commit reusable membership order", error)
@@ -178,7 +186,7 @@ impl PostgresCommerceMembershipOrderStore {
         .await?;
         if !inserted {
             if let Some(outcome) =
-                load_membership_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None)
+                load_membership_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None, cashier_base_url.as_deref())
                     .await?
             {
                 ensure_membership_request_fingerprint_matches(
@@ -191,7 +199,7 @@ impl PostgresCommerceMembershipOrderStore {
                 return Ok(outcome.value);
             }
             if let Some(outcome) =
-                load_membership_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key))
+                load_membership_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key), cashier_base_url.as_deref())
                     .await?
             {
                 tx.commit().await.map_err(|error| {
@@ -214,6 +222,7 @@ impl PostgresCommerceMembershipOrderStore {
             &command,
             &package,
             &method_key,
+            cashier_base_url.as_deref(),
         ))
     }
 }
@@ -228,6 +237,7 @@ async fn load_membership_order_in_tx(
     command: &CreateMembershipOrderCommand,
     idempotency_key: Option<&str>,
     purchase_intent_key: Option<&str>,
+    cashier_base_url: Option<&str>,
 ) -> Result<Option<StoredMembershipOrderOutcome>, CommerceServiceError> {
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let row = sqlx::query(
@@ -329,7 +339,11 @@ async fn load_membership_order_in_tx(
         &string_cell(&row, "payment_method"),
         membership_order_status_label(&string_cell(&row, "order_status")),
         true,
-        &membership_cashier_url(&string_cell(&row, "order_id"), &out_trade_no),
+        &membership_cashier_url(
+            &string_cell(&row, "order_id"),
+            &out_trade_no,
+            cashier_base_url,
+        ),
     )?;
     Ok(Some(StoredMembershipOrderOutcome {
         request_fingerprint: optional_string_cell(&row, "request_fingerprint"),
@@ -582,6 +596,7 @@ fn build_membership_order_outcome(
     command: &CreateMembershipOrderCommand,
     package: &MembershipPackageCatalog,
     payment_method: &str,
+    cashier_base_url: Option<&str>,
 ) -> CreateMembershipOrderOutcome {
     CreateMembershipOrderOutcome::new(
         &command.order_id,
@@ -597,16 +612,25 @@ fn build_membership_order_outcome(
         payment_method,
         "pending_payment",
         false,
-        &membership_cashier_url(&command.order_id, &command.out_trade_no),
+        &membership_cashier_url(
+            &command.order_id,
+            &command.out_trade_no,
+            cashier_base_url,
+        ),
     )
     .expect("membership order outcome should be valid")
 }
 
-fn membership_cashier_url(order_id: &str, out_trade_no: &str) -> String {
-    build_commerce_cashier_url(
+fn membership_cashier_url(
+    order_id: &str,
+    out_trade_no: &str,
+    cashier_base_url: Option<&str>,
+) -> String {
+    build_commerce_cashier_url_with_base(
         commerce_cashier_scene(Some("membership")),
         order_id,
         out_trade_no,
+        cashier_base_url,
     )
 }
 
@@ -724,9 +748,15 @@ mod tests {
 
     #[test]
     fn postgres_membership_cashier_url_uses_virtual_scene() {
-        let url = membership_cashier_url("MB123", "MEMBERSHIP123");
+        let url = membership_cashier_url("MB123", "MEMBERSHIP123", None);
         assert!(url.contains("scene=virtual"));
         assert!(url.contains("/cashier/MB123"));
+        let configured = membership_cashier_url(
+            "MB123",
+            "MEMBERSHIP123",
+            Some("https://h5.example.com/"),
+        );
+        assert!(configured.starts_with("https://h5.example.com/cashier/MB123"));
     }
 
     #[test]

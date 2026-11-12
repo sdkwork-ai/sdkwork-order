@@ -18,7 +18,7 @@ use sdkwork_order_service::{
     AppTemplateOrderSummary, CreateAppTemplateOrderCommand, CreateAppTemplateOrderOutcome,
     APP_TEMPLATE_ORDER_SUBJECT,
 };
-use sdkwork_utils_rust::{build_commerce_cashier_url, commerce_cashier_scene};
+use sdkwork_utils_rust::{build_commerce_cashier_url_with_base, commerce_cashier_scene};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::app_template_order_identity::{
@@ -200,6 +200,14 @@ impl PostgresCommerceAppTemplateOrderStore {
         &self,
         command: CreateAppTemplateOrderCommand,
     ) -> Result<CreateAppTemplateOrderOutcome, CommerceServiceError> {
+        // Resolve the operator-configured H5 payment domain (支付设置 → 域名设置)
+        // before opening the transaction so the cashier deep-link follows it.
+        let cashier_base_url = crate::payment_domain_bridge::resolve_h5_cashier_base_url(
+            &self.pool,
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+        )
+        .await?;
         let mut tx = self.pool.begin().await.map_err(|error| {
             store_error("failed to begin app template order transaction", error)
         })?;
@@ -221,7 +229,7 @@ impl PostgresCommerceAppTemplateOrderStore {
         let method_key = normalize_method_key(&command.method);
 
         if let Some(stored) =
-            load_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None).await?
+            load_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None, cashier_base_url.as_deref()).await?
         {
             ensure_app_template_request_fingerprint_matches(
                 stored.request_fingerprint.as_deref().unwrap_or_default(),
@@ -235,7 +243,9 @@ impl PostgresCommerceAppTemplateOrderStore {
 
         // The buyer already owns the listing: answer with the settled order
         // instead of selling the same template twice.
-        if let Some(stored) = load_settled_order_in_tx(&mut tx, &command, &template.uuid).await? {
+        if let Some(stored) =
+            load_settled_order_in_tx(&mut tx, &command, &template.uuid, cashier_base_url.as_deref()).await?
+        {
             tx.commit()
                 .await
                 .map_err(|error| store_error("failed to commit owned template replay", error))?;
@@ -244,7 +254,7 @@ impl PostgresCommerceAppTemplateOrderStore {
 
         expire_stale_app_template_orders(&mut tx, &command, &purchase_intent_key).await?;
         if let Some(stored) =
-            load_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key)).await?
+            load_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key), cashier_base_url.as_deref()).await?
         {
             tx.commit().await.map_err(|error| {
                 store_error("failed to commit reusable app template order", error)
@@ -263,7 +273,7 @@ impl PostgresCommerceAppTemplateOrderStore {
         .await?;
         if !inserted {
             if let Some(stored) =
-                load_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None).await?
+                load_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None, cashier_base_url.as_deref()).await?
             {
                 ensure_app_template_request_fingerprint_matches(
                     stored.request_fingerprint.as_deref().unwrap_or_default(),
@@ -275,7 +285,7 @@ impl PostgresCommerceAppTemplateOrderStore {
                 return Ok(stored.value);
             }
             if let Some(stored) =
-                load_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key)).await?
+                load_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key), cashier_base_url.as_deref()).await?
             {
                 tx.commit().await.map_err(|error| {
                     store_error("failed to commit concurrent app template reuse", error)
@@ -304,6 +314,7 @@ impl PostgresCommerceAppTemplateOrderStore {
             &method_key,
             if is_free { "paid" } else { "pending_payment" },
             false,
+            cashier_base_url.as_deref(),
         )
     }
 
@@ -429,6 +440,7 @@ async fn load_order_in_tx(
     command: &CreateAppTemplateOrderCommand,
     idempotency_key: Option<&str>,
     purchase_intent_key: Option<&str>,
+    cashier_base_url: Option<&str>,
 ) -> Result<Option<StoredAppTemplateOrder>, CommerceServiceError> {
     let method_key = normalize_method_key(&command.method);
     let row = sqlx::query(LOAD_ORDER)
@@ -448,7 +460,7 @@ async fn load_order_in_tx(
     };
     Ok(Some(StoredAppTemplateOrder {
         request_fingerprint: optional_string_cell(&row, "request_fingerprint"),
-        value: map_create_outcome(&row, &method_key, true)?,
+        value: map_create_outcome(&row, &method_key, true, cashier_base_url)?,
     }))
 }
 
@@ -456,6 +468,7 @@ async fn load_settled_order_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     command: &CreateAppTemplateOrderCommand,
     template_uuid: &str,
+    cashier_base_url: Option<&str>,
 ) -> Result<Option<StoredAppTemplateOrder>, CommerceServiceError> {
     let method_key = normalize_method_key(&command.method);
     let row = sqlx::query(LOAD_SETTLED_ORDER)
@@ -473,7 +486,7 @@ async fn load_settled_order_in_tx(
     };
     Ok(Some(StoredAppTemplateOrder {
         request_fingerprint: None,
-        value: map_create_outcome(&row, &method_key, true)?,
+        value: map_create_outcome(&row, &method_key, true, cashier_base_url)?,
     }))
 }
 
@@ -674,6 +687,7 @@ fn build_outcome(
     payment_method: &str,
     status: &str,
     reused: bool,
+    cashier_base_url: Option<&str>,
 ) -> Result<CreateAppTemplateOrderOutcome, CommerceServiceError> {
     CreateAppTemplateOrderOutcome::new(
         &command.order_id,
@@ -688,7 +702,11 @@ fn build_outcome(
         payment_method,
         status,
         reused,
-        &app_template_cashier_url(&command.order_id, &command.out_trade_no),
+        &app_template_cashier_url(
+            &command.order_id,
+            &command.out_trade_no,
+            cashier_base_url,
+        ),
     )
 }
 
@@ -696,6 +714,7 @@ fn map_create_outcome(
     row: &sqlx::postgres::PgRow,
     payment_method: &str,
     reused: bool,
+    cashier_base_url: Option<&str>,
 ) -> Result<CreateAppTemplateOrderOutcome, CommerceServiceError> {
     CreateAppTemplateOrderOutcome::new(
         &string_cell(row, "order_id"),
@@ -713,6 +732,7 @@ fn map_create_outcome(
         &app_template_cashier_url(
             &string_cell(row, "order_id"),
             &string_cell(row, "out_trade_no"),
+            cashier_base_url,
         ),
     )
 }
@@ -735,11 +755,16 @@ fn map_app_template_order_summary(
     })
 }
 
-fn app_template_cashier_url(order_id: &str, out_trade_no: &str) -> String {
-    build_commerce_cashier_url(
+fn app_template_cashier_url(
+    order_id: &str,
+    out_trade_no: &str,
+    cashier_base_url: Option<&str>,
+) -> String {
+    build_commerce_cashier_url_with_base(
         commerce_cashier_scene(Some(APP_TEMPLATE_ORDER_SUBJECT)),
         order_id,
         out_trade_no,
+        cashier_base_url,
     )
 }
 
@@ -911,9 +936,12 @@ mod tests {
 
     #[test]
     fn cashier_url_targets_the_virtual_scene() {
-        let url = app_template_cashier_url("order-1", "APPTEMPLATE1");
+        let url = app_template_cashier_url("order-1", "APPTEMPLATE1", None);
         assert!(url.contains("scene=virtual"));
         assert!(url.contains("/cashier/order-1"));
+        let configured =
+            app_template_cashier_url("order-1", "APPTEMPLATE1", Some("https://h5.example.com"));
+        assert!(configured.starts_with("https://h5.example.com/cashier/order-1"));
     }
 
     #[test]

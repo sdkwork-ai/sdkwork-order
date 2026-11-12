@@ -2622,6 +2622,7 @@ dependencies = [
  "sdkwork-order-integration-deployments",
  "sdkwork-order-repository-sqlx",
  "sdkwork-order-service",
+ "sdkwork-payment-repository-sqlx",
  "sdkwork-payment-service",
  "sdkwork-utils-rust",
  "serde",

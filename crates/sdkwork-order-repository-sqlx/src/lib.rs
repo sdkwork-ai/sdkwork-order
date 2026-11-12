@@ -5,6 +5,7 @@ pub mod order_lifecycle;
 pub mod order_limits;
 pub mod order_payment_settlement;
 pub mod order_settlement_context;
+mod payment_domain_bridge;
 pub mod postgres_account_value;
 pub mod postgres_after_sales;
 pub mod postgres_app_template_order;

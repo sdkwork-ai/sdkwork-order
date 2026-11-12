@@ -12,7 +12,7 @@ use sdkwork_order_service::{
     RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
     RechargeSettingsSnapshot,
 };
-use sdkwork_utils_rust::{build_commerce_cashier_url, commerce_cashier_scene};
+use sdkwork_utils_rust::{build_commerce_cashier_url_with_base, commerce_cashier_scene};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::recharge_platform_catalog::materialize_platform_catalog_sql;
@@ -673,6 +673,15 @@ impl PostgresCommerceRechargeStore {
             return Ok(recharge_outcome_from_checkout_status(snapshot));
         }
 
+        // Resolve the operator-configured H5 payment domain before opening the
+        // transaction: the setting lives in the payment capability, and the
+        // cashier deep-link / QR payload must follow it when it is configured.
+        let cashier_base_url = crate::payment_domain_bridge::resolve_h5_cashier_base_url(
+            &self.pool,
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+        )
+        .await?;
         let mut tx = self
             .pool
             .begin()
@@ -698,6 +707,7 @@ impl PostgresCommerceRechargeStore {
             &command,
             pack.as_ref(),
             credited_points,
+            cashier_base_url.as_deref(),
         )
         .await?
         {
@@ -721,7 +731,11 @@ impl PostgresCommerceRechargeStore {
         tx.commit()
             .await
             .map_err(|error| store_error("failed to commit recharge transaction", error))?;
-        let cashier_url = recharge_cashier_url(&command.order_id, &command.out_trade_no);
+        let cashier_url = recharge_cashier_url(
+            &command.order_id,
+            &command.out_trade_no,
+            cashier_base_url.as_deref(),
+        );
 
         Ok(CreatePointsRechargeOrderOutcome {
             success: true,
@@ -748,6 +762,12 @@ impl PostgresCommerceRechargeStore {
         query: CheckoutStatusQuery,
     ) -> Result<Option<CheckoutStatusSnapshot>, CommerceServiceError> {
         let organization_id = normalize_organization_scope(query.organization_id.as_deref());
+        let cashier_base_url = crate::payment_domain_bridge::resolve_h5_cashier_base_url(
+            &self.pool,
+            &query.tenant_id,
+            query.organization_id.as_deref(),
+        )
+        .await?;
         let row = sqlx::query(LOAD_CHECKOUT_STATUS)
             .bind(&query.tenant_id)
             .bind(&organization_id)
@@ -757,7 +777,9 @@ impl PostgresCommerceRechargeStore {
             .await
             .map_err(|error| store_error("failed to load checkout status", error))?;
 
-        row.as_ref().map(map_checkout_status).transpose()
+        row.as_ref()
+            .map(|row| map_checkout_status(row, cashier_base_url.as_deref()))
+            .transpose()
     }
 
     pub async fn load_recharge_checkout_by_idempotency_key(
@@ -1804,6 +1826,7 @@ async fn load_reusable_recharge_checkout_status(
     command: &CreatePointsRechargeOrderCommand,
     pack: Option<&RechargePack>,
     credited_points: i64,
+    cashier_base_url: Option<&str>,
 ) -> Result<Option<CheckoutStatusSnapshot>, CommerceServiceError> {
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
     let row = sqlx::query(LOAD_REUSABLE_RECHARGE_CHECKOUT)
@@ -1821,7 +1844,9 @@ async fn load_reusable_recharge_checkout_status(
         .await
         .map_err(|error| store_error("failed to load reusable recharge checkout", error))?;
 
-    row.as_ref().map(map_checkout_status).transpose()
+    row.as_ref()
+        .map(|row| map_checkout_status(row, cashier_base_url))
+        .transpose()
 }
 
 async fn expire_stale_recharge_orders(
@@ -1981,6 +2006,7 @@ fn recharge_outcome_from_checkout_status(
 
 fn map_checkout_status(
     row: &sqlx::postgres::PgRow,
+    cashier_base_url: Option<&str>,
 ) -> Result<CheckoutStatusSnapshot, CommerceServiceError> {
     let order_status_value = required_status_cell(row, "order_status", "order")?;
     let order_status = order_status_label(&order_status_value)?.to_owned();
@@ -2031,8 +2057,16 @@ fn map_checkout_status(
         expires_at: string_cell(row, "expires_at"),
         paid_at: string_cell(row, "paid_at"),
         next_action: checkout_next_action(status).to_string(),
-        cashier_url: recharge_cashier_url(&string_cell(row, "order_id"), &out_trade_no),
-        qr_code_payload: recharge_cashier_url(&string_cell(row, "order_id"), &out_trade_no),
+        cashier_url: recharge_cashier_url(
+            &string_cell(row, "order_id"),
+            &out_trade_no,
+            cashier_base_url,
+        ),
+        qr_code_payload: recharge_cashier_url(
+            &string_cell(row, "order_id"),
+            &out_trade_no,
+            cashier_base_url,
+        ),
         request_payment_payload: None,
     })
 }
@@ -2116,11 +2150,16 @@ fn checkout_next_action(status: &str) -> &'static str {
     }
 }
 
-fn recharge_cashier_url(order_id: &str, out_trade_no: &str) -> String {
-    build_commerce_cashier_url(
+fn recharge_cashier_url(
+    order_id: &str,
+    out_trade_no: &str,
+    cashier_base_url: Option<&str>,
+) -> String {
+    build_commerce_cashier_url_with_base(
         commerce_cashier_scene(Some("points_recharge")),
         order_id,
         out_trade_no,
+        cashier_base_url,
     )
 }
 
