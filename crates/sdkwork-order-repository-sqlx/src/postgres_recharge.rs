@@ -1726,7 +1726,7 @@ async fn load_recharge_product_sku(
     }
 
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
-    let row = if command.tenant_id.trim().is_empty() {
+    let catalog_row = if command.tenant_id.trim().is_empty() {
         sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
             LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC,
         )))
@@ -1763,14 +1763,40 @@ async fn load_recharge_product_sku(
             .fetch_optional(&mut **tx)
             .await
         }
-    }
-    .map_err(|error| store_error("failed to load recharge product sku", error))?
-    .ok_or_else(|| CommerceServiceError::conflict("recharge product sku is unavailable"))?;
+    };
 
+    match catalog_row {
+        Ok(Some(row)) => Ok(RechargeProductSku {
+            sku_id: string_cell(&row, "sku_id"),
+            product_name: string_cell(&row, "product_name"),
+        }),
+        // A free-amount top-up is an account-value purchase, not a sale of a
+        // catalog SKU: an empty catalog must not block the purchase.
+        Ok(None) => free_amount_recharge_sku(),
+        // A deployment without the catalog capability has no SKU table at all,
+        // which is the same "no catalog reference" case for a top-up.
+        Err(error) if is_undefined_table(&error) => free_amount_recharge_sku(),
+        Err(error) => Err(store_error("failed to load recharge product sku", error)),
+    }
+}
+
+/// Stable order-item reference for a free-amount points top-up.
+const FREE_AMOUNT_RECHARGE_SKU_ID: &str = "points-recharge-custom";
+const FREE_AMOUNT_RECHARGE_PRODUCT_NAME: &str = "Points recharge";
+
+fn free_amount_recharge_sku() -> Result<RechargeProductSku, CommerceServiceError> {
     Ok(RechargeProductSku {
-        sku_id: string_cell(&row, "sku_id"),
-        product_name: string_cell(&row, "product_name"),
+        sku_id: FREE_AMOUNT_RECHARGE_SKU_ID.to_string(),
+        product_name: FREE_AMOUNT_RECHARGE_PRODUCT_NAME.to_string(),
     })
+}
+
+/// Whether a failed statement only proves the catalog tables are absent.
+fn is_undefined_table(error: &sqlx::Error) -> bool {
+    matches!(
+        error,
+        sqlx::Error::Database(database) if database.code().is_some_and(|code| code == "42P01")
+    )
 }
 
 async fn load_reusable_recharge_checkout_status(
@@ -2781,6 +2807,79 @@ mod tests {
             compute_grant_amount("20.00", "USD", 50, &settings).unwrap(),
             1_550_000_000
         );
+    }
+
+    #[test]
+    fn postgres_free_amount_recharge_sku_is_stable_off_catalog() {
+        // A free-amount top-up must resolve an order-item SKU without a catalog
+        // row; the reference is stable so order history and retries agree.
+        let sku = free_amount_recharge_sku().expect("free amount sku");
+        assert_eq!(sku.sku_id, "points-recharge-custom");
+        assert_eq!(sku.product_name, "Points recharge");
+    }
+
+    #[test]
+    fn postgres_recharge_seed_is_ten_points_per_cny_without_bonus() {
+        // The seeded catalog is a product rule, not demo data: every tier must
+        // credit exactly ten points per CNY, carry no bonus, and the superseded
+        // tiers must stay retired.
+        let seed = include_str!("../../../database/seeds/common/001_bootstrap.sql");
+        let mut tiers: Vec<(i64, i64)> = Vec::new();
+        for line in seed.lines() {
+            let trimmed = line.trim();
+            if !trimmed.starts_with("('recharge-") {
+                continue;
+            }
+            let tuple = trimmed
+                .trim_start_matches('(')
+                .split(')')
+                .next()
+                .expect("catalog tuple");
+            let fields: Vec<&str> = tuple.split(',').map(str::trim).collect();
+            let id = fields[0].trim_matches('\'');
+            let points: i64 = fields[3].parse().expect("seeded points");
+            let price_minor: i64 = fields[7].trim_matches('\'').parse().expect("seeded price");
+            let bonus: i64 = fields[9].parse().expect("seeded bonus");
+            assert_eq!(bonus, 0, "{id} must not carry promotional bonus points");
+            assert_eq!(
+                points * 100,
+                price_minor * 10,
+                "{id} must credit ten points per CNY"
+            );
+            tiers.push((price_minor, points));
+        }
+        tiers.sort_unstable();
+        assert_eq!(
+            tiers,
+            vec![
+                (1_000, 100),
+                (5_000, 500),
+                (10_000, 1_000),
+                (20_000, 2_000),
+                (30_000, 3_000),
+                (50_000, 5_000),
+                (100_000, 10_000),
+                (500_000, 50_000),
+            ]
+        );
+
+        // Every superseded tier stays retired on an upgraded installation.
+        for legacy in [
+            "recharge-750",
+            "recharge-1500",
+            "recharge-2250",
+            "recharge-4500",
+            "recharge-9000",
+        ] {
+            assert!(
+                seed.contains(&format!("'{legacy}'")),
+                "{legacy} must remain in the retirement list"
+            );
+            assert!(
+                !seed.contains(&format!("('{legacy}',")),
+                "{legacy} must not be inserted as an active package"
+            );
+        }
     }
 
     #[test]

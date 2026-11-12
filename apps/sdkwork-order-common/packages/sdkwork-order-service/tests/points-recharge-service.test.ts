@@ -3,6 +3,8 @@ import {
   createSdkworkPointsRechargeService,
   createSdkworkCouponRechargeService,
   configureSdkworkOrderSessionTokenProvider,
+  SDKWORK_POINTS_RECHARGE_MAX_AMOUNT,
+  SDKWORK_POINTS_RECHARGE_MIN_AMOUNT,
   type SdkworkOrderAppService,
 } from "../src/index.ts";
 
@@ -10,6 +12,7 @@ function createAppService(overrides: {
   packages?: unknown;
   create?: unknown;
   retrieve?: unknown;
+  settings?: unknown;
 } = {}): { appService: SdkworkOrderAppService; create: ReturnType<typeof vi.fn> } {
   const create = vi.fn().mockResolvedValue(overrides.create ?? {
     item: {
@@ -49,7 +52,15 @@ function createAppService(overrides: {
           list: vi.fn(),
           cancel: vi.fn(),
         },
-        settings: { retrieve: vi.fn() },
+        settings: {
+          retrieve: vi.fn().mockResolvedValue(overrides.settings ?? {
+            item: {
+              baseCurrencyCode: "CNY",
+              basePointsPerCny: "10",
+              currencyToCnyRates: { CNY: "1", USD: "7" },
+            },
+          }),
+        },
       },
       withdrawals: {} as SdkworkOrderAppService["withdrawals"],
     },
@@ -97,6 +108,64 @@ describe("createSdkworkPointsRechargeService", () => {
       "selected recharge package is unavailable",
     );
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("creates a custom-amount order without reading the package catalog", async () => {
+    const { appService, create } = createAppService();
+    const service = createSdkworkPointsRechargeService({ appService });
+
+    await expect(service.createOrder({ amount: "88.5" })).resolves.toEqual(
+      expect.objectContaining({ orderId: "order-900", status: "pending" }),
+    );
+    expect(appService.recharges.packages.list).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith(
+      {
+        amount: "88.50",
+        currencyCode: "CNY",
+        paymentMethod: "wechat_pay",
+        paymentProduct: "mobile_cashier_h5",
+        source: "membership-token-plan",
+        subject: "points_recharge",
+        targetAsset: "points",
+      },
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+    // A custom top-up must not claim a package the server cannot verify.
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("packageId");
+  });
+
+  it("accepts the advertised custom-amount bounds and rejects everything else", async () => {
+    const { appService, create } = createAppService();
+    const service = createSdkworkPointsRechargeService({ appService });
+
+    await expect(service.createOrder({ amount: SDKWORK_POINTS_RECHARGE_MIN_AMOUNT })).resolves.toBeDefined();
+    await expect(service.createOrder({ amount: SDKWORK_POINTS_RECHARGE_MAX_AMOUNT })).resolves.toBeDefined();
+    await expect(service.createOrder({ amount: "0.99" })).rejects.toThrow("between 1.00 and 10000.00");
+    await expect(service.createOrder({ amount: "10000.01" })).rejects.toThrow("between 1.00 and 10000.00");
+    await expect(service.createOrder({ amount: "12.345" })).rejects.toThrow("at most two decimals");
+    await expect(service.createOrder({ amount: "-5" })).rejects.toThrow("at most two decimals");
+    await expect(service.createOrder({})).rejects.toThrow("package or amount is required");
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads the exchange rule a custom top-up is priced with", async () => {
+    const { appService } = createAppService();
+    const service = createSdkworkPointsRechargeService({ appService });
+    if (service.readSettings === undefined) throw new Error("readSettings is unavailable");
+
+    await expect(service.readSettings()).resolves.toEqual({
+      baseCurrencyCode: "CNY",
+      basePointsPerCny: 10,
+      currencyToCnyRates: { CNY: "1", USD: "7" },
+    });
+  });
+
+  it("reports no settings when the gateway omits the exchange rule", async () => {
+    const { appService } = createAppService({ settings: { item: {} } });
+    const service = createSdkworkPointsRechargeService({ appService });
+    if (service.readSettings === undefined) throw new Error("readSettings is unavailable");
+
+    await expect(service.readSettings()).resolves.toBeNull();
   });
 
   it("maps paid checkout status to completed", async () => {

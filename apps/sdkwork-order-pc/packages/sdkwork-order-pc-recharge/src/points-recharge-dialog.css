@@ -180,6 +180,54 @@
   font-weight: 500;
 }
 
+.sdkwork-points-recharge-dialog__package-custom .sdkwork-points-recharge-dialog__points {
+  font-size: 18px;
+}
+
+.sdkwork-points-recharge-dialog__custom {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.sdkwork-points-recharge-dialog__custom-label {
+  color: var(--sdk-color-text-secondary, #a9b1bd);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sdkwork-points-recharge-dialog__custom-input {
+  background: var(--sdk-color-surface-panel, #20242a);
+  border: 1px solid var(--sdk-color-border-default, #3d444d);
+  border-radius: 8px;
+  color: var(--sdk-color-text-primary, #f4f7fb);
+  font-size: 16px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.sdkwork-points-recharge-dialog__custom-input:focus-visible {
+  border-color: var(--sdk-color-brand-primary, #14c8e8);
+  outline: 2px solid var(--sdk-color-brand-primary, #14c8e8);
+  outline-offset: 1px;
+}
+
+.sdkwork-points-recharge-dialog__custom-input[aria-invalid="true"] {
+  border-color: var(--sdk-color-status-danger, #f07070);
+}
+
+.sdkwork-points-recharge-dialog__custom-hint {
+  color: var(--sdk-color-text-secondary, #a9b1bd);
+  font-size: 12px;
+  margin: 0;
+}
+
+.sdkwork-points-recharge-dialog__custom-error {
+  color: var(--sdk-color-status-danger, #f07070);
+  font-size: 12px;
+  margin: 0;
+}
+
 .sdkwork-points-recharge-dialog__load-error {
   display: grid;
   gap: 12px;

@@ -178,7 +178,13 @@ export interface SdkworkPointsRechargePayment {
 }
 
 export interface SdkworkPointsRechargeOrderInput {
-  packageId: number | string;
+  /** Package to buy. Omit it to buy a custom `amount` instead. */
+  packageId?: number | string;
+  /**
+   * Custom top-up amount in **major** currency units (for example `"88.50"`),
+   * used when no package is selected. The server owns the resulting grant.
+   */
+  amount?: string | number;
   /**
    * Stable within one purchase attempt so retried submissions dedupe
    * server-side instead of placing twin recharge orders.
@@ -189,10 +195,37 @@ export interface SdkworkPointsRechargeOrderInput {
   source?: string;
 }
 
+/** Smallest custom top-up the recharge surfaces offer, in major units. */
+export const SDKWORK_POINTS_RECHARGE_MIN_AMOUNT = 1;
+
+/**
+ * Largest custom top-up, in major units. Mirrors the app API's
+ * `MAX_RECHARGE_CENTS` cap (1,000,000 minor units) so a client-side rejection
+ * never hides a server rule the gateway would enforce anyway.
+ */
+export const SDKWORK_POINTS_RECHARGE_MAX_AMOUNT = 10_000;
+
+/** Exchange-rule facts the recharge surfaces price a custom top-up with. */
+export interface SdkworkPointsRechargeSettings {
+  /** Currency the exchange rule is quoted in (for example `CNY`). */
+  baseCurrencyCode: string;
+  /** Compute points credited per one major unit of `baseCurrencyCode`. */
+  basePointsPerCny: number;
+  /** Multipliers from each currency into the base currency. */
+  currencyToCnyRates: Record<string, string>;
+}
+
 export interface SdkworkPointsRechargeService {
   listPackages(): Promise<SdkworkPointsRechargePackage[]>;
   createOrder(input: SdkworkPointsRechargeOrderInput): Promise<SdkworkPointsRechargePayment>;
   getOrderStatus(orderId: string): Promise<SdkworkPointsRechargePayment>;
+  /**
+   * Read the points-per-currency-unit rule, or null when the gateway omits it.
+   * Optional so a host-injected service built before the custom-amount flow
+   * still satisfies the contract; the custom preview then stays blank while the
+   * server keeps pricing the order.
+   */
+  readSettings?(): Promise<SdkworkPointsRechargeSettings | null>;
 }
 
 export interface CreateSdkworkPointsRechargeServiceOptions {
@@ -509,33 +542,76 @@ export function createSdkworkPointsRechargeService(
     },
 
     async createOrder(input) {
-      const packageId = String(input.packageId).trim();
+      const packageId = String(input.packageId ?? "").trim();
+      const paymentProduct = input.paymentProduct ?? "mobile_cashier_h5";
+      const paymentMethod = input.paymentMethod
+        ?? (paymentProduct === "alipay_native" ? "alipay" : "wechat_pay");
+      const params = createSdkworkIdempotencyParams(input.idempotencyKey);
+
       if (!packageId) {
-        throw new Error("A recharge package is required.");
+        // No package: buy a custom amount. The server prices it from the
+        // currency exchange rule, so the client only validates the shape.
+        const amount = normalizeCustomRechargeAmount(input.amount);
+        const response = await resolveAppService().recharges.orders.create({
+          amount,
+          currencyCode: "CNY",
+          paymentMethod,
+          paymentProduct,
+          source: input.source ?? "membership-token-plan",
+          subject: "points_recharge" as const,
+          targetAsset: "points" as const,
+        }, params);
+        return normalizePointsRechargePayment(
+          unwrapSdkworkOrderResource<unknown>(response, "Unable to create points recharge order."),
+        );
       }
+
       const packages = await this.listPackages();
       const selectedPackage = packages.find((item) => item.id === packageId);
       if (!selectedPackage) {
         throw new Error("The selected recharge package is unavailable.");
       }
 
-      const paymentProduct = input.paymentProduct ?? "mobile_cashier_h5";
       const body = {
         amount: selectedPackage.priceAmount,
         currencyCode: selectedPackage.currencyCode,
         packageId: selectedPackage.id,
-        paymentMethod: input.paymentMethod
-          ?? (paymentProduct === "alipay_native" ? "alipay" : "wechat_pay"),
+        paymentMethod,
         paymentProduct,
         source: input.source ?? "membership-token-plan",
         subject: "points_recharge" as const,
         targetAsset: "points" as const,
       };
-      const params = createSdkworkIdempotencyParams(input.idempotencyKey);
       const response = await resolveAppService().recharges.orders.create(body, params);
       return normalizePointsRechargePayment(
         unwrapSdkworkOrderResource<unknown>(response, "Unable to create points recharge order."),
       );
+    },
+
+    async readSettings() {
+      const response = await resolveAppService().recharges.settings.retrieve();
+      const record = unwrapSdkworkOrderResource<Record<string, unknown>>(
+        response,
+        "Unable to load recharge settings.",
+      );
+      const basePointsPerCny = toNullableSdkworkOrderNumber(
+        record.basePointsPerCny ?? record.base_points_per_cny,
+      );
+      if (basePointsPerCny === null || basePointsPerCny <= 0) return null;
+      const rates: Record<string, string> = {};
+      const rawRates = record.currencyToCnyRates ?? record.currency_to_cny_rates;
+      if (rawRates && typeof rawRates === "object") {
+        for (const [code, value] of Object.entries(rawRates as Record<string, unknown>)) {
+          rates[code] = String(value);
+        }
+      }
+      return {
+        baseCurrencyCode: toSdkworkOrderOptionalString(
+          record.baseCurrencyCode ?? record.base_currency_code,
+        ) ?? "CNY",
+        basePointsPerCny,
+        currencyToCnyRates: rates,
+      };
     },
 
     async getOrderStatus(orderId) {
@@ -780,6 +856,31 @@ export function readSdkworkMediaResource(value: unknown): SdkworkMediaResource |
     return undefined;
   }
   return { ...record, kind, source } as SdkworkMediaResource;
+}
+
+/**
+ * Validate and normalize a custom top-up amount.
+ *
+ * The app API prices a package-less recharge from its currency exchange rule,
+ * so the client only enforces the amount's shape and the advertised bounds.
+ * @param value - caller-supplied major-unit amount.
+ * @returns the amount as a two-decimal major-unit string.
+ */
+function normalizeCustomRechargeAmount(value: string | number | undefined): string {
+  if (value === undefined || (typeof value === "string" && value.trim() === "")) {
+    throw new Error("A recharge package or amount is required.");
+  }
+  const raw = typeof value === "number" ? value.toString() : value.trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+    throw new Error("A recharge amount must be a positive number with at most two decimals.");
+  }
+  const amount = Number(raw);
+  if (amount < SDKWORK_POINTS_RECHARGE_MIN_AMOUNT || amount > SDKWORK_POINTS_RECHARGE_MAX_AMOUNT) {
+    throw new Error(
+      `A recharge amount must be between ${SDKWORK_POINTS_RECHARGE_MIN_AMOUNT.toFixed(2)} and ${SDKWORK_POINTS_RECHARGE_MAX_AMOUNT.toFixed(2)}.`,
+    );
+  }
+  return amount.toFixed(2);
 }
 
 function normalizePointsRechargePackage(value: unknown): SdkworkPointsRechargePackage | null {

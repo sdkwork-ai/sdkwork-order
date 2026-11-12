@@ -16,6 +16,8 @@ import {
 import {
   sdkworkTokenBankPointsMicroToDecimal,
   createSdkworkPointsRechargeService,
+  SDKWORK_POINTS_RECHARGE_MAX_AMOUNT,
+  SDKWORK_POINTS_RECHARGE_MIN_AMOUNT,
   type SdkworkPointsRechargePackage,
   type SdkworkPointsRechargePayment,
   type SdkworkPointsRechargeService,
@@ -33,6 +35,16 @@ export interface SdkworkPointsRechargeDialogCopy {
   completed: string;
   confirmPayment: string;
   creatingPayment: string;
+  /** Tile label that opens the free-amount purchase. */
+  customAmount: string;
+  /** Shown under the amount field: the accepted range. */
+  customAmountHint: string;
+  /** Shown when the typed amount is outside the accepted shape or range. */
+  customAmountInvalid: string;
+  /** Placeholder of the free-amount field. */
+  customAmountPlaceholder: string;
+  /** Label of the credited-points preview for a free amount. */
+  customAmountPreview: string;
   emptyPackages: string;
   expired: string;
   expiredDescription: string;
@@ -68,8 +80,32 @@ export interface SdkworkPointsRechargeInlineProps extends SdkworkPointsRechargeP
 }
 
 interface SdkworkPointsRechargeCheckout {
-  packageId: string;
+  /** Purchase target this payment belongs to: `pkg:<id>` or `custom`. */
+  targetKey: string;
   payment: SdkworkPointsRechargePayment;
+}
+
+/** Target key of the free-amount purchase; package targets are `pkg:<id>`. */
+const CUSTOM_TARGET_KEY = "custom";
+
+function packageTargetKey(packageId: string): string {
+  return `pkg:${packageId}`;
+}
+
+/**
+ * Validate a typed free amount.
+ * @param value - raw input text.
+ * @returns the amount in major units, or null when it is empty or invalid.
+ */
+function parseCustomAmount(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
+  const amount = Number(trimmed);
+  if (!Number.isFinite(amount)) return null;
+  if (amount < SDKWORK_POINTS_RECHARGE_MIN_AMOUNT || amount > SDKWORK_POINTS_RECHARGE_MAX_AMOUNT) {
+    return null;
+  }
+  return amount;
 }
 
 const DEFAULT_COPY: SdkworkPointsRechargeDialogCopy = {
@@ -81,6 +117,11 @@ const DEFAULT_COPY: SdkworkPointsRechargeDialogCopy = {
   completed: "支付完成，积分已到账",
   confirmPayment: "同意并支付",
   creatingPayment: "正在生成支付二维码...",
+  customAmount: "自定义金额",
+  customAmountHint: "单笔 1.00 - 10000.00 元",
+  customAmountInvalid: "请输入 1.00 - 10000.00 元之间的金额，最多两位小数",
+  customAmountPlaceholder: "输入充值金额",
+  customAmountPreview: "预计到账",
   emptyPackages: "暂无可用充值套餐",
   expired: "订单已过期",
   expiredDescription: "当前充值订单已过期，请重新创建订单后继续支付。",
@@ -131,13 +172,16 @@ function SdkworkPointsRechargeExperience({
   service: serviceProp,
 }: SdkworkPointsRechargeExperienceProps) {
   const titleId = useId();
+  const customAmountId = useId();
   const copy = useMemo(() => ({ ...DEFAULT_COPY, ...copyOverrides }), [copyOverrides]);
   const service = useMemo(
     () => serviceProp ?? createSdkworkPointsRechargeService(),
     [serviceProp],
   );
   const [packages, setPackages] = useState<SdkworkPointsRechargePackage[]>([]);
-  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [selectedTargetKey, setSelectedTargetKey] = useState<string | null>(null);
+  const [customAmountInput, setCustomAmountInput] = useState("");
+  const [pointsPerUnit, setPointsPerUnit] = useState<number | null>(null);
   const [checkout, setCheckout] = useState<SdkworkPointsRechargeCheckout | null>(null);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -150,10 +194,17 @@ function SdkworkPointsRechargeExperience({
   const hasAcceptedAgreementRef = useRef(false);
   const isPayingRef = useRef(false);
   const paymentRequestSequenceRef = useRef(0);
-  const selectedPackageIdRef = useRef<string | null>(null);
+  const selectedTargetRef = useRef<string | null>(null);
 
-  const selectedPackage = packages.find((item) => item.id === selectedPackageId) ?? null;
-  const payment = checkout?.packageId === selectedPackageId ? checkout.payment : null;
+  const selectedPackage = packages.find((item) => packageTargetKey(item.id) === selectedTargetKey) ?? null;
+  const isCustomSelected = selectedTargetKey === CUSTOM_TARGET_KEY;
+  const customAmount = parseCustomAmount(customAmountInput);
+  const customAmountInvalid = customAmountInput.trim() !== "" && customAmount === null;
+  const customPoints = customAmount !== null && pointsPerUnit !== null
+    ? customAmount * pointsPerUnit
+    : null;
+  const canPay = isCustomSelected ? customAmount !== null : selectedPackage !== null;
+  const payment = checkout?.targetKey === selectedTargetKey ? checkout.payment : null;
   const expirationTimeMs = parseExpirationTime(payment?.expiresAt);
   const remainingSeconds = expirationTimeMs === null
     ? null
@@ -182,11 +233,12 @@ function SdkworkPointsRechargeExperience({
       .then((items) => {
         if (!mounted) return;
         setPackages(items);
-        setSelectedPackageId((current) => {
-          const next = current && items.some((item) => item.id === current)
+        setSelectedTargetKey((current) => {
+          const next = current === CUSTOM_TARGET_KEY
+            || (current !== null && items.some((item) => packageTargetKey(item.id) === current))
             ? current
-            : items[0]?.id ?? null;
-          selectedPackageIdRef.current = next;
+            : items[0] ? packageTargetKey(items[0].id) : null;
+          selectedTargetRef.current = next;
           return next;
         });
       })
@@ -202,6 +254,27 @@ function SdkworkPointsRechargeExperience({
       isPayingRef.current = false;
     };
   }, [active, copy.loadFailed, loadAttempt, service]);
+
+  useEffect(() => {
+    const readSettings = service.readSettings?.bind(service);
+    if (!active || readSettings === undefined) {
+      setPointsPerUnit(null);
+      return undefined;
+    }
+    // The credited points of a free amount are the server's exchange rule, not
+    // a client constant: read it once per opening and keep the preview honest
+    // (a failed read leaves the preview blank; the order still prices server-side).
+    let mounted = true;
+    setPointsPerUnit(null);
+    void readSettings()
+      .then((settings) => {
+        if (mounted) setPointsPerUnit(settings?.basePointsPerCny ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, [active, service]);
 
   useEffect(() => {
     if (!payment?.qrCode) {
@@ -242,7 +315,7 @@ function SdkworkPointsRechargeExperience({
       return undefined;
     }
     const orderId = payment.orderId;
-    const packageId = checkout.packageId;
+    const targetKey = checkout.targetKey;
     const paymentSessionSequence = paymentRequestSequenceRef.current;
     let pollingActive = true;
     const poll = async () => {
@@ -250,11 +323,11 @@ function SdkworkPointsRechargeExperience({
         const next = await service.getOrderStatus(orderId);
         if (!pollingActive
           || paymentRequestSequenceRef.current !== paymentSessionSequence
-          || selectedPackageIdRef.current !== packageId) return;
+          || selectedTargetRef.current !== targetKey) return;
         setCurrentTimeMs(Date.now());
-        setCheckout((current) => current?.packageId === packageId
+        setCheckout((current) => current?.targetKey === targetKey
           && current.payment.orderId === orderId
-          ? { packageId, payment: { ...current.payment, ...next } }
+          ? { targetKey, payment: { ...current.payment, ...next } }
           : current);
         if (next.status === "completed" && completedOrderRef.current !== orderId) {
           completedOrderRef.current = orderId;
@@ -271,29 +344,29 @@ function SdkworkPointsRechargeExperience({
       pollingActive = false;
       window.clearInterval(interval);
     };
-  }, [active, checkout?.packageId, copy.paymentUnavailableDescription, isExpired, onCompleted, payment?.expiresAt, payment?.orderId, payment?.status, service]);
+  }, [active, checkout?.targetKey, copy.paymentUnavailableDescription, isExpired, onCompleted, payment?.expiresAt, payment?.orderId, payment?.status, service]);
 
-  function selectPackage(packageId: string) {
+  function selectTarget(targetKey: string) {
     if (isPayingRef.current) return;
-    if (packageId === selectedPackageIdRef.current) {
+    if (targetKey === selectedTargetRef.current) {
       if (isExpired && hasAcceptedAgreementRef.current) {
         // The previous order expired: a new attempt needs a fresh key, or
         // the server would hand back the dead order instead of a new one.
         attemptKeyRef.current = null;
-        void createPayment(packageId);
+        void createPayment(targetKey);
       }
       return;
     }
     attemptKeyRef.current = null;
     paymentRequestSequenceRef.current += 1;
-    selectedPackageIdRef.current = packageId;
+    selectedTargetRef.current = targetKey;
     completedOrderRef.current = null;
-    setSelectedPackageId(packageId);
+    setSelectedTargetKey(targetKey);
     setCheckout(null);
     setQrImageUrl(null);
     setError(null);
-    if (hasAcceptedAgreementRef.current) {
-      void createPayment(packageId);
+    if (hasAcceptedAgreementRef.current && (targetKey !== CUSTOM_TARGET_KEY || customAmount !== null)) {
+      void createPayment(targetKey);
     }
   }
 
@@ -303,9 +376,9 @@ function SdkworkPointsRechargeExperience({
     onClose?.();
   }
 
-  const attemptKeyRef = useRef<{ packageId: string; key: string } | null>(null);
+  const attemptKeyRef = useRef<{ targetKey: string; key: string } | null>(null);
 
-  async function createPayment(packageId: string) {
+  async function createPayment(targetKey: string) {
     if (isPayingRef.current) return;
     const requestSequence = paymentRequestSequenceRef.current + 1;
     paymentRequestSequenceRef.current = requestSequence;
@@ -313,19 +386,22 @@ function SdkworkPointsRechargeExperience({
     setIsPaying(true);
     setError(null);
     try {
-      if (!attemptKeyRef.current || attemptKeyRef.current.packageId !== packageId) {
+      if (!attemptKeyRef.current || attemptKeyRef.current.targetKey !== targetKey) {
         attemptKeyRef.current = {
-          packageId,
+          targetKey,
           key: createSdkworkIdempotencyParams().idempotencyKey,
         };
       }
-      const result = await service.createOrder({ packageId, idempotencyKey: attemptKeyRef.current.key, paymentMethod });
+      const idempotencyKey = attemptKeyRef.current.key;
+      const result = targetKey === CUSTOM_TARGET_KEY
+        ? await service.createOrder({ amount: customAmount ?? 0, idempotencyKey, paymentMethod })
+        : await service.createOrder({ packageId: targetKey.slice("pkg:".length), idempotencyKey, paymentMethod });
       if (paymentRequestSequenceRef.current !== requestSequence
-        || selectedPackageIdRef.current !== packageId) return;
+        || selectedTargetRef.current !== targetKey) return;
       setCurrentTimeMs(Date.now());
-      setCheckout({ packageId, payment: result });
+      setCheckout({ targetKey, payment: result });
       if (result.status === "completed") {
-        const key = result.orderId ?? packageId;
+        const key = result.orderId ?? targetKey;
         if (completedOrderRef.current !== key) {
           completedOrderRef.current = key;
           await onCompleted?.(result);
@@ -333,7 +409,7 @@ function SdkworkPointsRechargeExperience({
       }
     } catch (cause) {
       if (paymentRequestSequenceRef.current === requestSequence
-        && selectedPackageIdRef.current === packageId) {
+        && selectedTargetRef.current === targetKey) {
         setError(cause instanceof Error ? cause.message : copy.paymentUnavailableDescription);
       }
     } finally {
@@ -345,10 +421,10 @@ function SdkworkPointsRechargeExperience({
   }
 
   function acceptAgreementAndCreatePayment() {
-    if (!selectedPackage || isPayingRef.current) return;
+    if (!canPay || selectedTargetKey === null || isPayingRef.current) return;
     hasAcceptedAgreementRef.current = true;
     setHasAcceptedAgreement(true);
-    void createPayment(selectedPackage.id);
+    void createPayment(selectedTargetKey);
   }
 
   const content = (
@@ -387,14 +463,15 @@ function SdkworkPointsRechargeExperience({
             {!isLoading && packages.length > 0 ? (
               <div aria-busy={isPaying} className="sdkwork-points-recharge-dialog__grid">
                 {packages.map((item) => {
-                  const selected = item.id === selectedPackageId;
+                  const targetKey = packageTargetKey(item.id);
+                  const selected = targetKey === selectedTargetKey;
                   return (
                     <button
                       aria-pressed={selected}
                       className={`sdkwork-points-recharge-dialog__package ${selected ? "is-selected" : ""}`}
                       disabled={isLoading || isPaying}
                       key={item.id}
-                      onClick={() => selectPackage(item.id)}
+                      onClick={() => selectTarget(targetKey)}
                       type="button"
                     >
                       <span className="sdkwork-points-recharge-dialog__points"><Sparkles aria-hidden="true" />{sdkworkTokenBankPointsMicroToDecimal(item.points)} <small>{copy.pointsUnit}</small></span>
@@ -402,6 +479,47 @@ function SdkworkPointsRechargeExperience({
                     </button>
                   );
                 })}
+                <button
+                  aria-pressed={isCustomSelected}
+                  className={`sdkwork-points-recharge-dialog__package sdkwork-points-recharge-dialog__package-custom ${isCustomSelected ? "is-selected" : ""}`}
+                  disabled={isLoading || isPaying}
+                  onClick={() => selectTarget(CUSTOM_TARGET_KEY)}
+                  type="button"
+                >
+                  <span className="sdkwork-points-recharge-dialog__points">
+                    <Sparkles aria-hidden="true" />
+                    {customPoints === null ? "--" : sdkworkTokenBankPointsMicroToDecimal(Math.round(customPoints * 1_000_000))}
+                    {" "}
+                    <small>{copy.pointsUnit}</small>
+                  </span>
+                  <span className="sdkwork-points-recharge-dialog__price">{copy.customAmount}</span>
+                </button>
+              </div>
+            ) : null}
+            {!isLoading && isCustomSelected ? (
+              <div className="sdkwork-points-recharge-dialog__custom">
+                <label className="sdkwork-points-recharge-dialog__custom-label" htmlFor={customAmountId}>
+                  {copy.customAmount}
+                </label>
+                <input
+                  aria-invalid={customAmountInvalid || undefined}
+                  autoComplete="off"
+                  className="sdkwork-points-recharge-dialog__custom-input"
+                  id={customAmountId}
+                  inputMode="decimal"
+                  onChange={(event) => setCustomAmountInput(event.target.value)}
+                  placeholder={copy.customAmountPlaceholder}
+                  type="text"
+                  value={customAmountInput}
+                />
+                <p className="sdkwork-points-recharge-dialog__custom-hint">
+                  {customPoints === null
+                    ? copy.customAmountHint
+                    : `${copy.customAmountPreview} ${sdkworkTokenBankPointsMicroToDecimal(Math.round(customPoints * 1_000_000))} ${copy.pointsUnit}`}
+                </p>
+                {customAmountInvalid ? (
+                  <p className="sdkwork-points-recharge-dialog__custom-error" role="alert">{copy.customAmountInvalid}</p>
+                ) : null}
               </div>
             ) : null}
             <p className="sdkwork-points-recharge-dialog__hint">{copy.notice}</p>
@@ -420,7 +538,7 @@ function SdkworkPointsRechargeExperience({
                   </p>
                 ) : <p>{copy.agreement}</p>}
                 <Button
-                  disabled={!selectedPackage || isPaying || isLoading || hasActivePayment}
+                  disabled={!canPay || isPaying || isLoading || hasActivePayment}
                   loading={isPaying}
                   onClick={acceptAgreementAndCreatePayment}
                   type="button"
@@ -451,8 +569,8 @@ function SdkworkPointsRechargeExperience({
               <div className="sdkwork-points-recharge-dialog__expired">
                 <StatusNotice tone="danger" title={copy.expired}>{copy.expiredDescription}</StatusNotice>
                 <Button
-                  disabled={!selectedPackage}
-                  onClick={() => selectedPackage && void createPayment(selectedPackage.id)}
+                  disabled={!canPay}
+                  onClick={() => selectedTargetKey !== null && void createPayment(selectedTargetKey)}
                   type="button"
                   variant="secondary"
                 >

@@ -26,6 +26,11 @@ describe("SDKWork points recharge surfaces", () => {
         { id: "recharge-750", bonusPoints: 0, currencyCode: "CNY", grantAmount: 750, points: 750_000_000, priceAmount: 75 },
       ]),
       createOrder,
+      readSettings: vi.fn().mockResolvedValue({
+        baseCurrencyCode: "CNY",
+        basePointsPerCny: 10,
+        currencyToCnyRates: { CNY: "1" },
+      }),
       getOrderStatus: vi.fn().mockResolvedValue({
         amountCny: 75,
         orderId: "recharge-order-750",
@@ -72,10 +77,16 @@ describe("SDKWork points recharge surfaces", () => {
     // platform 1 CNY = 10 points ratio) must render ¥50.00, never ¥0.50.
     const service: SdkworkPointsRechargeService = {
       listPackages: vi.fn().mockResolvedValue([
+        { id: "recharge-100", bonusPoints: 0, currencyCode: "CNY", grantAmount: 100, points: 100_000_000, priceAmount: 10 },
         { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
-        { id: "recharge-9000", bonusPoints: 10, currencyCode: "CNY", grantAmount: 9000, points: 9_000_000_000, priceAmount: 899 },
+        { id: "recharge-50000", bonusPoints: 0, currencyCode: "CNY", grantAmount: 50000, points: 50_000_000_000, priceAmount: 5000 },
       ]),
       createOrder: vi.fn(),
+      readSettings: vi.fn().mockResolvedValue({
+        baseCurrencyCode: "CNY",
+        basePointsPerCny: 10,
+        currencyToCnyRates: { CNY: "1" },
+      }),
       getOrderStatus: vi.fn(),
     };
 
@@ -85,10 +96,88 @@ describe("SDKWork points recharge surfaces", () => {
       </SdkworkThemeProvider>,
     );
 
-    expect(await screen.findByText("¥50.00")).toBeInTheDocument();
-    expect(screen.getByText("¥899.00")).toBeInTheDocument();
+    expect(await screen.findByText("¥10.00")).toBeInTheDocument();
+    expect(screen.getByText("¥50.00")).toBeInTheDocument();
+    expect(screen.getByText("¥5,000.00")).toBeInTheDocument();
+    expect(screen.queryByText("¥0.10")).not.toBeInTheDocument();
     expect(screen.queryByText("¥0.50")).not.toBeInTheDocument();
-    expect(screen.queryByText("¥8.99")).not.toBeInTheDocument();
+    view.unmount();
+  });
+
+  it("buys a custom amount that the server prices from the exchange rule", async () => {
+    const createOrder = vi.fn().mockResolvedValue({
+      amountCny: 88.5,
+      orderId: "recharge-order-custom",
+      points: 885_000_000,
+      qrCode: "weixin://pay/recharge-order-custom",
+      status: "pending" as const,
+    });
+    const service: SdkworkPointsRechargeService = {
+      listPackages: vi.fn().mockResolvedValue([
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
+      ]),
+      createOrder,
+      readSettings: vi.fn().mockResolvedValue({
+        baseCurrencyCode: "CNY",
+        basePointsPerCny: 10,
+        currencyToCnyRates: { CNY: "1" },
+      }),
+      getOrderStatus: vi.fn(),
+    };
+
+    const view = render(
+      <SdkworkThemeProvider defaultTheme="light">
+        <SdkworkPointsRechargeDialog isOpen onClose={vi.fn()} service={service} />
+      </SdkworkThemeProvider>,
+    );
+
+    await screen.findByText("我的积分");
+    fireEvent.click(await screen.findByRole("button", { name: /自定义金额/ }));
+    const amountField = screen.getByLabelText("自定义金额");
+    expect(screen.getByRole("button", { name: "同意并支付" })).toBeDisabled();
+
+    fireEvent.change(amountField, { target: { value: "88.5" } });
+    expect(await screen.findByText("预计到账 885 积分")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "同意并支付" }));
+
+    await waitFor(() => expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
+      amount: 88.5,
+      paymentMethod: "wechat_pay",
+    })));
+    // A free amount never claims a package the server cannot verify.
+    expect(createOrder.mock.calls[0]?.[0]).not.toHaveProperty("packageId");
+    view.unmount();
+  });
+
+  it("blocks an out-of-range custom amount before creating an order", async () => {
+    const createOrder = vi.fn();
+    const service: SdkworkPointsRechargeService = {
+      listPackages: vi.fn().mockResolvedValue([
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
+      ]),
+      createOrder,
+      readSettings: vi.fn().mockResolvedValue({
+        baseCurrencyCode: "CNY",
+        basePointsPerCny: 10,
+        currencyToCnyRates: { CNY: "1" },
+      }),
+      getOrderStatus: vi.fn(),
+    };
+
+    const view = render(
+      <SdkworkThemeProvider defaultTheme="light">
+        <SdkworkPointsRechargeDialog isOpen onClose={vi.fn()} service={service} />
+      </SdkworkThemeProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /自定义金额/ }));
+    fireEvent.change(screen.getByLabelText("自定义金额"), { target: { value: "10000.01" } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("请输入 1.00 - 10000.00 元之间的金额");
+    const payButton = screen.getByRole("button", { name: "同意并支付" });
+    expect(payButton).toBeDisabled();
+    fireEvent.click(payButton);
+    expect(createOrder).not.toHaveBeenCalled();
     view.unmount();
   });
 
@@ -124,6 +213,11 @@ describe("SDKWork points recharge surfaces", () => {
         { id: "recharge-750", bonusPoints: 0, currencyCode: "CNY", grantAmount: 750, points: 750_000_000, priceAmount: 75 },
       ]),
       createOrder,
+      readSettings: vi.fn().mockResolvedValue({
+        baseCurrencyCode: "CNY",
+        basePointsPerCny: 10,
+        currencyToCnyRates: { CNY: "1" },
+      }),
       getOrderStatus: vi.fn().mockImplementation(async (orderId: string) => ({
         amountCny: orderId.endsWith("500") ? 50 : 75,
         orderId,
@@ -298,6 +392,11 @@ describe("SDKWork points recharge surfaces", () => {
         { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500_000_000, priceAmount: 50 },
       ]),
       createOrder,
+      readSettings: vi.fn().mockResolvedValue({
+        baseCurrencyCode: "CNY",
+        basePointsPerCny: 10,
+        currencyToCnyRates: { CNY: "1" },
+      }),
       getOrderStatus: vi.fn().mockResolvedValue({
         amountCny: 50,
         orderId: "recharge-order-500",
@@ -359,6 +458,11 @@ describe("SDKWork points recharge surfaces", () => {
           qrCode: "weixin://pay/recharge-order-500",
           status: "pending" as const,
         }),
+      readSettings: vi.fn().mockResolvedValue({
+        baseCurrencyCode: "CNY",
+        basePointsPerCny: 10,
+        currencyToCnyRates: { CNY: "1" },
+      }),
       getOrderStatus: vi.fn().mockImplementation((orderId: string) => orderId === "recharge-order-750"
         ? statusResult
         : Promise.resolve({
@@ -418,6 +522,11 @@ describe("SDKWork points recharge surfaces", () => {
         points: 500_000_000,
         qrCode: "weixin://pay/recharge-order-inline",
         status: "pending" as const,
+      }),
+      readSettings: vi.fn().mockResolvedValue({
+        baseCurrencyCode: "CNY",
+        basePointsPerCny: 10,
+        currencyToCnyRates: { CNY: "1" },
       }),
       getOrderStatus: vi.fn().mockResolvedValue({
         amountCny: 50,

@@ -1,23 +1,45 @@
--- Platform points recharge catalog. Amounts are stored as major-unit decimals.
--- The SKU ids are stable references to the shared commerce merchandise catalog.
--- Retire the legacy demo catalog that was previously bootstrapped outside Order ownership.
+-- Platform points recharge catalog. The advertised exchange rate is exactly
+-- 1 CNY = 10 compute points, with no promotional bonus and no per-tier
+-- discount: each package credits ten times its price, so `bonus_points` stays 0
+-- and `discount` keeps the schema default of 100 (no discount). Any other
+-- amount is bought through the custom-amount path, which the server prices from
+-- the `CASH_TO_POINTS` exchange rule below.
+--
+-- `price_amount` holds the currency's **minor** unit (fen): the app read model
+-- converts it to a major-unit decimal before computing the grant, so `'5000'`
+-- is ¥50.00 and credits 500 points.
+--
+-- Retire the legacy demo catalog that was previously bootstrapped outside Order
+-- ownership, plus the superseded tiers this seed used to publish; an upgraded
+-- installation must stop selling them.
 UPDATE commerce_recharge_package
 SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = '100001'
   AND (organization_id = '0' OR organization_id IS NULL)
-  AND id LIKE 'bootstrap-admin-recharge-package-%';
+  AND (
+    id LIKE 'bootstrap-admin-recharge-package-%'
+    OR id IN (
+      'recharge-750',
+      'recharge-1500',
+      'recharge-2250',
+      'recharge-4500',
+      'recharge-9000'
+    )
+  );
 
 INSERT INTO commerce_recharge_package (
     id, tenant_id, organization_id, external_id, package_no, sku_id, name,
     price_amount, currency_code, bonus_points, status, valid_from, valid_to,
     sort_weight, request_no, idempotency_key, created_at, updated_at
 ) VALUES
-    ('recharge-500', '100001', '0', 500, 'points-500', 'recharge-sku-500', '500 compute points', '5000', 'CNY', 0, 'active', NULL, NULL, 10, 'seed-recharge-500', 'seed-recharge-500', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('recharge-750', '100001', '0', 750, 'points-750', 'recharge-sku-750', '750 compute points', '7500', 'CNY', 0, 'active', NULL, NULL, 20, 'seed-recharge-750', 'seed-recharge-750', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('recharge-1500', '100001', '0', 1500, 'points-1500', 'recharge-sku-1500', '1500 compute points', '15000', 'CNY', 0, 'active', NULL, NULL, 30, 'seed-recharge-1500', 'seed-recharge-1500', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('recharge-2250', '100001', '0', 2250, 'points-2250', 'recharge-sku-2250', '2250 compute points', '22300', 'CNY', 20, 'active', NULL, NULL, 40, 'seed-recharge-2250', 'seed-recharge-2250', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('recharge-4500', '100001', '0', 4500, 'points-4500', 'recharge-sku-4500', '4500 compute points', '45000', 'CNY', 0, 'active', NULL, NULL, 50, 'seed-recharge-4500', 'seed-recharge-4500', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('recharge-9000', '100001', '0', 9000, 'points-9000', 'recharge-sku-9000', '9000 compute points', '89900', 'CNY', 10, 'active', NULL, NULL, 60, 'seed-recharge-9000', 'seed-recharge-9000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ('recharge-100', '100001', '0', 100, 'points-100', 'recharge-sku-100', '100 算力积分', '1000', 'CNY', 0, 'active', NULL, NULL, 10, 'seed-recharge-100', 'seed-recharge-100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('recharge-500', '100001', '0', 500, 'points-500', 'recharge-sku-500', '500 算力积分', '5000', 'CNY', 0, 'active', NULL, NULL, 20, 'seed-recharge-500', 'seed-recharge-500', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('recharge-1000', '100001', '0', 1000, 'points-1000', 'recharge-sku-1000', '1000 算力积分', '10000', 'CNY', 0, 'active', NULL, NULL, 30, 'seed-recharge-1000', 'seed-recharge-1000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('recharge-2000', '100001', '0', 2000, 'points-2000', 'recharge-sku-2000', '2000 算力积分', '20000', 'CNY', 0, 'active', NULL, NULL, 40, 'seed-recharge-2000', 'seed-recharge-2000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('recharge-3000', '100001', '0', 3000, 'points-3000', 'recharge-sku-3000', '3000 算力积分', '30000', 'CNY', 0, 'active', NULL, NULL, 50, 'seed-recharge-3000', 'seed-recharge-3000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('recharge-5000', '100001', '0', 5000, 'points-5000', 'recharge-sku-5000', '5000 算力积分', '50000', 'CNY', 0, 'active', NULL, NULL, 60, 'seed-recharge-5000', 'seed-recharge-5000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('recharge-10000', '100001', '0', 10000, 'points-10000', 'recharge-sku-10000', '10000 算力积分', '100000', 'CNY', 0, 'active', NULL, NULL, 70, 'seed-recharge-10000', 'seed-recharge-10000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('recharge-50000', '100001', '0', 50000, 'points-50000', 'recharge-sku-50000', '50000 算力积分', '500000', 'CNY', 0, 'active', NULL, NULL, 80, 'seed-recharge-50000', 'seed-recharge-50000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO UPDATE SET
     tenant_id = EXCLUDED.tenant_id,
     organization_id = EXCLUDED.organization_id,
