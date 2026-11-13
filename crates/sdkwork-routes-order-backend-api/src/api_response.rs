@@ -135,6 +135,18 @@ pub fn map_service_error(
         ),
     };
     let problem = SdkWorkProblemDetail::platform(result_code, detail, trace_id.clone());
+    if status == StatusCode::INTERNAL_SERVER_ERROR {
+        // The wire detail is sanitized for internal failures; without this log
+        // line the stored cause (SQL error, corrupt money value, ...) is lost
+        // and the trace id resolves to nothing on the gateway side.
+        tracing::error!(
+            target: "order.api",
+            error_kind = error.code(),
+            cause = %error.message(),
+            trace_id = %trace_id,
+            "order API request failed with an internal server error"
+        );
+    }
     problem_response(status, problem, &trace_id)
 }
 
