@@ -12,4 +12,6 @@ export interface MembershipOrderCreateCommand {
   grantQuantity?: string;
   /** Recharge price in currency amount (required for action=recharge). */
   amount?: string;
+  /** Seat quantity for team/organization packages whose priceAmount is the price of one seat for one billing period. Defaults to 1; allowed for action purchase, renew, and upgrade; rejected for recharge. */
+  quantity?: string;
 }

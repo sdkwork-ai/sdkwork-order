@@ -70,6 +70,7 @@ function SdkworkOrderPageContent({
     formatCurrencyCny,
     formatFilter,
     formatStatus,
+    formatSubject,
     formatTimestamp,
   } = useSdkworkOrderIntl();
   const filters = ["all", "pending-payment", "paid", "completed", "cancelled"] as const;
@@ -238,7 +239,7 @@ function SdkworkOrderPageContent({
                 <article className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-center lg:justify-between" key={order.id}>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="text-base font-semibold text-[var(--sdk-color-text-primary)]">{order.subject}</div>
+                      <div className="text-base font-semibold text-[var(--sdk-color-text-primary)]">{formatSubject(order.subject)}</div>
                       <span
                         className="rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em]"
                         style={createSdkworkOrderToneStyle(resolveStatusTone(order.status))}

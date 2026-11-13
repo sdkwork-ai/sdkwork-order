@@ -25,6 +25,10 @@ import {
   StatusNotice,
 } from "@sdkwork/ui-pc-react";
 import type { AccountValueRequestResponse } from "@sdkwork/order-pc-admin-core";
+import {
+  localizeSdkworkOrderSubject,
+  localizeSdkworkOrderTargetAsset,
+} from "@sdkwork/order-pc-core/subject";
 import type {
   TradeAdminService,
   TradeRequestReviewInput,
@@ -212,8 +216,8 @@ function AccountValueRequestListPageInner({
       ],
       requests.map((request) => [
         request.requestNo ?? request.accountValueRequestId ?? "",
-        request.subject ?? "",
-        request.targetAsset ?? "",
+        localizeSdkworkOrderSubject(request.subject, t),
+        localizeSdkworkOrderTargetAsset(request.targetAsset, t),
         request.amount ?? "",
         resolveTradeStatusLabel(request.status ?? "", t),
         request.createdAt ?? "",
@@ -267,7 +271,7 @@ function AccountValueRequestListPageInner({
             {request.requestNo ?? request.accountValueRequestId ?? t("admin.trade.common.noValue", "-")}
           </span>
           <span className="mt-1 block truncate text-xs text-[var(--sdk-color-text-muted)]">
-            {request.subject ?? t("admin.trade.common.noValue", "-")}
+            {localizeSdkworkOrderSubject(request.subject, t) || t("admin.trade.common.noValue", "-")}
           </span>
         </button>
       ),
@@ -424,8 +428,8 @@ function AccountValueRequestListPageInner({
               <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
                 <DetailRow label={t(copy.no, "Request no.")}>{detail.requestNo ?? t("admin.trade.common.noValue", "-")}</DetailRow>
                 <DetailRow label={t("admin.trade.filter.status", "Status")}><TradeStatusBadge status={detail.status ?? ""} /></DetailRow>
-                <DetailRow label={t(copy.subject, "Subject")}>{detail.subject ?? t("admin.trade.common.noValue", "-")}</DetailRow>
-                <DetailRow label={t(copy.targetAsset, "Target asset")}>{detail.targetAsset ?? t("admin.trade.common.noValue", "-")}</DetailRow>
+                <DetailRow label={t(copy.subject, "Subject")}>{localizeSdkworkOrderSubject(detail.subject, t) || t("admin.trade.common.noValue", "-")}</DetailRow>
+                <DetailRow label={t(copy.targetAsset, "Target asset")}>{localizeSdkworkOrderTargetAsset(detail.targetAsset, t) || t("admin.trade.common.noValue", "-")}</DetailRow>
                 <DetailRow label={t(copy.amount, "Amount")}>
                   <span className="font-mono font-semibold tabular-nums">{formatAmount(detail.amount, locale, detail.currencyCode)}</span>
                 </DetailRow>
@@ -452,7 +456,7 @@ function AccountValueRequestListPageInner({
       <RequestReviewDialog
         action={reviewTarget?.action ?? "approve"}
         busy={busy}
-        label={reviewTarget?.request.subject ?? reviewTarget?.request.requestNo ?? "-"}
+        label={localizeSdkworkOrderSubject(reviewTarget?.request.subject, t) || reviewTarget?.request.requestNo || "-"}
         onConfirm={(input) => { if (reviewTarget) void submitReview(input); }}
         onOpenChange={(open) => { if (!open) { setReviewTarget(null); setReviewIdempotencyKey(""); } }}
         open={Boolean(reviewTarget)}

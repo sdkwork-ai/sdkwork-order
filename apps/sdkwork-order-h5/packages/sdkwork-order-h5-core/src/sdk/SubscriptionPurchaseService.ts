@@ -96,11 +96,15 @@ function resolveAppService(options: CreateSubscriptionPurchaseServiceOptions): S
  * membership subscription checkout share the order-service factories, so
  * both flows use one idempotent, single-flight implementation.
  *
- * Token Bank recharge is a real `token_bank_recharge` account-value order
- * (subject + targetAsset + planCode + grantAmount); the points recharge
- * service is intentionally not reused here because it settles to the points
- * asset, not the Token Bank.
+ * A Token Bank top-up is a real `token_bank_recharge` account-value order that
+ * credits the `token_bank` asset
+ * (`sdkwork-order/specs/ACCOUNT_VALUE_ORDER_SPEC.md` §2.1). The server prices
+ * the grant from the exchange rule plus the package bonus, and the
+ * `mobile_cashier_h5` product returns an order-bound cashier deep-link without
+ * starting a provider payment — so the client never sends `grantAmount` and
+ * never falls back to the `points_recharge` subject.
  */
+
 export function createSubscriptionPurchaseService(
   options: CreateSubscriptionPurchaseServiceOptions = {},
 ): SubscriptionPurchasePort {
@@ -130,8 +134,12 @@ export function createSubscriptionPurchaseService(
       }
       const response = await appService.recharges.orders.create(
         {
-          subject: "points_recharge",
-          targetAsset: "points",
+          // These "plans" are one-off Token Bank top-ups (the catalog is the
+          // `recharges/packages` list, period "once"), so they are
+          // `token_bank_recharge` account-value orders that credit `token_bank`.
+          // The server prices the grant from the exchange rule + package bonus.
+          subject: "token_bank_recharge",
+          targetAsset: "token_bank",
           packageId: plan.planCode,
           amount: String(amountMinor),
           currencyCode: plan.currencyCode,

@@ -58,6 +58,7 @@ import {
   type ShipmentSummary,
 } from "@sdkwork/order-pc-admin-core";
 import { createOrderAdminService, type OrderAdminService } from "../order-admin-service";
+import { localizeSdkworkOrderSubject } from "@sdkwork/order-pc-core/subject";
 import { useOrderAdminLink } from "../navigation";
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -537,7 +538,7 @@ function AdminOrdersPageInner({
           type="button"
         >
           <span className="block truncate text-sm font-semibold text-[var(--sdk-color-text-primary)]">
-            {order.subject || order.orderSn || order.orderId}
+            {localizeSdkworkOrderSubject(order.subject, t) || order.orderSn || order.orderId}
           </span>
           <span className="mt-1 block truncate font-mono text-xs text-[var(--sdk-color-text-muted)]">
             {order.orderSn || order.orderId}
@@ -799,7 +800,7 @@ function AdminOrdersPageInner({
         onRowClick={(order) => setSelectedId(order.orderId)}
         rowActions={(order) => (
           <div className="flex items-center justify-end gap-1">
-            <Button aria-label={`${t("admin.orders.action.detail", "Details")} — ${order.subject || order.orderSn || order.orderId}`} disabled={busyId === order.orderId} size="sm" title={t("admin.orders.action.detail", "Details")} type="button" variant="ghost" onClick={() => setSelectedId(order.orderId)}>
+            <Button aria-label={`${t("admin.orders.action.detail", "Details")} — ${localizeSdkworkOrderSubject(order.subject, t) || order.orderSn || order.orderId}`} disabled={busyId === order.orderId} size="sm" title={t("admin.orders.action.detail", "Details")} type="button" variant="ghost" onClick={() => setSelectedId(order.orderId)}>
               <Eye aria-hidden="true" className="mr-1.5 h-4 w-4" />{t("admin.orders.action.detail", "Details")}
             </Button>
             {capabilities.canManageOrders ? (

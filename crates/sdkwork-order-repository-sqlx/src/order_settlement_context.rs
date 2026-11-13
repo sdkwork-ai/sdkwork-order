@@ -1,5 +1,5 @@
 use sdkwork_contract_service::CommerceServiceError;
-use sdkwork_order_service::MembershipPurchaseSettlementSnapshot;
+use sdkwork_order_service::{MembershipPurchaseSettlementSnapshot, MAX_MEMBERSHIP_ORDER_QUANTITY};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrderPaymentSettlementContext {
@@ -58,6 +58,8 @@ pub(crate) fn membership_purchase_snapshot(
             order_no: order_no.to_owned(),
             package_id: 0,
             grant_quantity: Some(grant_quantity),
+            // 充值是额度包而不是按席位售卖的团队套餐。
+            quantity: 1,
         }));
     }
     let package_id = value
@@ -68,13 +70,41 @@ pub(crate) fn membership_purchase_snapshot(
                 "membership order item snapshot package id is invalid",
             )
         })?;
+    // 团队/组织套餐按席位售卖；旧快照没有 quantity 时按单席位处理。
+    let quantity = membership_snapshot_quantity(&value)?;
 
     Ok(Some(MembershipPurchaseSettlementSnapshot {
         action,
         order_no: order_no.to_owned(),
         package_id,
         grant_quantity: None,
+        quantity,
     }))
+}
+
+/// Reads the seat quantity from the order item snapshot, defaulting to a
+/// single seat for snapshots written before per-seat pricing existed.
+fn membership_snapshot_quantity(value: &serde_json::Value) -> Result<i64, CommerceServiceError> {
+    let quantity = match value.get("quantity") {
+        None | Some(serde_json::Value::Null) => 1,
+        Some(raw) => raw
+            .as_i64()
+            .or_else(|| {
+                raw.as_str()
+                    .and_then(|text| text.trim().parse::<i64>().ok())
+            })
+            .ok_or_else(|| {
+                CommerceServiceError::invalid_state(
+                    "membership order item snapshot quantity is invalid",
+                )
+            })?,
+    };
+    if !(1..=MAX_MEMBERSHIP_ORDER_QUANTITY).contains(&quantity) {
+        return Err(CommerceServiceError::invalid_state(
+            "membership order item snapshot quantity must be between 1 and 10000",
+        ));
+    }
+    Ok(quantity)
 }
 
 fn json_positive_i64(value: &serde_json::Value) -> Option<i64> {
@@ -113,6 +143,54 @@ mod tests {
         assert_eq!(snapshot.order_no, "MB-1");
         assert_eq!(snapshot.package_id, 21);
         assert_eq!(snapshot.grant_quantity, None);
+        // Snapshots written before per-seat pricing default to one seat.
+        assert_eq!(snapshot.quantity, 1);
+    }
+
+    #[test]
+    fn membership_snapshot_reads_the_seat_quantity() {
+        let snapshot = membership_purchase_snapshot(
+            "membership",
+            "MB-4",
+            Some("purchase"),
+            Some(r#"{"packageId":"21","quantity":3}"#),
+        )
+        .expect("valid snapshot")
+        .expect("membership snapshot");
+        assert_eq!(snapshot.quantity, 3);
+
+        let string_wire = membership_purchase_snapshot(
+            "membership",
+            "MB-5",
+            Some("purchase"),
+            Some(r#"{"packageId":"21","quantity":"3"}"#),
+        )
+        .expect("valid snapshot")
+        .expect("membership snapshot");
+        assert_eq!(string_wire.quantity, 3);
+    }
+
+    #[test]
+    fn membership_snapshot_rejects_out_of_range_seat_quantity() {
+        for quantity in [0, -1, 10_001] {
+            assert!(
+                membership_purchase_snapshot(
+                    "membership",
+                    "MB-6",
+                    Some("purchase"),
+                    Some(&format!(r#"{{"packageId":"21","quantity":{quantity}}}"#)),
+                )
+                .is_err(),
+                "quantity {quantity} must be rejected"
+            );
+        }
+        assert!(membership_purchase_snapshot(
+            "membership",
+            "MB-7",
+            Some("purchase"),
+            Some(r#"{"packageId":"21","quantity":"three"}"#),
+        )
+        .is_err());
     }
 
     #[test]

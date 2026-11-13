@@ -116,6 +116,8 @@ export interface SdkworkMembershipCheckoutInput {
   packageId: number;
   paymentMethod?: string;
   paymentProduct?: "alipay_native" | "mobile_cashier_h5" | "wechat_native";
+  /** Seat quantity for organization (team) packages; 1 for personal packages. */
+  quantity?: number;
   /** 订阅期额度充值数量（仅 action=recharge）。 */
   grantQuantity?: number;
   /** 订阅期额度充值金额（仅 action=recharge，货币金额字符串）。 */
@@ -529,8 +531,38 @@ export function createSdkworkPhysicalPurchaseService(
 
 export type CreateSdkworkCouponRedemptionServiceOptions = CreateSdkworkCouponRechargeServiceOptions;
 
-export function createSdkworkPointsRechargeService(
-  options: CreateSdkworkPointsRechargeServiceOptions = {},
+/**
+ * Which account asset a recharge service sells.
+ *
+ * `points_recharge` credits the membership-points asset; `token_bank_recharge`
+ * credits Token Bank compute credits. They are different accounts, different
+ * ledger business types, and must never be swapped
+ * (`sdkwork-order/specs/ACCOUNT_VALUE_ORDER_SPEC.md` §2.1).
+ */
+interface SdkworkRechargeAssetVariant {
+  subject: "points_recharge" | "token_bank_recharge";
+  targetAsset: "points" | "token_bank";
+  defaultSource: string;
+  failure: string;
+}
+
+const POINTS_RECHARGE_VARIANT: SdkworkRechargeAssetVariant = {
+  failure: "points recharge",
+  subject: "points_recharge",
+  targetAsset: "points",
+  defaultSource: "membership-token-plan",
+};
+
+const TOKEN_BANK_RECHARGE_VARIANT: SdkworkRechargeAssetVariant = {
+  failure: "Token Bank recharge",
+  subject: "token_bank_recharge",
+  targetAsset: "token_bank",
+  defaultSource: "token-bank-recharge",
+};
+
+function createSdkworkRechargeService(
+  options: CreateSdkworkPointsRechargeServiceOptions,
+  variant: SdkworkRechargeAssetVariant,
 ): SdkworkPointsRechargeService {
   const resolveAppService = () => options.appService ?? getSdkworkOrderService();
 
@@ -557,12 +589,12 @@ export function createSdkworkPointsRechargeService(
           currencyCode: "CNY",
           paymentMethod,
           paymentProduct,
-          source: input.source ?? "membership-token-plan",
-          subject: "points_recharge" as const,
-          targetAsset: "points" as const,
+          source: input.source ?? variant.defaultSource,
+          subject: variant.subject,
+          targetAsset: variant.targetAsset,
         }, params);
         return normalizePointsRechargePayment(
-          unwrapSdkworkOrderResource<unknown>(response, "Unable to create points recharge order."),
+          unwrapSdkworkOrderResource<unknown>(response, `Unable to create ${variant.failure} order.`),
         );
       }
 
@@ -578,13 +610,13 @@ export function createSdkworkPointsRechargeService(
         packageId: selectedPackage.id,
         paymentMethod,
         paymentProduct,
-        source: input.source ?? "membership-token-plan",
-        subject: "points_recharge" as const,
-        targetAsset: "points" as const,
+        source: input.source ?? variant.defaultSource,
+        subject: variant.subject,
+        targetAsset: variant.targetAsset,
       };
       const response = await resolveAppService().recharges.orders.create(body, params);
       return normalizePointsRechargePayment(
-        unwrapSdkworkOrderResource<unknown>(response, "Unable to create points recharge order."),
+        unwrapSdkworkOrderResource<unknown>(response, `Unable to create ${variant.failure} order.`),
       );
     },
 
@@ -621,10 +653,33 @@ export function createSdkworkPointsRechargeService(
       }
       const response = await resolveAppService().recharges.orders.retrieve(normalizedOrderId);
       return normalizePointsRechargePayment(
-        unwrapSdkworkOrderResource<unknown>(response, "Unable to retrieve points recharge order."),
+        unwrapSdkworkOrderResource<unknown>(response, `Unable to retrieve ${variant.failure} order.`),
       );
     },
   };
+}
+
+/**
+ * Membership-points recharge service (`points_recharge` → `points` asset).
+ * Used by the console wallet's membership-points top-up.
+ */
+export function createSdkworkPointsRechargeService(
+  options: CreateSdkworkPointsRechargeServiceOptions = {},
+): SdkworkPointsRechargeService {
+  return createSdkworkRechargeService(options, POINTS_RECHARGE_VARIANT);
+}
+
+/**
+ * Token Bank recharge service (`token_bank_recharge` → `token_bank` asset).
+ *
+ * Use this for compute-credit purchases. It never sends `grantAmount`: the
+ * server prices the grant from the exchange rule/packages and ignores client
+ * grants (`sdkwork-order/specs/ACCOUNT_VALUE_ORDER_SPEC.md` D7).
+ */
+export function createSdkworkTokenBankRechargeService(
+  options: CreateSdkworkPointsRechargeServiceOptions = {},
+): SdkworkPointsRechargeService {
+  return createSdkworkRechargeService(options, TOKEN_BANK_RECHARGE_VARIANT);
 }
 
 export function createSdkworkCouponRechargeService(
@@ -673,7 +728,11 @@ export function createSdkworkMembershipCheckoutService(
 
       const paymentProduct = input.paymentProduct ?? "mobile_cashier_h5";
       const paymentMethod = normalizeMembershipPaymentMethod(input.paymentMethod, paymentProduct);
-      const singleFlightKey = [input.action, packageId, paymentMethod, paymentProduct, input.grantQuantity ?? "", input.amountCny ?? ""].join(":");
+      // Seat quantity for organization (team) packages. Normalized to the wire
+      // decimal string and folded into the single-flight key so two different
+      // seat counts never share one in-flight checkout promise.
+      const quantity = input.quantity && input.quantity > 0 ? String(input.quantity) : undefined;
+      const singleFlightKey = [input.action, packageId, paymentMethod, paymentProduct, quantity ?? "", input.grantQuantity ?? "", input.amountCny ?? ""].join(":");
       const existing = inFlightCheckouts.get(singleFlightKey);
       if (existing) {
         return existing;
@@ -683,6 +742,8 @@ export function createSdkworkMembershipCheckoutService(
         packageId,
         paymentMethod,
         paymentProduct,
+        // Seat quantity applies to purchase/renew/upgrade only; recharge rejects it.
+        ...(quantity !== undefined && !isRecharge ? { quantity } : {}),
         ...(isRecharge
           ? { grantQuantity: String(input.grantQuantity), amount: input.amountCny?.trim() }
           : {}),

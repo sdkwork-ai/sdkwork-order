@@ -1,6 +1,13 @@
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_utils_rust::parse_datetime;
 
+/// Upper bound for a single membership order's seat quantity.
+///
+/// Team/organization packages price one seat per billing period
+/// (`price_unit='seat'`), so a buyer picks the seat count. The bound keeps one
+/// order's total inside the minor-unit integer range of the money columns.
+pub const MAX_MEMBERSHIP_ORDER_QUANTITY: i64 = 10_000;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateMembershipOrderCommand {
     pub action: String,
@@ -23,6 +30,8 @@ pub struct CreateMembershipOrderCommand {
     pub grant_quantity: Option<i64>,
     /// 订阅期额度充值金额（仅 action=recharge 使用，货币金额字符串）。
     pub amount: Option<String>,
+    /// 席位数量：团队/组织套餐按席位计价（`price_unit='seat'`），默认 1。
+    pub quantity: i64,
 }
 
 impl CreateMembershipOrderCommand {
@@ -46,6 +55,7 @@ impl CreateMembershipOrderCommand {
         source: Option<&str>,
         grant_quantity: Option<i64>,
         amount: Option<&str>,
+        quantity: i64,
     ) -> Result<Self, CommerceServiceError> {
         crate::validation::require_non_empty("tenant_id", tenant_id)?;
         crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
@@ -70,11 +80,22 @@ impl CreateMembershipOrderCommand {
                 "membership action must be one of: purchase, renew, upgrade, recharge",
             ));
         }
+        if !(1..=MAX_MEMBERSHIP_ORDER_QUANTITY).contains(&quantity) {
+            return Err(CommerceServiceError::validation(
+                "membership order quantity must be between 1 and 10000",
+            ));
+        }
         if action == "recharge" {
             // 订阅期额度充值：数量与金额必填且为正。用户以"元"为单位的小数
             // （如 "99.00"）必须先转换为最小单位整数（"9900"）再进入命令，
             // 否则下游 `CommerceMoney::new` 会拒绝小数（panic）或把整数当作
             // 分处理（金额错 100 倍）。
+            // 充值是额度包而不是按席位售卖的团队套餐，席位数量恒为 1。
+            if quantity != 1 {
+                return Err(CommerceServiceError::validation(
+                    "membership quota recharge requires quantity to be 1",
+                ));
+            }
             if !matches!(grant_quantity, Some(quantity) if quantity > 0) {
                 return Err(CommerceServiceError::validation(
                     "membership quota recharge requires a positive grantQuantity",
@@ -128,6 +149,7 @@ impl CreateMembershipOrderCommand {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string),
+            quantity,
         })
     }
 }
@@ -171,7 +193,7 @@ fn optional_text(value: Option<&str>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::CreateMembershipOrderCommand;
+    use super::{CreateMembershipOrderCommand, MAX_MEMBERSHIP_ORDER_QUANTITY};
 
     fn command(
         action: &str,
@@ -197,6 +219,7 @@ mod tests {
             None,
             None,
             None,
+            1,
         )
     }
 
@@ -250,6 +273,7 @@ mod tests {
             None,
             Some(1000),
             Some("10.00"),
+            1,
         )
         .expect("valid recharge command");
         assert_eq!(value.action, "recharge");
@@ -278,6 +302,7 @@ mod tests {
             None,
             None,
             Some("10.00"),
+            1,
         )
         .is_err());
         assert!(CreateMembershipOrderCommand::new(
@@ -299,6 +324,7 @@ mod tests {
             None,
             Some(1000),
             None,
+            1,
         )
         .is_err());
     }
@@ -330,6 +356,120 @@ mod tests {
             None,
             Some(100),
             Some("10.00"),
+            1,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn membership_command_records_the_seat_quantity() {
+        let value = CreateMembershipOrderCommand::new(
+            "tenant-1",
+            Some("0"),
+            "user-1",
+            "team-package-1",
+            "purchase",
+            "wechat_pay",
+            "wechat_native",
+            "order-1",
+            "item-1",
+            "MB1",
+            "MEMBERSHIP1",
+            "2026-07-26T00:00:00Z",
+            "2026-07-26T00:30:00Z",
+            "idem-1",
+            None,
+            None,
+            None,
+            None,
+            3,
+        )
+        .expect("valid multi-seat membership command");
+
+        assert_eq!(value.quantity, 3);
+        assert_eq!(
+            command("purchase", "2026-07-26T00:00:00Z", "2026-07-26T00:30:00Z")
+                .expect("single-seat command")
+                .quantity,
+            1
+        );
+    }
+
+    #[test]
+    fn membership_command_rejects_out_of_range_seat_quantity() {
+        for quantity in [0, -1, MAX_MEMBERSHIP_ORDER_QUANTITY + 1] {
+            assert!(
+                CreateMembershipOrderCommand::new(
+                    "tenant-1",
+                    Some("0"),
+                    "user-1",
+                    "team-package-1",
+                    "purchase",
+                    "wechat_pay",
+                    "wechat_native",
+                    "order-1",
+                    "item-1",
+                    "MB1",
+                    "MEMBERSHIP1",
+                    "2026-07-26T00:00:00Z",
+                    "2026-07-26T00:30:00Z",
+                    "idem-1",
+                    None,
+                    None,
+                    None,
+                    None,
+                    quantity,
+                )
+                .is_err(),
+                "quantity {quantity} must be rejected"
+            );
+        }
+        assert!(CreateMembershipOrderCommand::new(
+            "tenant-1",
+            Some("0"),
+            "user-1",
+            "team-package-1",
+            "purchase",
+            "wechat_pay",
+            "wechat_native",
+            "order-1",
+            "item-1",
+            "MB1",
+            "MEMBERSHIP1",
+            "2026-07-26T00:00:00Z",
+            "2026-07-26T00:30:00Z",
+            "idem-1",
+            None,
+            None,
+            None,
+            None,
+            MAX_MEMBERSHIP_ORDER_QUANTITY,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn membership_command_rejects_multi_seat_quota_recharge() {
+        assert!(CreateMembershipOrderCommand::new(
+            "tenant-1",
+            Some("0"),
+            "user-1",
+            "membership-quota-recharge",
+            "recharge",
+            "wechat_pay",
+            "wechat_native",
+            "order-1",
+            "item-1",
+            "MB1",
+            "MEMBERSHIP1",
+            "2026-07-26T00:00:00Z",
+            "2026-07-26T00:30:00Z",
+            "idem-1",
+            None,
+            None,
+            Some(1000),
+            Some("10.00"),
+            3,
         )
         .is_err());
     }

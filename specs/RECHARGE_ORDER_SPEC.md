@@ -9,7 +9,9 @@ Authority: `sdkwork-specs/RPC_SPEC.md` (`OrderService`, `RechargeService`), `sdk
 
 ## 1. Purpose
 
-**sdkwork-order** owns all `commerce_order` headers, including recharge (`subject=points_recharge`), for a single order center: list, detail, cancel, refund eligibility, and pay orchestration.
+**sdkwork-order** owns all `commerce_order` headers, including account value recharges, for a single order center: list, detail, cancel, refund eligibility, and pay orchestration.
+
+The canonical subject → asset → ledger mapping is owned by [ACCOUNT_VALUE_ORDER_SPEC.md](./ACCOUNT_VALUE_ORDER_SPEC.md) §2.1. Recharge subjects are `token_bank_recharge`, `token_bank_plan_purchase`, `token_bank_plan_renewal`, `account_recharge_package`, `coupon_recharge`, and the legacy `points_recharge` (which credits the **points** asset, not Token Bank).
 
 ## 2. Owned domain
 
@@ -28,8 +30,13 @@ Authority: `sdkwork-specs/RPC_SPEC.md` (`OrderService`, `RechargeService`), `sdk
 | --- | --- | --- |
 | `product` | Physical / general goods | Shipment |
 | `virtual_goods` | Virtual SKU | Account / entitlement |
-| `points_recharge` | Wallet top-up | Account `adjustments/points` |
+| `token_bank_recharge` | Token Bank compute-credit top-up | Account value ledger `token_bank` |
+| `token_bank_plan_purchase` / `token_bank_plan_renewal` | Token Bank plan cycle | Account value ledger `token_bank` |
+| `account_recharge_package` | Admin-defined value package | Account value ledger (package target asset) |
+| `coupon_recharge` | Redemption code | Coupon benefit asset |
+| `points_recharge` | Legacy **Membership Points** top-up | Account `points` ledger (`points_recharge`) |
 | `membership` | Member purchase | Membership service |
+| `refund_request` / `cash_withdrawal` | Refund / payout request | Refund & withdrawal request flows |
 
 ## 3. Recharge API (app-api)
 
@@ -100,6 +107,14 @@ Order **must not** call payment provider SDK directly; use Payment service/repos
 
 Points grant metadata is stored on `commerce_order_item.sku_snapshot_json` and copied into payment attempt `callback_payload` when pay orchestrates.
 
+### Account-value subjects (Token Bank / plans)
+
+`token_bank_recharge`, `token_bank_plan_purchase`, and `token_bank_plan_renewal` share the same create-first boundary but are **server-priced**:
+
+- `paymentProduct = mobile_cashier_h5` returns the order-bound cashier deep-link (`cashierUrl` / `qrCodePayload`, `nextAction = cashier`) and starts **no** provider payment; `wechat_native` / `alipay_native` still create the provider intent.
+- The grant is never taken from the client: plan subjects price from the immutable plan snapshot (`grant_amount + bonus_amount`, micro-credits) and also override the payable amount/currency with the catalog values; `token_bank_recharge` prices from the exchange rule plus the package bonus. A request that sends `grantAmount` for these subjects is rejected.
+- Credits are written to the `token_bank` ledger asset (micro-credits, 1 credit = 1e6 micro). `points_recharge` remains the membership-points path and is never used as a fallback for Token Bank.
+
 Recharge SQL, routes, and lifecycle ownership belong exclusively to **sdkwork-order**. Clients call order app-api directly.
 
 ## 10. Gateway closure (O6 complete)
@@ -127,14 +142,17 @@ Track phases in [commerce-recharge.spec.json](./commerce-recharge.spec.json).
 | Package | Role |
 | --- | --- |
 | `@sdkwork/order-pc-order` | Unified order list, order detail, admin |
-| `@sdkwork/order-pc-recharge` | Reusable points package selector, recharge order creation, QR payment, and status polling dialog |
+| `@sdkwork/order-pc-recharge` | Reusable account value package selector, recharge order creation, QR payment, and status polling dialog (used by both Membership Points and Token Bank surfaces) |
 | `@sdkwork/account-pc-wallet` | May consume order SDK for recharge UI (composition) |
 
 ## 9. Verification
 
-- **Store E2E** (`cargo test -p sdkwork-order-integration-account points_recharge_store_e2e`): seeded recharge checkout → `mark_points_recharge_payment_succeeded` → `fulfill_points_recharge_order` with `StoreAccountPointsCreditAdapter` → wallet points balance + idempotent replay
+- **Fulfillment saga**: `cargo test -p sdkwork-order-service points_recharge_fulfillment_standard` — payment success markers, deterministic idempotency keys, credit-then-commit ordering, and compensation
+- **Store round-trip**: `cargo test -p sdkwork-order-repository-sqlx points_recharge_order_postgres` — create, pay, and fulfill a `points_recharge` order against PostgreSQL
 - **Cancel audit** (`cargo test -p sdkwork-order-repository-sqlx cancel_owner_order`): PostgreSQL via `SDKWORK_DATABASE_TEST_POSTGRES_URL` (server test profile must be PostgreSQL per DATABASE_SPEC)
-- Order service unit tests: fulfillment saga idempotency keys and mock port orchestration (`points_recharge_fulfillment_standard.rs`)
-- Account saga contract: ledger adjustment command shape (`points_recharge_saga_contract.rs`)
+- **Label contract**: `pnpm --filter @sdkwork/order-pc-admin-trade test` — every subject/asset code resolves to a localized label (§2.2)
+- **Account-value cashier link**: `cargo test -p sdkwork-order-repository-sqlx --lib postgres_account_value::tests` — recharge outcomes carry `cashierUrl`/`qrCodePayload`, coupon outcomes keep `fulfill`
+- **Server pricing**: `cargo test -p sdkwork-routes-order-app-api --lib token_bank_subjects_are_server_priced` — Token Bank subjects are priced server-side, points/package/coupon are not
+- **Client routing**: `pnpm exec vitest run apps/sdkwork-order-common/packages/sdkwork-order-service/tests/points-recharge-service.test.ts apps/sdkwork-order-h5/packages/sdkwork-order-h5-subscription/tests/subscription-purchase-service.test.ts` — Token Bank services send `token_bank_*` and never a client `grantAmount`
 - OpenAPI parity for `recharges` tag paths; `pnpm align:openapi` + `pnpm sdk:generate` for order-app-sdk
 - `pnpm verify` and `cargo test --workspace` in order and account repositories

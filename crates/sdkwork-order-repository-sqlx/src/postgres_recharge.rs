@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use sdkwork_contract_service::{CommerceMoney, CommercePaymentStatus, CommerceServiceError};
 use sdkwork_order_service::{
     AccountValueAssetCode, AccountValueFulfillmentContext, AccountValueFulfillmentStore,
-    AccountValueOrderSubject, CheckoutStatusQuery, CheckoutStatusSnapshot, CouponRedemptionBenefit,
+    AccountValueOrderSubject, AccountValueRechargePricing, CheckoutStatusQuery, CheckoutStatusSnapshot, CouponRedemptionBenefit,
     CouponSubscriptionPeriod, CreatePointsRechargeOrderCommand, CreatePointsRechargeOrderOutcome,
     FulfillAccountValueOrderCommand, FulfillAccountValueOrderOutcome,
     FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
@@ -12,6 +12,7 @@ use sdkwork_order_service::{
     RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
     RechargeSettingsSnapshot,
 };
+use sdkwork_utils_rust::decimal_math::{decimal_add, DecimalRounding};
 use sdkwork_utils_rust::{build_commerce_cashier_url_with_base, commerce_cashier_scene};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
@@ -660,6 +661,119 @@ impl PostgresCommerceRechargeStore {
             settings.currency_to_cny_rates,
             preview_examples,
         )
+    }
+
+    /// Server-side pricing for account-value recharge subjects.
+    ///
+    /// The client must never decide how many credits a Token Bank purchase
+    /// grants: a tampered `grantAmount` would mint balance. Pricing mirrors the
+    /// points recharge path:
+    ///
+    /// - plan subjects price from the immutable Token Bank plan catalog
+    ///   (`grant_amount + bonus_amount`, stored in micro-credits);
+    /// - `token_bank_recharge` prices from the exchange rule
+    ///   (`base_points_per_cny × currency rate × amount`) plus the package
+    ///   bonus, and is returned in micro-credits (1 credit = 1e6 micro) so it
+    ///   matches the account ledger scale.
+    pub async fn resolve_account_value_grant_amount(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        subject: &str,
+        amount: &CommerceMoney,
+        currency_code: &str,
+        package_id: Option<&str>,
+        plan_code: Option<&str>,
+    ) -> Result<AccountValueRechargePricing, CommerceServiceError> {
+        match subject.trim().to_ascii_lowercase().as_str() {
+            "token_bank_plan_purchase" | "token_bank_plan_renewal" => {
+                let plan_code = plan_code
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        CommerceServiceError::validation(
+                            "Token Bank plan purchase requires planCode",
+                        )
+                    })?;
+                let plan = self
+                    .load_token_bank_plan_by_code(tenant_id, organization_id, plan_code)
+                    .await?
+                    .ok_or_else(|| {
+                        CommerceServiceError::conflict("Token Bank plan is unavailable")
+                    })?;
+                let total = decimal_add(
+                    plan.grant_amount.as_str(),
+                    plan.bonus_amount.as_str(),
+                    6,
+                    DecimalRounding::Floor,
+                )
+                .map_err(|_| CommerceServiceError::storage("Token Bank plan grant overflow"))?;
+                let grant_amount = CommerceMoney::new(&total)
+                    .map_err(|error| CommerceServiceError::storage(error.to_string()))?;
+                Ok(AccountValueRechargePricing {
+                    grant_amount,
+                    payable_amount: Some(plan.price_amount.clone()),
+                    payable_currency_code: Some(plan.currency_code.clone()),
+                })
+            }
+            "token_bank_recharge" => {
+                let mut tx = self
+                    .pool
+                    .begin()
+                    .await
+                    .map_err(|error| store_error("failed to begin recharge pricing", error))?;
+                let settings = load_recharge_settings_for_transaction(
+                    &mut tx,
+                    tenant_id,
+                    organization_id,
+                )
+                .await?;
+                let pack = match package_id.map(str::trim).filter(|value| !value.is_empty()) {
+                    Some(package_id) => Some(
+                        load_recharge_package_for_pricing(
+                            &mut tx,
+                            tenant_id,
+                            organization_id,
+                            package_id,
+                        )
+                        .await?,
+                    ),
+                    None => None,
+                };
+                if let Some(pack) = pack.as_ref() {
+                    // Same rule as the points path: a package purchase must pay
+                    // the catalog price in the catalog currency, otherwise the
+                    // fixed package bonus could be claimed on a cheaper amount.
+                    if pack.currency_code != currency_code {
+                        return Err(CommerceServiceError::validation(
+                            "recharge currency code does not match package currency",
+                        ));
+                    }
+                    if &pack.price_amount != amount {
+                        return Err(CommerceServiceError::validation(
+                            "recharge amount does not match package amount",
+                        ));
+                    }
+                }
+                tx.rollback().await.map_err(|error| {
+                    store_error("failed to rollback recharge pricing", error)
+                })?;
+                let amount_major = minor_units_to_major_decimal(amount.as_str())?;
+                let bonus_points = pack.map(|item| item.bonus_points).unwrap_or(0);
+                let credited_micro =
+                    compute_grant_amount(&amount_major, currency_code, bonus_points, &settings)?;
+                let grant_amount = CommerceMoney::new(&credited_micro.to_string())
+                    .map_err(|error| CommerceServiceError::storage(error.to_string()))?;
+                Ok(AccountValueRechargePricing {
+                    grant_amount,
+                    payable_amount: None,
+                    payable_currency_code: None,
+                })
+            }
+            _ => Err(CommerceServiceError::validation(
+                "subject does not support server-side account value pricing",
+            )),
+        }
     }
 
     pub async fn create_points_recharge_order(
@@ -1604,6 +1718,56 @@ async fn load_recharge_method(
         provider_code,
         payment_product,
     })
+}
+
+/// Reads the catalog package a priced top-up refers to.
+///
+/// Kept separate from [`load_recharge_pack`] because pricing runs before an
+/// order exists: it must not require an order command or the amount-match
+/// fallback, and a missing package is a pricing failure, not a discount.
+async fn load_recharge_package_for_pricing(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: &str,
+    organization_id: Option<&str>,
+    package_id: &str,
+) -> Result<RechargePack, CommerceServiceError> {
+    let requested_at = current_query_timestamp();
+    let row = if tenant_id.trim().is_empty() {
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+            LOAD_RECHARGE_PACK_BY_ID_PUBLIC,
+        )))
+        .bind(package_id)
+        .bind(&requested_at)
+        .fetch_optional(&mut **tx)
+        .await
+    } else {
+        let scoped_row = sqlx::query(LOAD_RECHARGE_PACK_BY_ID)
+            .bind(tenant_id)
+            .bind(organization_id)
+            .bind(package_id)
+            .bind(&requested_at)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|error| store_error("failed to load recharge package by id", error))?;
+        if scoped_row.is_some() {
+            Ok(scoped_row)
+        } else {
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(
+                LOAD_RECHARGE_PACK_BY_ID_PUBLIC,
+            )))
+            .bind(package_id)
+            .bind(&requested_at)
+            .fetch_optional(&mut **tx)
+            .await
+        }
+    }
+    .map_err(|error| store_error("failed to load recharge package by id", error))?;
+    let Some(row) = row else {
+        return Err(CommerceServiceError::conflict(
+            "recharge package is unavailable",
+        ));
+    };
+    map_recharge_pack_row(&row)
 }
 
 async fn load_recharge_pack(

@@ -33,6 +33,11 @@
       "types": "./src/composition/index.ts",
       "import": "./src/composition/index.ts",
       "default": "./src/composition/index.ts"
+    },
+    "./subject": {
+      "types": "./src/subject/index.ts",
+      "import": "./src/subject/index.ts",
+      "default": "./src/subject/index.ts"
     }
   },
   "dependencies": {

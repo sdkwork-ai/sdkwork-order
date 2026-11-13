@@ -13,6 +13,8 @@ pub struct MembershipPurchaseSettlementSnapshot {
     pub package_id: i64,
     /// 订阅期额度充值数量（仅 action=recharge）。
     pub grant_quantity: Option<i64>,
+    /// 席位数量：团队/组织套餐按席位计价，单席位订单为 1。
+    pub quantity: i64,
 }
 
 /// 订阅期额度充值履约请求：向当前有效会员订阅的权益账户追加额度。
@@ -48,6 +50,8 @@ pub struct MembershipPurchaseFulfillmentRequest {
     pub paid_at: String,
     pub request_no: String,
     pub idempotency_key: String,
+    /// 席位数量：团队/组织套餐按席位计价，单席位订单为 1。
+    pub quantity: i64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

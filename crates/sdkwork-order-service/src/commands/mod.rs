@@ -8,7 +8,7 @@ use crate::OrderItemDraft;
 use sdkwork_contract_service::CommerceMoney;
 
 pub use account_value::{
-    AccountValueRequestReviewAction, CreateAccountRechargeOrderCommand,
+    AccountValueRechargePricing, AccountValueRequestReviewAction, CreateAccountRechargeOrderCommand,
     CreateCashWithdrawalRequestCommand, CreateCouponRechargeOrderCommand,
     CreateOrderRefundRequestCommand, FulfillAccountValueOrderCommand,
     RetireAccountValuePackageCommand, RetireTokenBankPlanCommand, ReviewAccountValueRequestCommand,
@@ -18,7 +18,7 @@ pub use app_template::CreateAppTemplateOrderCommand;
 pub use fulfillment::{
     FulfillPointsRechargeOrderCommand, MarkPointsRechargePaymentSucceededCommand,
 };
-pub use membership::CreateMembershipOrderCommand;
+pub use membership::{CreateMembershipOrderCommand, MAX_MEMBERSHIP_ORDER_QUANTITY};
 pub use recharge::CreatePointsRechargeOrderCommand;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

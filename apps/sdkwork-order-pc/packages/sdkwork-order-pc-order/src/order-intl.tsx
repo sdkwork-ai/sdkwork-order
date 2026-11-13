@@ -5,6 +5,9 @@ import {
   type PropsWithChildren,
 } from "react";
 import { formatSdkworkOrderCurrencyCny as formatSdkworkCurrencyCny } from "@sdkwork/order-service";
+import {
+  resolveSdkworkOrderSubjectLabelKey,
+} from "@sdkwork/order-pc-core/subject";
 import type { SdkworkOrderFilter } from "./order-controller";
 import {
   createSdkworkOrderMessages,
@@ -23,6 +26,7 @@ export interface SdkworkOrderIntlValue {
   formatPaginationSummary: (shown: number, total: number) => string;
   formatPaymentMethod: (value: string | null | undefined) => string;
   formatStatus: (status: string | null | undefined, fallbackLabel?: string | null | undefined) => string;
+  formatSubject: (subject: string | null | undefined) => string;
   formatTimelineLabel: (label: string | null | undefined) => string;
   formatTimestamp: (value: string | undefined) => string;
   locale: string;
@@ -163,6 +167,22 @@ function createSdkworkOrderIntlValue(
       }
 
       return copy.status[key];
+    },
+    formatSubject(subject) {
+      const raw = String(subject ?? "").trim();
+      if (!raw) {
+        return copy.service.summaryFallbackSubject;
+      }
+
+      // The shared catalog owns code normalization so `Token Bank Recharge`,
+      // `token-bank-recharge`, and `token_bank_recharge` share one label.
+      const canonicalKey = resolveSdkworkOrderSubjectLabelKey(raw);
+      if (!canonicalKey) {
+        return raw;
+      }
+
+      const code = canonicalKey.replace("orders.subject_", "");
+      return copy.subject[code] ?? raw;
     },
     formatTimelineLabel(label) {
       const normalized = String(label || "").trim().toLowerCase();

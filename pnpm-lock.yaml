@@ -837,6 +837,9 @@ importers:
       '@types/qrcode':
         specifier: 'catalog:'
         version: 1.5.6
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.14
 
   apps/sdkwork-order-common/packages/sdkwork-order-sdk-ports: {}
 

@@ -254,8 +254,9 @@
       "status": "complete",
       "blockedBy": ["O9"],
       "deliverables": [
-        "sdkwork-order-integration-account/tests/points_recharge_store_e2e_standard.rs",
-        "sdkwork-order-repository-sqlx/test_migrations/0001_order_points_recharge_e2e.sql",
+        "crates/sdkwork-order-repository-sqlx/tests/points_recharge_order_postgres.rs",
+        "crates/sdkwork-order-service/tests/points_recharge_fulfillment_standard.rs",
+        "crates/sdkwork-order-repository-sqlx/test_migrations/0001_order_points_recharge_e2e.postgres.sql",
         "test-support feature on order/account repository-sqlx crates"
       ]
     },
@@ -268,7 +269,8 @@
         "specs/commerce-checkout-topology.spec.json",
         "docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md",
         "sdkwork-utils-rust::build_commerce_cashier_url",
-        "payment fulfillment callback path points_recharge (snake_case)"
+        "payment fulfillment callback path points_recharge (snake_case)",
+        "sdkwork-utils-rust::commerce_cashier_scene covers every recharge subject"
       ]
     },
     {

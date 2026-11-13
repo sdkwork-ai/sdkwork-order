@@ -3,7 +3,7 @@
 Status: active  
 Owner: SDKWork maintainers  
 Capability: `commerce.order`  
-Updated: 2026-07-08
+Updated: 2026-11-14
 
 Authority: `sdkwork-specs/API_SPEC.md`, `sdkwork-specs/DATABASE_SPEC.md`, `sdkwork-account/specs/COMMERCE_BOUNDARY_SPEC.md`, `sdkwork-payment/specs/PAYMENT_EXECUTOR_SPEC.md`
 
@@ -17,13 +17,53 @@ Recharge, coupon redemption, refund, and withdrawal orchestration belong to `sdk
 
 ## 2. Naming Model
 
-Use `Token Bank` for the AI-era intermediate value capability and `token_bank` for the account asset code. Do not introduce `compute_credit`, `token`, or other parallel asset names for the same purpose.
+Use `Token Bank` for the AI-era intermediate value capability and `token_bank` for the account asset code. Do not introduce `compute_credit`, `token`, or other parallel asset names for the same purpose. `Compute Credits` is the English *display* name of the `token_bank` asset (its Chinese display name is `算力额度`); it is a translation, not a fourth asset.
 
-| Term | Canonical code | Meaning |
+| Term | Canonical code | Display (en-US / zh-CN) | Meaning |
+| --- | --- | --- | --- |
+| Token Bank | `token_bank` | `Compute Credits` / `算力额度` | Intermediate account asset used by LLM, image, video, Agent, workflow, plugin, and model-service consumption. Ledger unit: micro-credits (1 credit = 1e6 micro). |
+| Points | `points` | `Membership Points` / `会员积分` | Traditional loyalty or marketing points. Ledger unit: integer points. |
+| Cash balance | `cash` | `Cash balance` / `现金余额` | Withdrawable stored value when a product requires cash-account withdrawal. Ledger unit: currency minor units. |
+| Membership entitlement | `subscription` | `Subscription` / `会员订阅` | **Not an account asset.** Fulfilled by the membership service; it must never be written to `acct_ledger_entry`. |
+
+Only `cash`, `points`, and `token_bank` exist as ledger assets (`CommerceAccountAssetType`). `subscription` appears in order/coupon payloads solely as a fulfillment target routed to the membership capability.
+
+### 2.1 Canonical subject → asset → ledger mapping
+
+| Subject | Target asset | Fulfillment ledger `business_type` | Compensation `business_type` | Dispatcher |
+| --- | --- | --- | --- | --- |
+| `points_recharge` | `points` | `points_recharge` | `points_cloudback` (legacy spelling, see §13) | `AccountPointsCreditPort` |
+| `token_bank_recharge` | `token_bank` | `token_bank_purchase_credit` | `token_bank_reversal` | Account value ledger port |
+| `token_bank_plan_purchase` | `token_bank` | `token_bank_grant` | `token_bank_reversal` | Account value ledger port |
+| `token_bank_plan_renewal` | `token_bank` | `token_bank_grant` | `token_bank_reversal` | Account value ledger port |
+| `account_recharge_package` | package target asset (`points` / `token_bank` / `cash`) | by asset: `points_recharge` / `token_bank_purchase_credit` / `cash_adjustment` | by asset: `points_cloudback` / `token_bank_reversal` / `cash_adjustment` | Account value ledger port |
+| `coupon_recharge` | coupon benefit asset | `token_bank_grant` (Token Bank), `points_earn` (Points), `cash_adjustment` (Cash), membership service (Subscription) | by asset | Account value ledger port / membership port |
+| `refund_request` | reversed asset | `token_bank_hold_release` / `points_cloudback` / `cash_adjustment` / `manual_adjustment` | same table | Refund notify port |
+| `cash_withdrawal` | `cash` | payout path (`cash_adjustment`) | `cash_adjustment` | Payout executor port |
+| `membership` | `subscription` | membership service (no ledger row) | — | Membership notification port |
+| `product`, `virtual_goods`, `app_template` | — | `product` / `external` / `app_template` | — | Fulfillment/shipment handlers |
+
+`points_recharge` and `token_bank_recharge` are **different assets and different settlement chains**. An order that credits Token Bank must never carry `points_recharge`, and a `points_recharge` order must never be fulfilled from the Token Bank ledger.
+
+### 2.2 Display-label contract
+
+Every client surface resolves order subjects and asset codes through a catalog that emits these labels; it must never render the raw wire code.
+
+| Code | en-US | zh-CN |
 | --- | --- | --- |
-| Token Bank | `token_bank` | Intermediate account asset used by LLM, image, video, Agent, workflow, plugin, and model-service consumption |
-| Points | `points` | Traditional loyalty or marketing points |
-| Cash balance | `cash` | Withdrawable stored value when a product requires cash-account withdrawal |
+| `product` | Product order | 商品订单 |
+| `virtual_goods` | Virtual goods order | 虚拟商品订单 |
+| `membership` | Membership subscription | 会员订阅 |
+| `points_recharge` | Membership Points recharge | 会员积分充值 |
+| `token_bank_recharge` | Token Bank recharge | Token Bank 充值 |
+| `token_bank_plan_purchase` | Token Bank plan purchase | Token Bank 套餐购买 |
+| `token_bank_plan_renewal` | Token Bank plan renewal | Token Bank 套餐续订 |
+| `account_recharge_package` | Account value package recharge | 账户价值包充值 |
+| `coupon_recharge` | Coupon recharge | 兑换码充值 |
+| `refund_request` | Refund request | 退款申请 |
+| `cash_withdrawal` | Cash withdrawal | 提现申请 |
+
+Asset display names follow §2 table. A host may append product-specific subjects, but it must not rename `points` as Token Bank or the reverse.
 
 ## 3. Account Value Order Subjects
 
@@ -251,3 +291,32 @@ Immutable commercial evidence must be copied into order rows or order item snaps
 - account-owned recharge, refund, or withdrawal orchestration
 - payment-created `commerce_order` records
 - mutable plan or package evidence after order creation
+- naming the `points` asset "Token Bank" (or the reverse) in any client copy, key, or default
+- crediting `token_bank` through `points_recharge` (or the reverse) "for compatibility"
+
+## 13. Known Contract Debt (tracked, not yet migrated)
+
+These are real inconsistencies accepted only until their migration lands. Do not add new code that depends on them.
+
+| # | Debt | Impact | Migration requirement |
+| --- | --- | --- | --- |
+| D1 | `CommerceLedgerBusinessType::POINTS_CLAWBACK` is spelled `points_cloudback` | Every points reversal persists the misspelled code; `points_clawback` rows do not exist | Rename the constant **and** backfill `acct_ledger_entry.business_type` in one migration; update any report filter |
+| D2 | `recharges.orders.create` defaults an omitted `subject` to `points_recharge` | A Token Bank purchase that omits `subject` becomes a points order and credits the points ledger | Make `subject` required for the recharge create command, or default to an explicit `account_recharge_package` |
+| D3 | Admin refund create defaults `targetAsset` to `token_bank` | A refund on a points/cash order can target an asset the order never granted | Require the refund asset explicitly, or derive it from the original order's fulfillment ledger row |
+| D4 | `AccountValueAssetCode::Subscription` is parseable but has no account counterpart | `targetAsset=subscription` survives DTO validation and fails at the last hop, after the order/refund row exists | Reject `subscription` at the account-value command boundary and route subscription orders only through the membership port |
+| D5 | Subscription fulfillment maps to `token_bank_grant` and compensation to `token_bank_reversal` | Subscription orders appear in Token Bank ledger reports with no Token Bank asset movement | Move subscription to the membership port and remove the ledger mapping |
+| D6 | The generated app/backend SDK unions expose only `points`/`token_bank`/`cash` while the Rust enum also accepts `subscription` | Client types and server acceptance disagree | Align the OpenAPI enum with D4 resolution |
+| D6 | The generated app/backend SDK unions expose only `points`/`token_bank`/`cash` while the Rust enum also accepts `subscription` | Client types and server acceptance disagree | Align the OpenAPI enum with D4 resolution |
+
+### 13.1 Resolved (2026-11-14)
+
+**D7 (Token Bank sales booked as points)** — resolved.
+
+The account-value recharge path now supports the `mobile_cashier_h5` product and server-side pricing:
+
+- `create_account_recharge_order` returns an order-bound cashier deep-link (`cashierUrl` + `qrCodePayload`, `nextAction = cashier`); `submit_recharge` returns it and starts **no** provider payment when the product is `mobile_cashier_h5` (`sdkwork-order-repository-sqlx::postgres_account_value`, `sdkwork-routes-order-app-api::recharge_router`).
+- `resolve_account_value_grant_amount` prices `token_bank_recharge` from the exchange rule + package bonus and plan subjects from the immutable Token Bank plan snapshot (`grant_amount + bonus_amount`); for plans it also overrides the payable amount/currency with the catalog values. Client-supplied `grantAmount` is rejected for these subjects.
+- Clients switched: `createSdkworkTokenBankRechargeService` (`token_bank_recharge` → `token_bank`), Cloud Router Token Plan modal + Playground, and the H5 Token Bank top-up (`token_bank_recharge` + `packageId`; the catalog those "plans" read is `recharges/packages`, a one-off top-up, so no plan period is involved).
+
+Remaining follow-ups: `account_recharge_package` and `coupon_recharge` still use their existing grant/benefit paths, and historical orders keep their original subject (no data migration is performed).
+

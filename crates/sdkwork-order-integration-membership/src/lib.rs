@@ -40,12 +40,21 @@ impl MembershipPurchaseFulfillmentPort for StoreMembershipFulfillmentAdapter {
     ) -> MembershipPurchaseFulfillmentFuture<'a, MembershipPurchaseFulfillmentOutcome> {
         Box::pin(async move {
             let membership_id = format!("membership-{}", request.order_id);
+            let subject = membership_subject(
+                &request.tenant_id,
+                request.organization_id.as_deref(),
+                &request.owner_user_id,
+            )?;
             let command = FulfillPaidMembershipPurchaseCommand {
-                subject: membership_subject(
-                    &request.tenant_id,
-                    request.organization_id.as_deref(),
-                    &request.owner_user_id,
-                )?,
+                subject,
+                // 团队/组织套餐的原始组织主体字符串（可能不是数字 id）；
+                // 非数字主体在上面已映射为 organization_id = 0，但仍由该通道
+                // 透传给会员仓库存档。
+                organization_subject_id: request
+                    .organization_id
+                    .clone()
+                    .filter(|value| !value.trim().is_empty()),
+                seats: request.quantity.max(1),
                 package_id: request.package_id,
                 order_id: request.order_id,
                 membership_id,
@@ -153,7 +162,7 @@ fn membership_subject(
 ) -> Result<AppMembershipSubject, CommerceServiceError> {
     Ok(AppMembershipSubject {
         tenant_id: positive_identifier(tenant_id, "tenant id")?,
-        organization_id: optional_identifier(organization_id, "organization id")?,
+        organization_id: organization_identifier(organization_id),
         user_id: positive_identifier(owner_user_id, "owner user id")?,
     })
 }
@@ -167,13 +176,14 @@ fn positive_identifier(value: &str, name: &str) -> Result<i64, CommerceServiceEr
         .ok_or_else(|| CommerceServiceError::validation(format!("membership {name} is invalid")))
 }
 
-fn optional_identifier(value: Option<&str>, name: &str) -> Result<i64, CommerceServiceError> {
-    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(0);
-    };
+/// 组织主体 id 在上游是字符串（团队/组织套餐可能使用非数字主体标识），而
+/// `AppMembershipSubject.organization_id` 仍是 i64：数字主体原样传递，非数字
+/// 或非法主体映射为 0，原始字符串由 `organization_subject_id` 继续透传。
+fn organization_identifier(value: Option<&str>) -> i64 {
     value
-        .parse::<i64>()
-        .ok()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.parse::<i64>().ok())
         .filter(|value| *value >= 0)
-        .ok_or_else(|| CommerceServiceError::validation(format!("membership {name} is invalid")))
+        .unwrap_or(0)
 }

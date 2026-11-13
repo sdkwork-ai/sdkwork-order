@@ -523,6 +523,7 @@ where
             paid_at: paid_at.to_owned(),
             request_no: request_no.to_owned(),
             idempotency_key,
+            quantity: snapshot.quantity.max(1),
         })
         .await?;
 

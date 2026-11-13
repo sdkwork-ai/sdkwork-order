@@ -59,6 +59,17 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
             physical_checkout_resolver.clone(),
             physical_inventory.clone(),
         ))
+        // Anonymous cashier: the scanned QR pays without a platform session. It
+        // reuses the same owner-order payment store, so idempotency, attempt
+        // reuse, and provider enrichment stay identical to the signed-in path.
+        .merge(crate::cashier_router::build_app_cashier_router(
+            pool.clone(),
+            crate::owner_order_payment_enrich::enriched_postgres_owner_order_payments(
+                pool.clone(),
+                registry.clone(),
+                credentials.clone(),
+            ),
+        ))
         .merge(app_order_discount_router_with_postgres_pool(
             &pool,
             promotion_discount_port.clone(),

@@ -25,6 +25,7 @@ export function SdkworkOrderDetailDrawer({
     formatItemMeta,
     formatPaymentMethod,
     formatStatus,
+    formatSubject,
     formatTimelineLabel,
     formatTimestamp,
   } = useSdkworkOrderIntl();
@@ -34,7 +35,7 @@ export function SdkworkOrderDetailDrawer({
 
   return (
     <DetailDrawer
-      description={detail?.subject || copy.detail.description}
+      description={detail?.subject ? formatSubject(detail.subject) : copy.detail.description}
       footer={(
         <div className="flex flex-wrap justify-end gap-3">
           {canCancel ? (

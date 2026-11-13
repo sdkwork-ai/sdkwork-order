@@ -45,7 +45,7 @@ Write commands marked `x-sdkwork-idempotent` accept the standard `Idempotency-Ke
 | Route | Operation | Use case |
 | --- | --- | --- |
 | `POST /app/v3/api/checkout/sessions/{checkoutSessionId}/orders` | `checkout.sessions.orders.create` | Canonical checkout-bound product order creation after quote |
-| `POST /app/v3/api/recharges/orders` | `recharges.orders.create` | Account value order creation, starting with points recharge and extending to Token Bank/package/coupon subjects |
+| `POST /app/v3/api/recharges/orders` | `recharges.orders.create` | Account value order creation: `token_bank_recharge`, `token_bank_plan_*`, `account_recharge_package`, `coupon_recharge`, and legacy `points_recharge` (points asset only) |
 | `POST /app/v3/api/memberships/orders` | `memberships.orders.create` | Membership purchase checkout (`subject=membership`) |
 
 Membership checkout uses two independent idempotency layers. `Idempotency-Key` identifies one command and is bound to a server-computed request fingerprint; replaying that key with a different action, package, source, payment method, or payment product returns HTTP 409. `purchase_intent_key` identifies the commercial intent from tenant, organization, owner, membership action, and the selected package/price snapshot. A partial unique index permits only one active order for that intent. Payment method and product are intentionally excluded, so switching between H5, WeChat, and Alipay reuses the Order. Before creating the new PSP checkout, Payment closes prior active attempts through their historical provider account and commits their local terminal state only after the PSP close succeeds.
@@ -64,7 +64,7 @@ Account value order subjects:
 
 | Subject | Target | Status |
 | --- | --- | --- |
-| `points_recharge` | Account `points` credit | complete |
+| `points_recharge` | Account `points` (Membership Points) credit — legacy points path, never Token Bank | complete |
 | `token_bank_recharge` | Account `token_bank` credit | implemented settlement path |
 | `token_bank_plan_purchase` | Token Bank first-cycle grant | implemented settlement path |
 | `token_bank_plan_renewal` | Token Bank renewal grant | implemented settlement path |
@@ -199,7 +199,7 @@ Points recharge fulfillment currently uses a three-phase saga:
 
 ```text
 fulfillment_status = processing
-  -> idempotent Account wallet credit
+  -> idempotent Account ledger credit (points / token_bank, by subject)
   -> local fulfilled commit
 ```
 
@@ -238,7 +238,7 @@ Wallet recharge, refund, and withdrawal UI surfaces must delegate to order SDK r
 | `ORDER_API_BIND` | Gateway listen address | `0.0.0.0:18093` |
 | `SDKWORK_CORS_ALLOWED_ORIGINS` | Comma-separated browser origins (canonical shared key) | empty (same-origin only) |
 | `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` | Tenant id for public recharge package catalog fallback | `100001` |
-| `SDKWORK_ACCESS_TOKEN` | Bearer token for service-to-service wallet credit and membership fulfillment during order settlement | required in production |
+| `SDKWORK_ACCESS_TOKEN` | Bearer token for service-to-service account ledger credit (points / token_bank) and membership fulfillment during order settlement | required in production |
 | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | Public base URL registered with PSP for order-owned webhooks | required in production |
 | `SDKWORK_ORDER_PAYMENT_COMPENSATION_WORKER_ENABLED` | Enable the payment/refund compensation worker (webhook-failure safety net) | disabled |
 | `SDKWORK_ORDER_PAYMENT_COMPENSATION_TENANT_ID` | Scan scope: tenant id filter for claimed attempts/refunds | unset (all) |

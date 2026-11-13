@@ -11,7 +11,9 @@ use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::PostgresCommerceMembershipOrderStore;
-use sdkwork_order_service::{CreateMembershipOrderCommand, CreateMembershipOrderOutcome};
+use sdkwork_order_service::{
+    CreateMembershipOrderCommand, CreateMembershipOrderOutcome, MAX_MEMBERSHIP_ORDER_QUANTITY,
+};
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
@@ -67,6 +69,10 @@ struct CreateMembershipOrderRequest {
     grant_quantity: Option<i64>,
     /// 订阅期额度充值金额（仅 action=recharge，货币金额字符串）。
     amount: Option<String>,
+    /// 席位数量：团队/组织套餐按席位计价（`price_unit='seat'`），默认 1。
+    /// wire 为 int64 十进制字符串，同时兼容进程内客户端直接传数字。
+    #[serde(default, with = "sdkwork_utils_rust::serde_int64::option_query")]
+    quantity: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -107,6 +113,7 @@ struct CreateMembershipCommandInput<'a> {
     source: Option<&'a str>,
     grant_quantity: Option<i64>,
     amount: Option<&'a str>,
+    quantity: i64,
 }
 
 impl CreateMembershipOrderRequest {
@@ -140,6 +147,10 @@ impl CreateMembershipOrderRequest {
 
     fn amount(&self) -> Option<&str> {
         self.amount.as_deref()
+    }
+
+    fn quantity(&self) -> Option<i64> {
+        self.quantity
     }
 }
 
@@ -212,6 +223,11 @@ async fn create_membership_order(
         Err(message) => return validation(ctx, message),
     };
     let is_recharge = action == "recharge";
+    // 席位数量：团队/组织套餐按席位售卖，只有购买类动作允许指定。
+    let quantity = match validate_membership_quantity(request.quantity(), is_recharge) {
+        Ok(value) => value,
+        Err(message) => return validation(ctx, message),
+    };
     // 订阅期额度充值：数量与金额必填；非充值动作不得携带充值字段
     let package_id = if is_recharge {
         if request.grant_quantity().unwrap_or(0) <= 0 {
@@ -265,6 +281,7 @@ async fn create_membership_order(
         source: request.source(),
         grant_quantity: request.grant_quantity(),
         amount: request.amount(),
+        quantity,
     }) {
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
@@ -352,6 +369,26 @@ fn validate_membership_action(value: Option<&str>) -> Result<String, String> {
 
 /// 订阅期额度充值的合成包标识（不依赖目录套餐）。
 const MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID: &str = "membership-quota-recharge";
+
+/// 席位数量校验：购买类动作允许 1..=10000（缺省为单席位）；充值是额度包，
+/// 不按席位售卖，显式传 quantity 一律视为校验错误。
+fn validate_membership_quantity(value: Option<i64>, is_recharge: bool) -> Result<i64, String> {
+    if is_recharge {
+        return match value {
+            None => Ok(1),
+            Some(_) => Err(
+                "quantity is only valid for membership purchase, renew, and upgrade".to_string(),
+            ),
+        };
+    }
+    let quantity = value.unwrap_or(1);
+    if !(1..=MAX_MEMBERSHIP_ORDER_QUANTITY).contains(&quantity) {
+        return Err(format!(
+            "quantity must be between 1 and {MAX_MEMBERSHIP_ORDER_QUANTITY}"
+        ));
+    }
+    Ok(quantity)
+}
 
 /// 轻量金额正数校验（命令层为权威校验）。
 fn is_positive_money_text(value: Option<&str>) -> bool {
@@ -474,6 +511,7 @@ fn build_create_membership_command(
         input.source,
         input.grant_quantity,
         input.amount,
+        input.quantity,
     )
 }
 
@@ -569,8 +607,8 @@ mod tests {
 
     use super::{
         map_membership_order_outcome, membership_order_organization_scope, payment_scene,
-        provider_qr_code, validate_payment_method, validate_payment_product,
-        DEFAULT_PAYMENT_PRODUCT,
+        provider_qr_code, validate_membership_quantity, validate_payment_method,
+        validate_payment_product, CreateMembershipOrderRequest, DEFAULT_PAYMENT_PRODUCT,
     };
 
     #[test]
@@ -629,6 +667,47 @@ mod tests {
             provider_qr_code(&params).map(String::as_str),
             Some("weixin://wxpay/bizpayurl?pr=order")
         );
+    }
+
+    #[test]
+    fn membership_quantity_defaults_to_one_seat_and_is_bounded() {
+        assert_eq!(validate_membership_quantity(None, false).unwrap(), 1);
+        assert_eq!(validate_membership_quantity(Some(3), false).unwrap(), 3);
+        assert_eq!(
+            validate_membership_quantity(Some(10_000), false).unwrap(),
+            10_000
+        );
+        assert!(validate_membership_quantity(Some(0), false).is_err());
+        assert!(validate_membership_quantity(Some(-1), false).is_err());
+        assert!(validate_membership_quantity(Some(10_001), false).is_err());
+    }
+
+    #[test]
+    fn membership_quota_recharge_rejects_seat_quantity() {
+        assert_eq!(validate_membership_quantity(None, true).unwrap(), 1);
+        assert!(validate_membership_quantity(Some(1), true).is_err());
+        assert!(validate_membership_quantity(Some(3), true).is_err());
+    }
+
+    #[test]
+    fn membership_order_request_parses_int64_string_quantity() {
+        let request: CreateMembershipOrderRequest = serde_json::from_str(
+            r#"{"action":"purchase","packageId":"team-1","paymentMethod":"wechat_pay","quantity":"3"}"#,
+        )
+        .expect("int64 string quantity");
+        assert_eq!(request.quantity(), Some(3));
+
+        let numeric: CreateMembershipOrderRequest = serde_json::from_str(
+            r#"{"action":"purchase","packageId":"team-1","paymentMethod":"wechat_pay","quantity":4}"#,
+        )
+        .expect("numeric quantity");
+        assert_eq!(numeric.quantity(), Some(4));
+
+        let omitted: CreateMembershipOrderRequest = serde_json::from_str(
+            r#"{"action":"purchase","packageId":"team-1","paymentMethod":"wechat_pay"}"#,
+        )
+        .expect("omitted quantity");
+        assert_eq!(omitted.quantity(), None);
     }
 
     #[test]
