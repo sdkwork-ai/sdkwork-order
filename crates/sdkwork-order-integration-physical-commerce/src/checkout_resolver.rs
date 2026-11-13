@@ -214,6 +214,7 @@ impl PhysicalCheckoutAdapter {
         let query = ProductSkuRetrieveQuery {
             tenant_id: tenant_id.to_owned(),
             sku_id: sku_id.to_owned(),
+            locale: None,
         };
         match &self.catalog {
             CatalogStore::Postgres(store) => store.retrieve_sku(&query).await,
@@ -228,6 +229,7 @@ impl PhysicalCheckoutAdapter {
         let query = ProductSpuRetrieveQuery {
             tenant_id: tenant_id.to_owned(),
             spu_id: spu_id.to_owned(),
+            locale: None,
         };
         match &self.catalog {
             CatalogStore::Postgres(store) => store.retrieve_spu(&query).await,
