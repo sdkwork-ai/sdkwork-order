@@ -129,7 +129,7 @@
   "cashier": {
     "urlBuilder": "sdkwork-utils-rust::build_commerce_cashier_url",
     "baseUrlEnv": "SDKWORK_COMMERCE_CASHIER_BASE_URL",
-    "defaultBaseUrl": "https://im.sdkwork.com/cashier",
+    "defaultBaseUrl": "https://platform.sdkwork.com",
     "queryParams": ["scene", "orderId", "outTradeNo"],
     "orderIdWire": "business order_no (orderSn), not internal UUID",
     "paymentParamsKeys": ["cashierUrl", "nextAction", "orderSn", "cashierScene", "qrCodePayload"]

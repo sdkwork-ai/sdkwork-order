@@ -65,7 +65,7 @@ The reusable composed frontend service is `createSdkworkPhysicalPurchaseService`
 
 Webhook settlement carries the exact payment attempt identity through Payment and Order. The order-only operator replay fails with `409` when multiple attempts make the target ambiguous; replay the exact Payment webhook event for that case. A successful late payment preserves a terminal Order status and records the Order-owned late-payment audit event once.
 
-Cashier URL is returned in `orders.payments.create` outcome `paymentParams.cashierUrl`. Configure base URL with `SDKWORK_COMMERCE_CASHIER_BASE_URL` (default `https://im.sdkwork.com/cashier`).
+Cashier URL is returned in `orders.payments.create` outcome `paymentParams.cashierUrl`. Configure base URL with `SDKWORK_COMMERCE_CASHIER_BASE_URL` (default `https://platform.sdkwork.com`).
 
 **PC:** `sdkwork-order-pc` buyer surface at `/app/order`; operator admin at `/admin/orders` (`@sdkwork/order-backend-sdk`, permissions `commerce.orders.read` / `commerce.orders.manage`).  
 **H5 / Flutter:** consume `@sdkwork/order-app-sdk` and `@sdkwork/payment-app-sdk` from host shells; navigate to `cashierUrl` after pay.

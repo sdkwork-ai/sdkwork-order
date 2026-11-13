@@ -131,7 +131,7 @@ Authority: `../sdkwork-membership/specs/COMMERCE_ORDER_BOUNDARY_SPEC.md`, `../sd
 
 Cashier deep-links are built by `sdkwork-utils-rust`:
 
-- `commerce_cashier_base_url()` — env `SDKWORK_COMMERCE_CASHIER_BASE_URL`, default `https://im.sdkwork.com/cashier`
+- `commerce_cashier_base_url()` — env `SDKWORK_COMMERCE_CASHIER_BASE_URL`, default `https://platform.sdkwork.com`
 - `commerce_cashier_scene(order_subject)` — maps `points_recharge` → `recharge`, `product` → `checkout`
 - `build_commerce_cashier_url(scene, order_id, out_trade_no)`
 
