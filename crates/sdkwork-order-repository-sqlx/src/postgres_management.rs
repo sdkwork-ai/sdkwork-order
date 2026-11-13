@@ -34,7 +34,7 @@ SELECT
     TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expire_time,
     COALESCE(
         (
-            SELECT b.payable_amount
+            SELECT CAST(b.payable_amount AS TEXT)
             FROM commerce_order_amount_breakdown b
             WHERE b.tenant_id = o.tenant_id
               AND b.order_id = o.id
@@ -45,7 +45,7 @@ SELECT
     ) AS total_amount,
     COALESCE(
         (
-            SELECT b.discount_amount
+            SELECT CAST(b.discount_amount AS TEXT)
             FROM commerce_order_amount_breakdown b
             WHERE b.tenant_id = o.tenant_id
               AND b.order_id = o.id
@@ -56,7 +56,7 @@ SELECT
     ) AS discount_amount,
     COALESCE(
         (
-            SELECT SUM(oi.quantity)
+            SELECT CAST(SUM(oi.quantity) AS BIGINT)
             FROM commerce_order_item oi
             WHERE oi.tenant_id = o.tenant_id
               AND oi.order_id = o.id
@@ -208,7 +208,7 @@ impl PostgresCommerceOrderStore {
                 TO_CHAR(o.expired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expire_time,
                 COALESCE(
                     (
-                        SELECT b.payable_amount
+                        SELECT CAST(b.payable_amount AS TEXT)
                         FROM commerce_order_amount_breakdown b
                         WHERE b.tenant_id = o.tenant_id
                           AND b.order_id = o.id
@@ -219,7 +219,7 @@ impl PostgresCommerceOrderStore {
                 ) AS total_amount,
                 COALESCE(
                     (
-                        SELECT b.discount_amount
+                        SELECT CAST(b.discount_amount AS TEXT)
                         FROM commerce_order_amount_breakdown b
                         WHERE b.tenant_id = o.tenant_id
                           AND b.order_id = o.id
@@ -230,7 +230,7 @@ impl PostgresCommerceOrderStore {
                 ) AS discount_amount,
                 COALESCE(
                     (
-                        SELECT SUM(oi.quantity)
+                        SELECT CAST(SUM(oi.quantity) AS BIGINT)
                         FROM commerce_order_item oi
                         WHERE oi.tenant_id = o.tenant_id
                           AND oi.order_id = o.id
