@@ -414,6 +414,70 @@ async fn membership_settlement_forwards_the_paid_order_snapshot_exactly_once() {
 }
 
 #[tokio::test]
+async fn membership_seat_expansion_settles_with_the_added_seat_quantity() {
+    let payment_store = Arc::new(MockOwnerOrderPaymentStore::default());
+    let order_state_store = Arc::new(MockOwnerOrderPaymentStateStore::default());
+    let account_value_store = Arc::new(MockAccountValueFulfillmentStore::default());
+    let points_store = Arc::new(UnsupportedPointsRechargeStore);
+    let points_port = Arc::new(UnsupportedAccountPointsCreditPort);
+    let account_value_ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let membership_port = Arc::new(CapturingMembershipPurchaseFulfillmentPort::default());
+    let coupon_port = Arc::new(NoopCouponRedemptionPort);
+    let attempt = OrderPaymentSettlementAttempt {
+        tenant_id: "tenant-1".to_owned(),
+        organization_id: Some("org-9".to_owned()),
+        owner_user_id: "user-1".to_owned(),
+        order_id: "order-seat-expansion".to_owned(),
+        payment_attempt_id: None,
+        out_trade_no: None,
+    };
+    // `add_seats` carries the number of seats to ADD, not a new seat total, and
+    // never the quota-recharge payload.
+    let snapshot = MembershipPurchaseSettlementSnapshot {
+        action: "add_seats".to_owned(),
+        order_no: "MB-SEATS-1".to_owned(),
+        package_id: 303,
+        grant_quantity: None,
+        quantity: 5,
+    };
+
+    let outcome = settle_owner_order_after_payment_success(
+        OwnerOrderSettlementPorts {
+            payment_store: payment_store.as_ref(),
+            order_state_store: order_state_store.as_ref(),
+            recharge_store: points_store.as_ref(),
+            account_value_store: account_value_store.as_ref(),
+            credit_port: points_port.as_ref(),
+            account_value_ledger_port: account_value_ledger.as_ref(),
+            coupon_redemption_port: coupon_port.as_ref(),
+            membership_port: membership_port.as_ref(),
+            app_template_port: &NoopAppTemplatePurchaseFulfillmentPort,
+            physical_goods_port: &UnavailablePhysicalGoodsFulfillmentPort,
+            promotion_discount_port: &NoopPromotionDiscountPort,
+        },
+        &attempt,
+        Some("membership"),
+        Some(&snapshot),
+        "request-seat-expansion",
+    )
+    .await
+    .expect("seat expansion settlement");
+
+    assert!(outcome.fulfillment_accepted);
+    let requests = membership_port.requests();
+    assert_eq!(requests.len(), 1);
+    // The action reaches the membership port verbatim: fulfillment branches on
+    // `add_seats` instead of reusing `renew`.
+    assert_eq!(requests[0].action, "add_seats");
+    assert_eq!(requests[0].quantity, 5);
+    assert_eq!(requests[0].package_id, 303);
+    assert_eq!(
+        requests[0].idempotency_key,
+        "membership-purchase:fulfill:order-seat-expansion"
+    );
+}
+
+#[tokio::test]
 async fn coupon_recharge_consumes_coupon_before_crediting_token_bank() {
     let store = MockAccountValueFulfillmentStore::default();
     store.seed_context(coupon_context("50"));

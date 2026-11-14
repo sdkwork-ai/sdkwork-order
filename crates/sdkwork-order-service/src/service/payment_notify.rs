@@ -513,6 +513,10 @@ where
     let idempotency_key = membership_purchase_fulfillment_idempotency_key(&attempt.order_id);
     let outcome = membership_port
         .fulfill_membership_purchase(MembershipPurchaseFulfillmentRequest {
+            // The action is carried through untouched, so `add_seats` (席位扩容)
+            // reaches the membership port as seat expansion — never as `renew`,
+            // which would extend the subscription period. `quantity` is the
+            // number of seats to ADD for that action.
             action: snapshot.action.clone(),
             tenant_id: attempt.tenant_id.clone(),
             organization_id: attempt.organization_id.clone(),

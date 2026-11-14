@@ -8503,13 +8503,14 @@
               "purchase",
               "renew",
               "upgrade",
-              "recharge"
+              "recharge",
+              "add_seats"
             ],
-            "description": "Membership lifecycle action. Recharge adds quota to the current active subscription's entitlement account; it participates in business purchase-intent identity."
+            "description": "Membership lifecycle action. Recharge adds quota to the current active subscription's entitlement account. `add_seats` expands the buyer organization's existing active/grace-period team subscription by `quantity` seats without extending the period (charged at the package's full seat price for the current term); it participates in business purchase-intent identity."
           },
           "packageId": {
             "type": "string",
-            "description": "Catalog package external id (purchase/renew/upgrade). Recharge uses the synthetic 'membership-quota-recharge' package id and ignores the catalog."
+            "description": "Catalog package external id (purchase/renew/upgrade/add_seats). Recharge uses the synthetic 'membership-quota-recharge' package id and ignores the catalog."
           },
           "paymentMethod": {
             "type": "string"
@@ -8545,7 +8546,7 @@
             "format": "int64",
             "pattern": "^[0-9]+$",
             "default": "1",
-            "description": "Seat quantity for team/organization packages whose priceAmount is the price of one seat for one billing period. Defaults to 1; allowed for action purchase, renew, and upgrade; rejected for recharge.",
+            "description": "Seat quantity for team/organization packages whose priceAmount is the price of one seat for one billing period. Defaults to 1; allowed for action purchase, renew, upgrade, and add_seats; rejected for recharge. For `add_seats` it is the number of seats to ADD to the existing subscription (1..10000), not the new total.",
             "x-sdkwork-int64-string": true
           }
         }
@@ -8607,7 +8608,8 @@
               "purchase",
               "renew",
               "upgrade",
-              "recharge"
+              "recharge",
+              "add_seats"
             ]
           },
           "orderId": {

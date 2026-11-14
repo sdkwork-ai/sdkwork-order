@@ -2390,6 +2390,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkwork-iam-directory-repository-sqlx"
+version = "0.1.0"
+dependencies = [
+ "sdkwork-database-config",
+ "sdkwork-iam-context-service",
+ "sqlx",
+]
+
+[[package]]
 name = "sdkwork-iam-module-registry"
 version = "0.1.0"
 dependencies = [
@@ -2451,6 +2460,7 @@ dependencies = [
  "sdkwork-contract-service",
  "sdkwork-database-config",
  "sdkwork-database-sqlx",
+ "sdkwork-iam-directory-repository-sqlx",
  "sdkwork-utils-rust",
  "serde",
  "serde_json",

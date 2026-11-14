@@ -54,6 +54,9 @@ impl MembershipPurchaseFulfillmentPort for StoreMembershipFulfillmentAdapter {
                     .organization_id
                     .clone()
                     .filter(|value| !value.trim().is_empty()),
+                // 团队/组织套餐的席位数。`action = 'add_seats'` 时这是**要追加**
+                // 的席位数（会员侧执行 `seats_purchased += seats`），其余动作仍是
+                // 订单购买的席位总数。
                 seats: request.quantity.max(1),
                 package_id: request.package_id,
                 order_id: request.order_id,
@@ -62,6 +65,8 @@ impl MembershipPurchaseFulfillmentPort for StoreMembershipFulfillmentAdapter {
                 request_no: request.request_no,
                 idempotency_key: request.idempotency_key,
                 paid_at: request.paid_at,
+                // 动作原样透传：`add_seats` 在会员侧先于新建订阅路径分流，
+                // `purchase`/`renew`/`upgrade` 行为不变。
                 action: request.action,
             };
             let outcome = self.store.fulfill_paid_purchase(command).await?;

@@ -360,11 +360,14 @@ fn validate_membership_action(value: Option<&str>) -> Result<String, String> {
     let action = value.unwrap_or("purchase").trim().to_ascii_lowercase();
     if matches!(
         action.as_str(),
-        "purchase" | "renew" | "upgrade" | "recharge"
+        "purchase" | "renew" | "upgrade" | "recharge" | "add_seats"
     ) {
         return Ok(action);
     }
-    Err("membership action must be one of: purchase, renew, upgrade, recharge".to_string())
+    Err(
+        "membership action must be one of: purchase, renew, upgrade, recharge, add_seats"
+            .to_string(),
+    )
 }
 
 /// 订阅期额度充值的合成包标识（不依赖目录套餐）。
@@ -372,12 +375,16 @@ const MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID: &str = "membership-quota-recharge";
 
 /// 席位数量校验：购买类动作允许 1..=10000（缺省为单席位）；充值是额度包，
 /// 不按席位售卖，显式传 quantity 一律视为校验错误。
+///
+/// `add_seats`（席位扩容）的 quantity 是**要追加**的席位数，而不是续费或
+/// 购买后的席位总数：它同样落在 1..=10000，并且不能缺省为 0。
 fn validate_membership_quantity(value: Option<i64>, is_recharge: bool) -> Result<i64, String> {
     if is_recharge {
         return match value {
             None => Ok(1),
             Some(_) => Err(
-                "quantity is only valid for membership purchase, renew, and upgrade".to_string(),
+                "quantity is only valid for membership purchase, renew, upgrade, and add_seats"
+                    .to_string(),
             ),
         };
     }
@@ -607,9 +614,41 @@ mod tests {
 
     use super::{
         map_membership_order_outcome, membership_order_organization_scope, payment_scene,
-        provider_qr_code, validate_membership_quantity, validate_payment_method,
-        validate_payment_product, CreateMembershipOrderRequest, DEFAULT_PAYMENT_PRODUCT,
+        provider_qr_code, validate_membership_action, validate_membership_quantity,
+        validate_payment_method, validate_payment_product, CreateMembershipOrderRequest,
+        DEFAULT_PAYMENT_PRODUCT,
     };
+
+    #[test]
+    fn membership_action_accepts_seat_expansion_and_rejects_unknown_actions() {
+        assert_eq!(
+            validate_membership_action(Some(" ADD_SEATS ")).expect("seat expansion action"),
+            "add_seats"
+        );
+        for action in [
+            "purchase",
+            "renew",
+            "upgrade",
+            "recharge",
+        ] {
+            assert_eq!(
+                validate_membership_action(Some(action)).expect("existing membership action"),
+                action
+            );
+        }
+        assert_eq!(validate_membership_action(None).expect("default action"), "purchase");
+        assert!(validate_membership_action(Some("expand")).is_err());
+    }
+
+    #[test]
+    fn membership_seat_expansion_requires_a_positive_bounded_quantity() {
+        // `add_seats` quantity is the number of seats to ADD; the same 1..=10000
+        // bound as every other seat-priced action applies and 0 is rejected.
+        assert_eq!(validate_membership_quantity(Some(5), false).unwrap(), 5);
+        assert!(validate_membership_quantity(Some(0), false).is_err());
+        assert!(validate_membership_quantity(Some(-5), false).is_err());
+        assert!(validate_membership_quantity(Some(10_001), false).is_err());
+    }
 
     #[test]
     fn defaults_to_order_bound_mobile_cashier_product() {
