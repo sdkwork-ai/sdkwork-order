@@ -37,7 +37,7 @@ pub(crate) fn membership_purchase_snapshot(
         .to_ascii_lowercase();
     if !matches!(
         action.as_str(),
-        "purchase" | "renew" | "upgrade" | "recharge"
+        "purchase" | "renew" | "upgrade" | "recharge" | "add_seats"
     ) {
         return Err(CommerceServiceError::invalid_state(
             "membership order item snapshot action is invalid",
@@ -71,6 +71,8 @@ pub(crate) fn membership_purchase_snapshot(
             )
         })?;
     // 团队/组织套餐按席位售卖；旧快照没有 quantity 时按单席位处理。
+    // `add_seats` 订单的 quantity 是**要追加**的席位数，随快照原样透传给
+    // 会员侧履约端口（`membership_subscription.seats_purchased += quantity`）。
     let quantity = membership_snapshot_quantity(&value)?;
 
     Ok(Some(MembershipPurchaseSettlementSnapshot {
@@ -191,6 +193,24 @@ mod tests {
             Some(r#"{"packageId":"21","quantity":"three"}"#),
         )
         .is_err());
+    }
+
+    #[test]
+    fn membership_snapshot_carries_the_seat_expansion_action() {
+        let snapshot = membership_purchase_snapshot(
+            "membership",
+            "MB-8",
+            Some(" ADD_SEATS "),
+            Some(r#"{"packageId":"21","quantity":5,"action":"add_seats"}"#),
+        )
+        .expect("valid seat expansion snapshot")
+        .expect("membership snapshot");
+
+        assert_eq!(snapshot.action, "add_seats");
+        assert_eq!(snapshot.package_id, 21);
+        // The carried quantity is the number of seats to ADD, not a new total.
+        assert_eq!(snapshot.quantity, 5);
+        assert_eq!(snapshot.grant_quantity, None);
     }
 
     #[test]

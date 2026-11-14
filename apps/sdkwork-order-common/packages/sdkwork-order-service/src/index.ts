@@ -107,22 +107,62 @@ export interface CreateSdkworkPhysicalPurchaseServiceOptions {
   appService?: SdkworkOrderAppService;
 }
 
-export type SdkworkMembershipCheckoutAction = "purchase" | "renew" | "upgrade" | "recharge";
+/**
+ * Membership lifecycle actions accepted by
+ * `POST /app/v3/api/memberships/orders`.
+ *
+ * `add_seats` (席位扩容) grows the buyer organization's existing active team
+ * subscription by `quantity` seats. It never extends the subscription period:
+ * `renew` remains the period-extension action.
+ */
+export type SdkworkMembershipCheckoutAction =
+  | "purchase"
+  | "renew"
+  | "upgrade"
+  | "recharge"
+  | "add_seats";
 
-export interface SdkworkMembershipCheckoutInput {
+/** Checkout actions priced from a catalog package, which must name one. */
+export type SdkworkMembershipCatalogCheckoutAction = Exclude<
+  SdkworkMembershipCheckoutAction,
+  "recharge"
+>;
+
+export interface SdkworkMembershipCheckoutBaseInput {
   /** Stable within one purchase attempt so retried orders dedupe. */
   idempotencyKey?: string;
-  action: SdkworkMembershipCheckoutAction;
-  packageId: number;
   paymentMethod?: string;
   paymentProduct?: "alipay_native" | "mobile_cashier_h5" | "wechat_native";
-  /** Seat quantity for organization (team) packages; 1 for personal packages. */
+  /**
+   * Seat quantity for organization (team) packages; 1 for personal packages.
+   *
+   * `action = "add_seats"` sends the number of seats to ADD, never the new
+   * total.
+   */
   quantity?: number;
   /** 订阅期额度充值数量（仅 action=recharge）。 */
   grantQuantity?: number;
   /** 订阅期额度充值金额（仅 action=recharge，货币金额字符串）。 */
   amountCny?: string;
 }
+
+/**
+ * Checkout input for `POST /app/v3/api/memberships/orders`.
+ *
+ * Mirrors the membership `SdkworkMembershipCheckoutPort` contract: `packageId`
+ * is required for every catalog action and optional only for `recharge`, which
+ * is priced from `grantQuantity` + `amountCny`. The order service sends the
+ * synthetic recharge package id when a recharge omits one.
+ */
+export type SdkworkMembershipCheckoutInput =
+  | (SdkworkMembershipCheckoutBaseInput & {
+      action: SdkworkMembershipCatalogCheckoutAction;
+      packageId: number;
+    })
+  | (SdkworkMembershipCheckoutBaseInput & {
+      action: "recharge";
+      packageId?: number;
+    });
 
 export interface SdkworkMembershipCheckoutPayment {
   action?: SdkworkMembershipCheckoutAction;
@@ -703,6 +743,13 @@ export function createSdkworkCouponRechargeService(
   };
 }
 
+/**
+ * Synthetic package id the order service assigns to subscription-quota recharge
+ * orders. Recharge is priced from its grant quantity and amount, so the catalog
+ * is never consulted, but the wire contract still requires a package id.
+ */
+const MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID = "membership-quota-recharge";
+
 export function createSdkworkMembershipCheckoutService(
   options: CreateSdkworkMembershipCheckoutServiceOptions = {},
 ): SdkworkMembershipCheckoutService {
@@ -721,8 +768,15 @@ export function createSdkworkMembershipCheckoutService(
           throw new Error("Membership quota recharge requires a positive grantQuantity and amount.");
         }
       }
-      const packageId = String(input.packageId).trim();
-      if (!isRecharge && (!packageId || input.packageId <= 0)) {
+      // Recharge is priced from grantQuantity + amountCny, so a caller may omit
+      // `packageId`; the wire contract still carries the synthetic id the server
+      // assigns to quota recharge orders.
+      const packageId = input.action === "recharge"
+        ? (input.packageId === undefined
+          ? MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID
+          : String(input.packageId).trim())
+        : String(input.packageId).trim();
+      if (input.action !== "recharge" && (!packageId || input.packageId <= 0)) {
         throw new Error("A valid membership package is required.");
       }
 
@@ -742,7 +796,8 @@ export function createSdkworkMembershipCheckoutService(
         packageId,
         paymentMethod,
         paymentProduct,
-        // Seat quantity applies to purchase/renew/upgrade only; recharge rejects it.
+        // Seat quantity applies to purchase/renew/upgrade/add_seats only;
+        // recharge rejects it.
         ...(quantity !== undefined && !isRecharge ? { quantity } : {}),
         ...(isRecharge
           ? { grantQuantity: String(input.grantQuantity), amount: input.amountCny?.trim() }
@@ -1076,7 +1131,7 @@ function normalizeCouponRechargeResult(value: unknown): SdkworkCouponRedemptionR
 
 function normalizeMembershipCheckoutPayment(
   value: unknown,
-  fallbackPackageId: number,
+  fallbackPackageId: number | undefined,
   paymentProduct: SdkworkMembershipCheckoutInput["paymentProduct"],
 ): SdkworkMembershipCheckoutPayment {
   const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -1100,7 +1155,7 @@ function normalizeMembershipCheckoutPayment(
     durationDays: toNullableSdkworkOrderNumber(record.durationDays),
     expiresAt: toSdkworkOrderOptionalString(record.expiresAt),
     orderId: toSdkworkOrderOptionalString(record.orderId ?? record.id),
-    packageId: toNullableSdkworkOrderNumber(record.packageId) ?? fallbackPackageId,
+    packageId: toNullableSdkworkOrderNumber(record.packageId) ?? fallbackPackageId ?? null,
     packageName: toSdkworkOrderOptionalString(record.packageName),
     qrCode: paymentProduct === "mobile_cashier_h5" ? cashierUrl : providerQrCode ?? cashierUrl,
     reused: record.reused === true,

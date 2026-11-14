@@ -1,5 +1,5 @@
 export interface MembershipOrderCreateResult {
-  action: 'purchase' | 'renew' | 'upgrade' | 'recharge';
+  action: 'purchase' | 'renew' | 'upgrade' | 'recharge' | 'add_seats';
   orderId: string;
   orderNo: string;
   outTradeNo: string;

@@ -25,6 +25,12 @@ pub(crate) fn membership_order_request_fingerprint(
 /// requests for the same package with different seat counts never reuse each
 /// other's pending order. For a single-seat order the total equals the unit
 /// price, which keeps the historical identity stable.
+///
+/// `action` is part of both the transport fingerprint and this intent key, so an
+/// `add_seats` (席位扩容) order can never collide with the `renew` order that
+/// would extend the subscription period: they are distinct business intents for
+/// the same package. Two `add_seats` orders that add a different seat count also
+/// differ, because the intent key carries the total.
 pub(crate) fn membership_purchase_intent_key(
     command: &CreateMembershipOrderCommand,
     sku_id: &str,

@@ -42,6 +42,13 @@ fn catalog_sql(template: &'static str) -> String {
 /// purchased seat quantity. Both the unit price and the result are canonical
 /// integer smallest-unit currency strings, so `quantity = 1` reproduces the
 /// historical single-seat total exactly.
+///
+/// Pricing note (`action = 'add_seats'`, 席位扩容): `quantity` is the number of
+/// seats to ADD to the buyer organization's existing subscription, and those
+/// seats are charged at the package's **full seat price for the current term**.
+/// The order neither extends `starts_at`/`expires_at` nor prorates the remaining
+/// term, so the total is computed exactly like a first purchase. Day-based
+/// proration is deliberately not implemented.
 fn membership_order_total(unit_price: &str, quantity: i64) -> Result<String, CommerceServiceError> {
     if !(1..=MAX_MEMBERSHIP_ORDER_QUANTITY).contains(&quantity) {
         return Err(CommerceServiceError::validation(
@@ -872,5 +879,54 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&snapshot).expect("snapshot json");
         assert_eq!(value["quantity"], 3);
         assert_eq!(value["packageId"], "team-package-1");
+    }
+
+    /// Seat expansion bills the added seats at the package's full seat price for
+    /// the current term: no period extension and no proration. The order total is
+    /// therefore `seat unit price × added seats`, exactly like a first purchase.
+    #[test]
+    fn postgres_seat_expansion_charges_the_full_seat_price_for_added_seats() {
+        assert_eq!(membership_order_total("6800", 5).unwrap(), "34000");
+        assert_eq!(membership_order_total("6800", 1).unwrap(), "6800");
+
+        let command = CreateMembershipOrderCommand::new(
+            "tenant-1",
+            Some("org-1"),
+            "user-1",
+            "team-package-1",
+            "add_seats",
+            "wechat_pay",
+            "wechat_native",
+            "order-2",
+            "item-2",
+            "MB2",
+            "MEMBERSHIP2",
+            "2026-07-26T00:00:00Z",
+            "2026-07-26T00:30:00Z",
+            "idem-2",
+            None,
+            None,
+            None,
+            None,
+            5,
+        )
+        .expect("seat expansion command");
+        let package = MembershipPackageCatalog {
+            package_external_id: "team-package-1".to_owned(),
+            package_name: "Team Seats".to_owned(),
+            price_amount: CommerceMoney::new("6800").expect("unit price"),
+            currency_code: "CNY".to_owned(),
+            duration_days: 30,
+            sku_id: "sku-team-1".to_owned(),
+            product_name: "Team Seats".to_owned(),
+        };
+
+        let snapshot = membership_order_item_snapshot_json(&package, &command, "wechat_pay");
+        let value: serde_json::Value = serde_json::from_str(&snapshot).expect("snapshot json");
+        // The settlement snapshot carries the action and the added seat count so
+        // membership fulfillment can branch on `add_seats` before the
+        // new-subscription path.
+        assert_eq!(value["action"], "add_seats");
+        assert_eq!(value["quantity"], 5);
     }
 }

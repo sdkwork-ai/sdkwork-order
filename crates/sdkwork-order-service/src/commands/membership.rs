@@ -74,12 +74,17 @@ impl CreateMembershipOrderCommand {
         let action = action.trim().to_ascii_lowercase();
         if !matches!(
             action.as_str(),
-            "purchase" | "renew" | "upgrade" | "recharge"
+            "purchase" | "renew" | "upgrade" | "recharge" | "add_seats"
         ) {
             return Err(CommerceServiceError::validation(
-                "membership action must be one of: purchase, renew, upgrade, recharge",
+                "membership action must be one of: purchase, renew, upgrade, recharge, add_seats",
             ));
         }
+        // `quantity` is the seat count for every seat-priced team action. For
+        // `add_seats` (席位扩容) it is the number of seats to ADD to the buyer
+        // organization's active subscription; the subscription period is never
+        // extended and no proration is applied, so the added seats are billed at
+        // the package's full seat price for the current term.
         if !(1..=MAX_MEMBERSHIP_ORDER_QUANTITY).contains(&quantity) {
             return Err(CommerceServiceError::validation(
                 "membership order quantity must be between 1 and 10000",
@@ -110,6 +115,18 @@ impl CreateMembershipOrderCommand {
         } else if grant_quantity.is_some() || amount.is_some() {
             return Err(CommerceServiceError::validation(
                 "grantQuantity and amount are only valid for membership quota recharge",
+            ));
+        }
+        if action == "add_seats"
+            && organization_id
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .is_none()
+        {
+            // Seat expansion grows the buyer organization's existing team
+            // subscription, so it can never be started from a personal scope.
+            return Err(CommerceServiceError::validation(
+                "membership seat expansion requires an organization scope",
             ));
         }
         let requested_at_value = parse_datetime(requested_at.trim(), None).ok_or_else(|| {
@@ -472,5 +489,174 @@ mod tests {
             3,
         )
         .is_err());
+    }
+
+    #[test]
+    fn membership_command_accepts_seat_expansion_without_recharge_fields() {
+        let value = CreateMembershipOrderCommand::new(
+            "tenant-1",
+            Some("org-1"),
+            "user-1",
+            "team-package-1",
+            " ADD_SEATS ",
+            "wechat_pay",
+            "wechat_native",
+            "order-1",
+            "item-1",
+            "MB1",
+            "MEMBERSHIP1",
+            "2026-07-26T00:00:00Z",
+            "2026-07-26T00:30:00Z",
+            "idem-1",
+            None,
+            None,
+            None,
+            None,
+            5,
+        )
+        .expect("valid seat expansion command");
+
+        // The action is normalized and the quantity is the number of seats to
+        // ADD; seat expansion never carries the quota-recharge fields.
+        assert_eq!(value.action, "add_seats");
+        assert_eq!(value.quantity, 5);
+        assert_eq!(value.grant_quantity, None);
+        assert_eq!(value.amount, None);
+    }
+
+    #[test]
+    fn membership_command_rejects_seat_expansion_with_recharge_fields() {
+        assert!(CreateMembershipOrderCommand::new(
+            "tenant-1",
+            Some("org-1"),
+            "user-1",
+            "team-package-1",
+            "add_seats",
+            "wechat_pay",
+            "wechat_native",
+            "order-1",
+            "item-1",
+            "MB1",
+            "MEMBERSHIP1",
+            "2026-07-26T00:00:00Z",
+            "2026-07-26T00:30:00Z",
+            "idem-1",
+            None,
+            None,
+            Some(100),
+            None,
+            5,
+        )
+        .is_err());
+        assert!(CreateMembershipOrderCommand::new(
+            "tenant-1",
+            Some("org-1"),
+            "user-1",
+            "team-package-1",
+            "add_seats",
+            "wechat_pay",
+            "wechat_native",
+            "order-1",
+            "item-1",
+            "MB1",
+            "MEMBERSHIP1",
+            "2026-07-26T00:00:00Z",
+            "2026-07-26T00:30:00Z",
+            "idem-1",
+            None,
+            None,
+            None,
+            Some("10.00"),
+            5,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn membership_command_requires_an_organization_scope_for_seat_expansion() {
+        for organization_id in [None, Some("   ")] {
+            assert!(
+                CreateMembershipOrderCommand::new(
+                    "tenant-1",
+                    organization_id,
+                    "user-1",
+                    "team-package-1",
+                    "add_seats",
+                    "wechat_pay",
+                    "wechat_native",
+                    "order-1",
+                    "item-1",
+                    "MB1",
+                    "MEMBERSHIP1",
+                    "2026-07-26T00:00:00Z",
+                    "2026-07-26T00:30:00Z",
+                    "idem-1",
+                    None,
+                    None,
+                    None,
+                    None,
+                    5,
+                )
+                .is_err(),
+                "add_seats must reject a personal (organization-less) scope"
+            );
+        }
+    }
+
+    #[test]
+    fn membership_command_bounds_the_added_seat_quantity() {
+        for quantity in [0, -1, MAX_MEMBERSHIP_ORDER_QUANTITY + 1] {
+            assert!(
+                CreateMembershipOrderCommand::new(
+                    "tenant-1",
+                    Some("org-1"),
+                    "user-1",
+                    "team-package-1",
+                    "add_seats",
+                    "wechat_pay",
+                    "wechat_native",
+                    "order-1",
+                    "item-1",
+                    "MB1",
+                    "MEMBERSHIP1",
+                    "2026-07-26T00:00:00Z",
+                    "2026-07-26T00:30:00Z",
+                    "idem-1",
+                    None,
+                    None,
+                    None,
+                    None,
+                    quantity,
+                )
+                .is_err(),
+                "add_seats quantity {quantity} must be rejected"
+            );
+        }
+        assert_eq!(
+            CreateMembershipOrderCommand::new(
+                "tenant-1",
+                Some("org-1"),
+                "user-1",
+                "team-package-1",
+                "add_seats",
+                "wechat_pay",
+                "wechat_native",
+                "order-1",
+                "item-1",
+                "MB1",
+                "MEMBERSHIP1",
+                "2026-07-26T00:00:00Z",
+                "2026-07-26T00:30:00Z",
+                "idem-1",
+                None,
+                None,
+                None,
+                None,
+                MAX_MEMBERSHIP_ORDER_QUANTITY,
+            )
+            .expect("maximum seat expansion command")
+            .quantity,
+            MAX_MEMBERSHIP_ORDER_QUANTITY
+        );
     }
 }
