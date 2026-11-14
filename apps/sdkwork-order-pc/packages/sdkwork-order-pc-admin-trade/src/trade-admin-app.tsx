@@ -65,6 +65,7 @@ export function SdkworkOrderTradeCenterAdminApp({
         <SdkworkOrderAdminOrdersPage
           capabilities={{ canManageOrders: capabilities.canManageOrders, canConfirmPayment: capabilities.canConfirmPayment }}
           locale={locale}
+          messages={messages}
           service={services?.orders}
         />
       );

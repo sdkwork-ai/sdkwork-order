@@ -50,6 +50,47 @@ describe("SdkworkOrderTradeWorkbenchPage", () => {
     expect(screen.getByText("99.00")).toBeInTheDocument();
   });
 
+  it("localizes machine order subjects instead of rendering raw database codes", async () => {
+    const service = {
+      getWorkbenchSummary: vi.fn(async () => ({
+        pendingAfterSales: 0,
+        pendingRefunds: 0,
+        pendingShipments: 0,
+        pendingWithdrawals: 0,
+        pendingCancellations: 0,
+        recentOrders: [
+          {
+            orderId: "order-points",
+            orderSn: "ORDER-POINTS",
+            status: "pending_payment",
+            statusName: "Pending payment",
+            subject: "points_recharge",
+            totalAmount: "500.00",
+            quantity: "1",
+            createdAt: "2026-07-18T00:00:00.000Z",
+          },
+          {
+            orderId: "order-token-bank",
+            orderSn: "ORDER-TOKEN-BANK",
+            status: "paid",
+            statusName: "Paid",
+            subject: "token_bank_recharge",
+            totalAmount: "500.00",
+            quantity: "1",
+            createdAt: "2026-07-18T00:01:00.000Z",
+          },
+        ],
+      })),
+    };
+
+    render(<SdkworkOrderTradeWorkbenchPage service={service as never} />);
+
+    await waitFor(() => expect(screen.getByText("会员积分充值")).toBeInTheDocument());
+    expect(screen.getByText("Token Bank 充值")).toBeInTheDocument();
+    expect(screen.queryByText("points_recharge")).toBeNull();
+    expect(screen.queryByText("token_bank_recharge")).toBeNull();
+  });
+
   it("shows quick entry links for every trade module", async () => {
     render(<SdkworkOrderTradeWorkbenchPage service={createServiceStub() as never} />);
 

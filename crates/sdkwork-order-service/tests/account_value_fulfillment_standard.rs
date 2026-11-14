@@ -373,6 +373,7 @@ async fn membership_settlement_forwards_the_paid_order_snapshot_exactly_once() {
         order_no: "MB-UPGRADE-1".to_owned(),
         package_id: 202,
         grant_quantity: None,
+        quantity: 3,
     };
 
     let outcome = settle_owner_order_after_payment_success(
@@ -404,6 +405,7 @@ async fn membership_settlement_forwards_the_paid_order_snapshot_exactly_once() {
     assert_eq!(requests[0].action, "upgrade");
     assert_eq!(requests[0].order_no, "MB-UPGRADE-1");
     assert_eq!(requests[0].package_id, 202);
+    assert_eq!(requests[0].quantity, 3);
     assert_eq!(requests[0].paid_at, "2026-07-08T00:00:00Z");
     assert_eq!(
         requests[0].idempotency_key,

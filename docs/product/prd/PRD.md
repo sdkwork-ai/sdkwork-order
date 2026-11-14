@@ -128,7 +128,7 @@ None blocking the account value order architecture. Platform ingress rate-limit 
 
 | Subject | Automated fulfillment in order gateway |
 | --- | --- |
-| `points_recharge` | Complete - wallet credit via Account service after payment |
+| `points_recharge` | Complete - **Membership Points** (`points`) ledger credit via Account service after payment. Not a Token Bank top-up. |
 | `token_bank_recharge` | Implemented settlement path - Token Bank credit via Account service after payment |
 | `token_bank_plan_purchase` | Implemented settlement path - first-cycle Token Bank grant through Account service after payment |
 | `token_bank_plan_renewal` | Implemented settlement path - renewal Token Bank grant through Account service after provider renewal payment |

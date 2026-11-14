@@ -193,6 +193,32 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "orders.receipts.confirm",
     )
     .with_idempotent(true),
+    // === Anonymous cashier (capability-token authenticated, no session) ===
+    // The scanned QR must work without signing in. Authorization is the signed
+    // cashier token in the path; these routes are public and declare the anonymous
+    // auth mode in the OpenAPI authority.
+    HttpRoute::public(
+        HttpMethod::Get,
+        "/app/v3/api/cashier/{token}",
+        "cashier",
+        "cashier.retrieve",
+    ),
+    // Idempotency is server-derived (`tokenId` + method), so the route does not
+    // declare `with_idempotent`: that marker requires a client-supplied
+    // `Idempotency-Key` header, and a caller-chosen key would let a retry create a
+    // second payment for the same order.
+    HttpRoute::public(
+        HttpMethod::Post,
+        "/app/v3/api/cashier/{token}/payments",
+        "cashier",
+        "cashier.payments.create",
+    ),
+    HttpRoute::public(
+        HttpMethod::Get,
+        "/app/v3/api/cashier/{token}/status",
+        "cashier",
+        "cashier.status.retrieve",
+    ),
     // === Payment webhooks (PSP callbacks; no user token) ===
     HttpRoute::public(
         HttpMethod::Post,
@@ -410,11 +436,12 @@ mod tests {
                 || route.path.contains("/recharges/packages")
                 || route.path.contains("/recharges/plans")
                 || route.path.contains("/recharges/settings")
+                || route.path.contains("/cashier/")
             {
                 assert_eq!(
                     route.auth,
                     RouteAuth::Public,
-                    "provider webhook routes must be public"
+                    "provider webhook and anonymous cashier routes must be public"
                 );
                 continue;
             }

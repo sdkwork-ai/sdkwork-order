@@ -19,6 +19,7 @@ import {
 import { useTradeAdminLink } from "../navigation";
 import { Button, LoadingBlock, StatusNotice } from "@sdkwork/ui-pc-react";
 import { getSdkworkOrderBackendSdkClient } from "@sdkwork/order-pc-admin-core";
+import { localizeSdkworkOrderSubject } from "@sdkwork/order-pc-core/subject";
 import {
   createTradeAdminService,
   type TradeAdminService,
@@ -193,7 +194,7 @@ function TradeWorkbenchPageInner({ service: injectedService }: { service?: Trade
               <li key={order.orderId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <Link href="/admin/trade/orders" className="min-w-0">
                   <p className="truncate text-sm font-semibold text-[var(--sdk-color-text-primary)] transition-colors hover:text-[var(--sdk-color-brand-primary)]">
-                    {order.subject || order.orderSn || order.orderId}
+                    {localizeSdkworkOrderSubject(order.subject, t) || order.orderSn || order.orderId}
                   </p>
                   <p className="mt-0.5 truncate font-mono text-xs text-[var(--sdk-color-text-muted)]">
                     {order.orderSn || order.orderId}

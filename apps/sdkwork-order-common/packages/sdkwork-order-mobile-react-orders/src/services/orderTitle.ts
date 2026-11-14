@@ -29,6 +29,21 @@ const KNOWN_SUBJECT_KEYS: Readonly<Record<string, string>> = {
   "points recharge": "orders.subject_points_recharge",
   token_bank_recharge: "orders.subject_token_bank_recharge",
   "token bank recharge": "orders.subject_token_bank_recharge",
+  token_bank_plan_purchase: "orders.subject_token_bank_plan_purchase",
+  "token bank plan purchase": "orders.subject_token_bank_plan_purchase",
+  token_bank_plan_renewal: "orders.subject_token_bank_plan_renewal",
+  "token bank plan renewal": "orders.subject_token_bank_plan_renewal",
+  account_recharge_package: "orders.subject_account_recharge_package",
+  "account recharge package": "orders.subject_account_recharge_package",
+  coupon_recharge: "orders.subject_coupon_recharge",
+  "coupon recharge": "orders.subject_coupon_recharge",
+  refund_request: "orders.subject_refund_request",
+  "refund request": "orders.subject_refund_request",
+  cash_withdrawal: "orders.subject_cash_withdrawal",
+  "cash withdrawal": "orders.subject_cash_withdrawal",
+  product: "orders.subject_product",
+  virtual_goods: "orders.subject_virtual_goods",
+  "virtual goods": "orders.subject_virtual_goods",
 };
 
 /** Normalizes a backend label for matching: trim, lowercase, `_` → space. */

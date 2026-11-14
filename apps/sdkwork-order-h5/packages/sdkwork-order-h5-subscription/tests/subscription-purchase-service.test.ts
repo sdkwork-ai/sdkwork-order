@@ -96,6 +96,7 @@ describe("subscription purchase service", () => {
       listTokenBankPlans: vi.fn().mockResolvedValue([
         {
           planCode: "tb-100",
+          planPeriod: "once",
           priceAmount: "10000",
           currencyCode: "CNY",
           grantAmount: "100000000",
@@ -112,12 +113,16 @@ describe("subscription purchase service", () => {
     const payment = await service.createRechargeOrder("tb-100", "wechat_pay");
 
     const [body] = vi.mocked(appService.recharges.orders.create).mock.calls[0];
+    // Token Bank top-ups are account-value orders: the subject and target asset
+    // must credit the Token Bank, never the membership-points account, and the
+    // client must not send a grantAmount (the server prices it).
     expect(body).toMatchObject({
-      subject: "points_recharge",
-      targetAsset: "points",
+      subject: "token_bank_recharge",
+      targetAsset: "token_bank",
       packageId: "tb-100",
       paymentProduct: "mobile_cashier_h5",
     });
+    expect(body).not.toHaveProperty("grantAmount");
     expect(payment.orderId).toBe("recharge-order-1");
     expect(payment.cashierUrl).toBe("https://cashier.example/pay");
     expect(payment.status).toBe("pending");

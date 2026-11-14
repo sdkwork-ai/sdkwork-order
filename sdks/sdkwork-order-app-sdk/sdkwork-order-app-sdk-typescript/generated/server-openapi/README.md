@@ -27,7 +27,11 @@ client.setAuthToken('your-auth-token');
 client.setAccessToken('your-access-token');
 
 // Use the SDK
-const result = await client.orderDemandClaims.demandClaims.statistics.retrieve();
+const token = 'token';
+const body = {
+  paymentMethod: 'wechat_pay',
+};
+const result = await client.orderCashier.cashier.payments.create(token, body);
 ```
 
 ## Authentication
@@ -65,6 +69,7 @@ const client = new SdkworkAppClient({
 - `client.orderWithdrawals` - order_withdrawals API
 - `client.orderAppTemplates` - order_app_templates API
 - `client.orderDemandClaims` - order_demand_claims API
+- `client.orderCashier` - order_cashier API
 
 ## Usage Examples
 
@@ -149,6 +154,7 @@ const body = {
   source: 'source',
   grantQuantity: 'grantQuantity',
   amount: 'amount',
+  quantity: 'quantity',
 };
 const idempotencyKey = 'Idempotency-Key';
 const params = {
@@ -183,13 +189,28 @@ const result = await client.orderAppTemplates.appTemplateOrders.list(params);
 const result = await client.orderDemandClaims.demandClaims.statistics.retrieve();
 ```
 
+### order_cashier
+
+```typescript
+// Create a payment from an anonymous cashier link.
+const token = 'token';
+const body = {
+  paymentMethod: 'wechat_pay',
+};
+const result = await client.orderCashier.cashier.payments.create(token, body);
+```
+
 ## Error Handling
 
 ```typescript
 import { SdkworkAppClient, NetworkError, TimeoutError, AuthenticationError } from '@sdkwork/order-app-sdk';
 
 try {
-  const result = await client.orderDemandClaims.demandClaims.statistics.retrieve();
+  const token = 'token';
+  const body = {
+    paymentMethod: 'wechat_pay',
+  };
+  const result = await client.orderCashier.cashier.payments.create(token, body);
 } catch (error) {
   if (error instanceof AuthenticationError) {
     console.error('Authentication failed:', error.message);

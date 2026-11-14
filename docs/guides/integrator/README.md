@@ -21,7 +21,7 @@ pnpm sdk:generate:backend
 
 - App routes require IAM session context (`AuthToken` / `Access-Token` per OpenAPI).
 - Backend routes require organization-scoped IAM with permissions such as `commerce.orders.read` and `commerce.orders.manage`.
-- Points-recharge fulfillment credits the account wallet through `SDKWORK_ACCESS_TOKEN` (Bearer) unless `SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE=1` is set for local development only.
+- Points-recharge fulfillment credits the **points** account ledger (not the cash wallet or Token Bank) through `SDKWORK_ACCESS_TOKEN` (Bearer) unless `SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE=1` is set for local development only. Token Bank recharges use the account value ledger port instead.
 
 ## Response Envelope
 

@@ -1,5 +1,7 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
-use sdkwork_order_service::{CreateMembershipOrderCommand, CreateMembershipOrderOutcome};
+use sdkwork_order_service::{
+    CreateMembershipOrderCommand, CreateMembershipOrderOutcome, MAX_MEMBERSHIP_ORDER_QUANTITY,
+};
 use sdkwork_utils_rust::{build_commerce_cashier_url_with_base, commerce_cashier_scene};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
@@ -7,6 +9,7 @@ use crate::membership_order_identity::{
     ensure_membership_request_fingerprint_matches, membership_order_request_fingerprint,
     membership_purchase_intent_key,
 };
+use crate::money_amount::multiply_money_amount;
 use crate::recharge_platform_catalog::materialize_platform_catalog_sql;
 
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
@@ -33,6 +36,19 @@ fn recharge_membership_package(command: &CreateMembershipOrderCommand) -> Member
 
 fn catalog_sql(template: &'static str) -> String {
     materialize_platform_catalog_sql(template)
+}
+
+/// Computes a membership order's total from the per-seat unit price and the
+/// purchased seat quantity. Both the unit price and the result are canonical
+/// integer smallest-unit currency strings, so `quantity = 1` reproduces the
+/// historical single-seat total exactly.
+fn membership_order_total(unit_price: &str, quantity: i64) -> Result<String, CommerceServiceError> {
+    if !(1..=MAX_MEMBERSHIP_ORDER_QUANTITY).contains(&quantity) {
+        return Err(CommerceServiceError::validation(
+            "membership order quantity must be between 1 and 10000",
+        ));
+    }
+    multiply_money_amount(unit_price, quantity)
 }
 
 const LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID: &str = r#"
@@ -144,10 +160,16 @@ impl PostgresCommerceMembershipOrderStore {
         // Persist the requested method without requiring a pre-seeded method row.
         let method_key = normalize_method_key(&command.method);
         let request_fingerprint = membership_order_request_fingerprint(&command);
+        // 团队/组织套餐的 `price_amount` 是单个席位一个计费周期的单价
+        // （`price_unit='seat'`），订单金额按席位数量倍数计算。价格与金额都
+        // 是最小货币单位的整数字符串，quantity=1 时与原单席位金额完全一致。
+        let order_total = membership_order_total(package.price_amount.as_str(), command.quantity)?;
         let purchase_intent_key = membership_purchase_intent_key(
             &command,
             &package.sku_id,
-            package.price_amount.as_str(),
+            // 购买意图的价格维度使用订单总额：同一套餐不同席位数不会复用
+            // 彼此的待支付订单，quantity=1 时总额等于单价，历史行为不变。
+            &order_total,
             &package.currency_code,
             package.duration_days,
         );
@@ -180,6 +202,7 @@ impl PostgresCommerceMembershipOrderStore {
             &mut tx,
             &command,
             &package,
+            &order_total,
             &request_fingerprint,
             &purchase_intent_key,
         )
@@ -211,19 +234,21 @@ impl PostgresCommerceMembershipOrderStore {
                 "membership order creation conflicted with another request",
             ));
         }
-        insert_membership_order_item(&mut tx, &command, &package, &method_key).await?;
-        insert_membership_order_amount_breakdown(&mut tx, &command, &package).await?;
+        insert_membership_order_item(&mut tx, &command, &package, &order_total, &method_key)
+            .await?;
+        insert_membership_order_amount_breakdown(&mut tx, &command, &package, &order_total).await?;
 
         tx.commit()
             .await
             .map_err(|error| store_error("failed to commit membership order transaction", error))?;
 
-        Ok(build_membership_order_outcome(
+        build_membership_order_outcome(
             &command,
             &package,
+            &order_total,
             &method_key,
             cashier_base_url.as_deref(),
-        ))
+        )
     }
 }
 
@@ -448,6 +473,7 @@ async fn insert_membership_order(
     tx: &mut Transaction<'_, Postgres>,
     command: &CreateMembershipOrderCommand,
     package: &MembershipPackageCatalog,
+    order_total: &str,
     request_fingerprint: &str,
     purchase_intent_key: &str,
 ) -> Result<bool, CommerceServiceError> {
@@ -465,7 +491,7 @@ async fn insert_membership_order(
         "payment_status": "pending",
         "fulfillment_status": "unfulfilled",
         "refund_status": "none",
-        "total_amount": package.price_amount.as_str(),
+        "total_amount": order_total,
         "currency_code": package.currency_code,
         "request_no": command.out_trade_no,
         "idempotency_key": command.idempotency_key,
@@ -496,6 +522,7 @@ async fn insert_membership_order_item(
     tx: &mut Transaction<'_, Postgres>,
     command: &CreateMembershipOrderCommand,
     package: &MembershipPackageCatalog,
+    order_total: &str,
     payment_method: &str,
 ) -> Result<(), CommerceServiceError> {
     let snapshot = membership_order_item_snapshot_json(package, command, payment_method);
@@ -508,13 +535,13 @@ async fn insert_membership_order_item(
         "sku_snapshot_json": snapshot,
         "title": package.package_name,
         "item_title": package.package_name,
-        "quantity": 1,
+        "quantity": command.quantity,
         "unit_price_amount": package.price_amount.as_str(),
         // Amount columns store canonical integer smallest-unit strings; the
         // owner list/detail readers parse them with CommerceMoney::new.
         "discount_amount": "0",
         "tax_amount": "0",
-        "total_amount": package.price_amount.as_str(),
+        "total_amount": order_total,
         "fulfillment_status": "unfulfilled",
         "refund_status": "none",
         "created_at": command.requested_at,
@@ -537,6 +564,7 @@ async fn insert_membership_order_amount_breakdown(
     tx: &mut Transaction<'_, Postgres>,
     command: &CreateMembershipOrderCommand,
     package: &MembershipPackageCatalog,
+    order_total: &str,
 ) -> Result<(), CommerceServiceError> {
     let payload = serde_json::json!({
         "id": format!("{}-amount", command.order_id),
@@ -545,11 +573,11 @@ async fn insert_membership_order_amount_breakdown(
         "order_id": command.order_id,
         "order_item_id": null,
         "allocation_type": "order_total",
-        "original_amount": package.price_amount.as_str(),
+        "original_amount": order_total,
         // Canonical integer smallest-unit string; the owner order list parses
         // discount_amount with CommerceMoney::new and rejects decimals.
         "discount_amount": "0",
-        "payable_amount": package.price_amount.as_str(),
+        "payable_amount": order_total,
         "currency_code": package.currency_code,
         "created_at": command.requested_at,
         "updated_at": command.requested_at,
@@ -578,6 +606,7 @@ fn membership_order_item_snapshot_json(
         "productName": package.product_name,
         "packageId": package.package_external_id,
         "durationDays": package.duration_days,
+        "quantity": command.quantity,
         "clientRequestNo": command.client_request_no,
         "source": command.source,
         "action": command.action,
@@ -595,15 +624,19 @@ fn membership_order_item_snapshot_json(
 fn build_membership_order_outcome(
     command: &CreateMembershipOrderCommand,
     package: &MembershipPackageCatalog,
+    order_total: &str,
     payment_method: &str,
     cashier_base_url: Option<&str>,
-) -> CreateMembershipOrderOutcome {
+) -> Result<CreateMembershipOrderOutcome, CommerceServiceError> {
+    let order_total = CommerceMoney::new(order_total).map_err(|message| {
+        CommerceServiceError::storage(format!("invalid membership order total: {message}"))
+    })?;
     CreateMembershipOrderOutcome::new(
         &command.order_id,
         &command.action,
         &command.order_no,
         &command.out_trade_no,
-        package.price_amount.clone(),
+        order_total,
         &package.currency_code,
         &package.package_external_id,
         &package.package_name,
@@ -618,7 +651,6 @@ fn build_membership_order_outcome(
             cashier_base_url,
         ),
     )
-    .expect("membership order outcome should be valid")
 }
 
 fn membership_cashier_url(
@@ -792,5 +824,53 @@ mod tests {
     fn postgres_membership_catalog_queries_resolve_the_platform_tenant_placeholder() {
         let sql = catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC);
         assert!(!sql.contains("__PLATFORM_TENANT__"));
+    }
+
+    #[test]
+    fn postgres_membership_total_multiplies_the_per_seat_price() {
+        assert_eq!(membership_order_total("9900", 1).unwrap(), "9900");
+        assert_eq!(membership_order_total("9900", 3).unwrap(), "29700");
+        assert!(membership_order_total("9900", 0).is_err());
+        assert!(membership_order_total("9900", 10_001).is_err());
+    }
+
+    #[test]
+    fn postgres_membership_snapshot_records_the_seat_quantity() {
+        let command = CreateMembershipOrderCommand::new(
+            "tenant-1",
+            Some("0"),
+            "user-1",
+            "team-package-1",
+            "purchase",
+            "wechat_pay",
+            "wechat_native",
+            "order-1",
+            "item-1",
+            "MB1",
+            "MEMBERSHIP1",
+            "2026-07-26T00:00:00Z",
+            "2026-07-26T00:30:00Z",
+            "idem-1",
+            None,
+            None,
+            None,
+            None,
+            3,
+        )
+        .expect("membership command");
+        let package = MembershipPackageCatalog {
+            package_external_id: "team-package-1".to_owned(),
+            package_name: "Team Seats".to_owned(),
+            price_amount: CommerceMoney::new("9900").expect("unit price"),
+            currency_code: "CNY".to_owned(),
+            duration_days: 30,
+            sku_id: "sku-team-1".to_owned(),
+            product_name: "Team Seats".to_owned(),
+        };
+
+        let snapshot = membership_order_item_snapshot_json(&package, &command, "wechat_pay");
+        let value: serde_json::Value = serde_json::from_str(&snapshot).expect("snapshot json");
+        assert_eq!(value["quantity"], 3);
+        assert_eq!(value["packageId"], "team-package-1");
     }
 }

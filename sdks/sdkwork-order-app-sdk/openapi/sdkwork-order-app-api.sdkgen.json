@@ -59,6 +59,10 @@
       "name": "orderShipments",
       "description": "Shipments API resources.",
       "x-sdk-nested-resource-surface": true
+    },
+    {
+      "name": "orderCashier",
+      "description": "Anonymous cashier API resources authenticated by a signed capability token instead of a session."
     }
   ],
   "paths": {
@@ -6858,6 +6862,280 @@
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api"
       }
+    },
+    "/app/v3/api/cashier/{token}": {
+      "get": {
+        "tags": [
+          "orderCashier"
+        ],
+        "summary": "Anonymous cashier order view.",
+        "operationId": "cashier.retrieve",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashierOrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The cashier link is unknown, expired, or tampered",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The order is no longer payable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-sdkwork-auth-mode": "anonymous",
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "cashier",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
+    "/app/v3/api/cashier/{token}/payments": {
+      "post": {
+        "tags": [
+          "orderCashier"
+        ],
+        "summary": "Create a payment from an anonymous cashier link.",
+        "operationId": "cashier.payments.create",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashierPaymentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The cashier link is unknown, expired, or tampered",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The order cannot be paid, or the bound amount changed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Payment creation is rate limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-sdkwork-auth-mode": "anonymous",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashierPaymentCreateCommand"
+              }
+            }
+          }
+        },
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "cashier",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api",
+        "description": "Idempotency is server-derived from the capability token id and the payment method. The client cannot supply an Idempotency-Key: a caller-chosen key would let a retry mint a second payment."
+      }
+    },
+    "/app/v3/api/cashier/{token}/status": {
+      "get": {
+        "tags": [
+          "orderCashier"
+        ],
+        "summary": "Anonymous cashier payment status.",
+        "operationId": "cashier.status.retrieve",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashierStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The cashier link is unknown, expired, or tampered",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-sdkwork-auth-mode": "anonymous",
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "cashier",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
     }
   },
   "components": {
@@ -8261,6 +8539,14 @@
           "amount": {
             "type": "string",
             "description": "Recharge price in currency amount (required for action=recharge)."
+          },
+          "quantity": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^[0-9]+$",
+            "default": "1",
+            "description": "Seat quantity for team/organization packages whose priceAmount is the price of one seat for one billing period. Defaults to 1; allowed for action purchase, renew, and upgrade; rejected for recharge.",
+            "x-sdkwork-int64-string": true
           }
         }
       },
@@ -9564,6 +9850,219 @@
                 "properties": {
                   "item": {
                     "$ref": "#/components/schemas/DemandClaimStatistics"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CashierOrder": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "orderSn",
+          "subject",
+          "amount",
+          "currencyCode",
+          "status",
+          "payable",
+          "scene",
+          "allowedMethods"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "orderSn": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Payable amount in the currency's minor unit."
+          },
+          "currencyCode": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "status": {
+            "type": "string"
+          },
+          "payable": {
+            "type": "boolean"
+          },
+          "scene": {
+            "type": "string"
+          },
+          "allowedMethods": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "wechat_pay",
+                "wechat_h5",
+                "alipay",
+                "alipay_wap"
+              ]
+            }
+          },
+          "expireTime": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CashierPayment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "paymentId",
+          "orderId",
+          "outTradeNo",
+          "amount",
+          "paymentMethod",
+          "paymentParams"
+        ],
+        "properties": {
+          "paymentId": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "outTradeNo": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "paymentMethod": {
+            "type": "string"
+          },
+          "paymentParams": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CashierStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "status",
+          "paid"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "paid": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CashierPaymentCreateCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "paymentMethod"
+        ],
+        "properties": {
+          "paymentMethod": {
+            "type": "string",
+            "enum": [
+              "wechat_pay",
+              "wechat_h5",
+              "alipay",
+              "alipay_wap"
+            ],
+            "description": "Identity-bound instruments such as balance are not available without signing in."
+          }
+        }
+      },
+      "CashierOrderResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CashierOrder"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CashierPaymentResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CashierPayment"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CashierStatusResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CashierStatus"
                   }
                 }
               }

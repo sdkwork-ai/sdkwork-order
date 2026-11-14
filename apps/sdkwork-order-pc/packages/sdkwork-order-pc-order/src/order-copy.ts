@@ -104,6 +104,14 @@ export interface SdkworkOrderMessages {
     refunding: string;
     unknown: string;
   };
+  /**
+   * `commerce_order.subject` wire code → localized display label.
+   *
+   * Open-ended on purpose: hosts may append product-specific subjects without
+   * changing the type, and an unknown code always falls back to the raw value
+   * (see `formatSubject` in `order-intl.tsx`).
+   */
+  subject: Record<string, string>;
   timeline: {
     created: string;
     currentStatus: string;
@@ -256,6 +264,19 @@ const EN_US_MESSAGES: SdkworkOrderMessages = {
     refunding: "Refunding",
     unknown: "Unknown",
   },
+  subject: {
+    account_recharge_package: "Account value package recharge",
+    cash_withdrawal: "Cash withdrawal",
+    coupon_recharge: "Coupon recharge",
+    membership: "Membership subscription",
+    points_recharge: "Membership Points recharge",
+    product: "Product order",
+    refund_request: "Refund request",
+    token_bank_plan_purchase: "Token Bank plan purchase",
+    token_bank_plan_renewal: "Token Bank plan renewal",
+    token_bank_recharge: "Token Bank recharge",
+    virtual_goods: "Virtual goods order",
+  },
   timeline: {
     created: "Created",
     currentStatus: "Current status",
@@ -372,6 +393,19 @@ const ZH_CN_MESSAGES: SdkworkOrderMessages = {
     refunded: "\u5df2\u9000\u6b3e",
     refunding: "\u9000\u6b3e\u4e2d",
     unknown: "\u672a\u77e5",
+  },
+  subject: {
+    account_recharge_package: "\u8d26\u6237\u4ef7\u503c\u5305\u5145\u503c",
+    cash_withdrawal: "\u63d0\u73b0\u7533\u8bf7",
+    coupon_recharge: "\u5151\u6362\u7801\u5145\u503c",
+    membership: "\u4f1a\u5458\u8ba2\u9605",
+    points_recharge: "\u4f1a\u5458\u79ef\u5206\u5145\u503c",
+    product: "\u5546\u54c1\u8ba2\u5355",
+    refund_request: "\u9000\u6b3e\u7533\u8bf7",
+    token_bank_plan_purchase: "Token Bank \u5957\u9910\u8d2d\u4e70",
+    token_bank_plan_renewal: "Token Bank \u5957\u9910\u7eed\u8ba2",
+    token_bank_recharge: "Token Bank \u5145\u503c",
+    virtual_goods: "\u865a\u62df\u5546\u54c1\u8ba2\u5355",
   },
   timeline: {
     created: "\u5df2\u521b\u5efa",

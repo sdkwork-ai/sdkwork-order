@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createSdkworkPointsRechargeService,
+  createSdkworkTokenBankRechargeService,
   createSdkworkCouponRechargeService,
   configureSdkworkOrderSessionTokenProvider,
   SDKWORK_POINTS_RECHARGE_MAX_AMOUNT,
@@ -67,6 +68,46 @@ function createAppService(overrides: {
     create,
   };
 }
+
+describe("createSdkworkTokenBankRechargeService", () => {
+  it("books a package purchase against the Token Bank asset", async () => {
+    const { appService, create } = createAppService();
+    const service = createSdkworkTokenBankRechargeService({ appService });
+
+    await service.createOrder({ packageId: "recharge-900" });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        packageId: "recharge-900",
+        source: "token-bank-recharge",
+        subject: "token_bank_recharge",
+        targetAsset: "token_bank",
+      }),
+      expect.objectContaining({
+        idempotencyKey: expect.any(String),
+      }),
+    );
+    // The server prices the grant; the client must never send one.
+    expect(create.mock.calls[0][0]).not.toHaveProperty("grantAmount");
+  });
+
+  it("books a custom top-up against the Token Bank asset without a client grant", async () => {
+    const { appService, create } = createAppService();
+    const service = createSdkworkTokenBankRechargeService({ appService });
+
+    await service.createOrder({ amount: "88.5" });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: "token_bank_recharge",
+        targetAsset: "token_bank",
+      }),
+      expect.any(Object),
+    );
+    expect(create.mock.calls[0][0]).not.toHaveProperty("grantAmount");
+    expect(create.mock.calls[0][0]).not.toHaveProperty("packageId");
+  });
+});
 
 describe("createSdkworkPointsRechargeService", () => {
   it("resolves the selected package and creates the canonical points recharge order", async () => {

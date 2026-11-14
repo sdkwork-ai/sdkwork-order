@@ -44,6 +44,7 @@ async fn postgres_concurrent_membership_purchase_intent_has_one_active_order() {
             Some("postgres-concurrency-test"),
             None,
             None,
+            1,
         )
         .expect("membership concurrency command");
         tasks.push(tokio::spawn(async move {

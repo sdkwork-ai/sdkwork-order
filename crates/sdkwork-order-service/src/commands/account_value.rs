@@ -4,6 +4,20 @@ use crate::{
     AccountValueAssetCode, AccountValueOrderSubject, CouponRedemptionBenefit, TokenBankPlanPeriod,
 };
 
+/// Server-owned pricing for an account-value recharge.
+///
+/// The client must never decide how many credits a Token Bank purchase grants
+/// or what a Token Bank plan costs. `payable_amount` is `Some` when the seller
+/// catalog owns the price (plan/package); the route then replaces the
+/// client-supplied amount with it, and `payable_currency_code` replaces the
+/// client-supplied currency.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AccountValueRechargePricing {
+    pub grant_amount: CommerceMoney,
+    pub payable_amount: Option<CommerceMoney>,
+    pub payable_currency_code: Option<String>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateAccountRechargeOrderCommand {
     pub amount: CommerceMoney,

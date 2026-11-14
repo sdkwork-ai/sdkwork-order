@@ -19,6 +19,12 @@ pub(crate) fn membership_order_request_fingerprint(
     )
 }
 
+/// Business purchase-intent identity for a membership order.
+///
+/// The price dimension is the order total (unit price × seat quantity), so two
+/// requests for the same package with different seat counts never reuse each
+/// other's pending order. For a single-seat order the total equals the unit
+/// price, which keeps the historical identity stable.
 pub(crate) fn membership_purchase_intent_key(
     command: &CreateMembershipOrderCommand,
     sku_id: &str,
@@ -82,6 +88,7 @@ mod tests {
             None,
             None,
             None,
+            1,
         )
         .expect("membership command")
     }

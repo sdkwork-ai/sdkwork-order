@@ -132,7 +132,7 @@ Authority: `../sdkwork-membership/specs/COMMERCE_ORDER_BOUNDARY_SPEC.md`, `../sd
 Cashier deep-links are built by `sdkwork-utils-rust`:
 
 - `commerce_cashier_base_url()` — env `SDKWORK_COMMERCE_CASHIER_BASE_URL`, default `https://platform.sdkwork.com`
-- `commerce_cashier_scene(order_subject)` — maps `points_recharge` → `recharge`, `product` → `checkout`
+- `commerce_cashier_scene(order_subject)` — maps every recharge subject (`points_recharge`, `token_bank_recharge`, `token_bank_plan_purchase`, `token_bank_plan_renewal`, `account_recharge_package`, `coupon_recharge`) → `recharge`; `product`/`physical` → `checkout`; `virtual_goods`/`membership`/`app_template` → `virtual`
 - `build_commerce_cashier_url(scene, order_id, out_trade_no)`
 
 `orders.payments.create` and recharge pay outcomes expose:

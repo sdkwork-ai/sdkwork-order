@@ -14,6 +14,7 @@ import {
   type RefundTargetAsset,
 } from "../services/RefundTypes";
 import { toUserErrorMessage } from "../services/errorMessage";
+import { localizeOrderTitle } from "../services/orderTitle";
 
 /**
  * Buyer refund surface: "my refund requests" list plus an inline
@@ -193,7 +194,7 @@ export function RefundRequestsPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[13px] font-medium text-text-main">
-                    {request.subject || t("orders.refund_request_subject", "退款申请")}
+                    {localizeOrderTitle(request.subject, t) || t("orders.refund_request_subject", "退款申请")}
                   </span>
                   <span
                     className={`rounded-full px-2 py-0.5 text-[11px] ${refundStatusBadgeClass(request.status)}`}

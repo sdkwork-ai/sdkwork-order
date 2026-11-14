@@ -17,7 +17,7 @@ use sdkwork_order_service::{
     redeem_coupon_and_fulfill_order, AccountValueAssetCode, AccountValueCatalogListQuery,
     AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
     AccountValueRequestDetailQuery, AccountValueRequestListPage, AccountValueRequestListQuery,
-    AccountValueRequestView, CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot,
+    AccountValueRequestView, AccountValueRechargePricing, CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot,
     CouponRedemptionBenefit, CouponRedemptionPort, CouponRedemptionRequest,
     CreateAccountRechargeOrderCommand, CreateAccountRechargeOrderOutcome,
     CreateCashWithdrawalRequestCommand, CreateCouponRechargeOrderCommand,
@@ -115,6 +115,21 @@ pub trait CommerceRechargeCheckoutStore: Send + Sync {
         &'a self,
         command: CreateAccountRechargeOrderCommand,
     ) -> CommerceRechargeCheckoutFuture<'a, CreateAccountRechargeOrderOutcome>;
+
+    /// Prices a Token Bank (or plan) recharge from server-side catalogs.
+    ///
+    /// The client-supplied `grantAmount` is deliberately ignored for these
+    /// subjects: trusting it would let a tampered client mint balance.
+    fn resolve_account_value_grant_amount<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        subject: &'a str,
+        amount: &'a CommerceMoney,
+        currency_code: &'a str,
+        package_id: Option<&'a str>,
+        plan_code: Option<&'a str>,
+    ) -> CommerceRechargeCheckoutFuture<'a, AccountValueRechargePricing>;
 
     fn create_coupon_recharge_order<'a>(
         &'a self,
@@ -578,6 +593,30 @@ impl CommerceRechargeCheckoutStore for PostgresCommerceRechargeStore {
         command: CreateAccountRechargeOrderCommand,
     ) -> CommerceRechargeCheckoutFuture<'a, CreateAccountRechargeOrderOutcome> {
         Box::pin(async move { self.create_account_recharge_order(command).await })
+    }
+
+    fn resolve_account_value_grant_amount<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        subject: &'a str,
+        amount: &'a CommerceMoney,
+        currency_code: &'a str,
+        package_id: Option<&'a str>,
+        plan_code: Option<&'a str>,
+    ) -> CommerceRechargeCheckoutFuture<'a, AccountValueRechargePricing> {
+        Box::pin(async move {
+            self.resolve_account_value_grant_amount(
+                tenant_id,
+                organization_id,
+                subject,
+                amount,
+                currency_code,
+                package_id,
+                plan_code,
+            )
+            .await
+        })
     }
 
     fn create_coupon_recharge_order<'a>(
@@ -1171,7 +1210,7 @@ async fn submit_recharge(
             "refund_request and cash_withdrawal are managed by their dedicated request APIs",
         );
     }
-    let amount = if matches!(order_subject, AccountValueOrderSubject::CouponRecharge) {
+    let mut amount = if matches!(order_subject, AccountValueOrderSubject::CouponRecharge) {
         match validate_non_negative_money_amount(request.amount_value(), "recharge amount") {
             Ok(amount) => amount,
             Err(message) => return validation(ctx, message),
@@ -1182,7 +1221,7 @@ async fn submit_recharge(
             Err(message) => return validation(ctx, message),
         }
     };
-    let currency_code = match validate_currency_code(request.currency_code()) {
+    let mut currency_code = match validate_currency_code(request.currency_code()) {
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
@@ -1298,6 +1337,41 @@ async fn submit_recharge(
                             "coupon does not grant a supported asset benefit",
                         ),
                     )
+                }
+                Err(error) => return map_service_error(ctx, error),
+            }
+        } else if server_priced_account_value_subject(order_subject) {
+            // Token Bank pricing is server-owned: a client-supplied grantAmount
+            // would let a tampered request mint credits.
+            if request.grant_amount_value().is_some() {
+                return validation(
+                    ctx,
+                    "grantAmount is server-controlled for Token Bank subjects",
+                );
+            }
+            match state
+                .store
+                .resolve_account_value_grant_amount(
+                    &subject.tenant_id,
+                    subject.organization_id.as_deref(),
+                    order_subject.as_str(),
+                    &amount,
+                    &currency_code,
+                    request.package_id(),
+                    request.plan_code(),
+                )
+                .await
+            {
+                Ok(pricing) => {
+                    // The catalog owns the price for plan purchases; replace the
+                    // client amount/currency so a tampered client cannot underpay.
+                    if let Some(payable) = pricing.payable_amount {
+                        amount = payable;
+                    }
+                    if let Some(code) = pricing.payable_currency_code {
+                        currency_code = code;
+                    }
+                    (pricing.grant_amount, None)
                 }
                 Err(error) => return map_service_error(ctx, error),
             }
@@ -1427,12 +1501,31 @@ async fn submit_recharge(
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
     };
+    let payment_product = match validate_payment_product(request.payment_product()) {
+        Ok(value) => value,
+        Err(message) => return validation(ctx, message),
+    };
+    if let Some(method) = method.as_deref() {
+        if let Err(message) = validate_payment_method_for_product(method, &payment_product) {
+            return validation(ctx, message);
+        }
+    }
     let command_for_payment = command.clone();
     match state.store.create_account_recharge_order(command).await {
-        Ok(outcome) => {
+        Ok(mut outcome) => {
             let Some(method) = method.as_deref() else {
                 return validation(ctx, "payment method must be provided");
             };
+            outcome.payment_product = payment_product.clone();
+            if !payment_product_requires_provider_route(&payment_product) {
+                // The mobile cashier product is settled by the H5 cashier page:
+                // return the deep-link now and start no provider payment.
+                outcome.next_action = "cashier".to_string();
+                if outcome.qr_code_payload.is_empty() {
+                    outcome.qr_code_payload = outcome.cashier_url.clone();
+                }
+                return success_created_item(ctx, map_account_recharge_outcome(outcome));
+            }
             pay_account_value_order(
                 state,
                 ctx,
@@ -2449,6 +2542,16 @@ fn resolve_account_value_target_asset(
     Ok(asset)
 }
 
+/// Subjects whose grant is priced by the server, never by the client.
+fn server_priced_account_value_subject(subject: AccountValueOrderSubject) -> bool {
+    matches!(
+        subject,
+        AccountValueOrderSubject::TokenBankRecharge
+            | AccountValueOrderSubject::TokenBankPlanPurchase
+            | AccountValueOrderSubject::TokenBankPlanRenewal
+    )
+}
+
 fn resolve_grant_amount(
     subject: AccountValueOrderSubject,
     amount: &CommerceMoney,
@@ -2877,6 +2980,32 @@ mod tests {
         );
         assert!(command.requested_at.ends_with('Z'));
         assert!(command.expire_at.ends_with('Z'));
+    }
+
+    #[test]
+    fn token_bank_subjects_are_server_priced_and_points_subjects_are_not() {
+        for subject in [
+            AccountValueOrderSubject::TokenBankRecharge,
+            AccountValueOrderSubject::TokenBankPlanPurchase,
+            AccountValueOrderSubject::TokenBankPlanRenewal,
+        ] {
+            assert!(
+                server_priced_account_value_subject(subject),
+                "{subject:?} must be priced by the server"
+            );
+        }
+        for subject in [
+            AccountValueOrderSubject::PointsRecharge,
+            AccountValueOrderSubject::CouponRecharge,
+            AccountValueOrderSubject::AccountRechargePackage,
+            AccountValueOrderSubject::RefundRequest,
+            AccountValueOrderSubject::CashWithdrawal,
+        ] {
+            assert!(
+                !server_priced_account_value_subject(subject),
+                "{subject:?} must not use the Token Bank pricing path"
+            );
+        }
     }
 
     #[test]
@@ -3760,6 +3889,29 @@ mod tests {
             _command: CreateAccountRechargeOrderCommand,
         ) -> CommerceRechargeCheckoutFuture<'a, CreateAccountRechargeOrderOutcome> {
             Box::pin(async { Err(mock_store_unsupported()) })
+        }
+
+        fn resolve_account_value_grant_amount<'a>(
+            &'a self,
+            _tenant_id: &'a str,
+            _organization_id: Option<&'a str>,
+            _subject: &'a str,
+            _amount: &'a CommerceMoney,
+            _currency_code: &'a str,
+            _package_id: Option<&'a str>,
+            _plan_code: Option<&'a str>,
+        ) -> CommerceRechargeCheckoutFuture<'a, AccountValueRechargePricing> {
+            // One credit in micro-units: route tests assert the wire shape, not
+            // the pricing rule (the repository owns that and covers it).
+            Box::pin(async {
+                let grant_amount = CommerceMoney::new("1000000")
+                    .map_err(|error| CommerceServiceError::storage(error.to_string()))?;
+                Ok(AccountValueRechargePricing {
+                    grant_amount,
+                    payable_amount: None,
+                    payable_currency_code: None,
+                })
+            })
         }
 
         /// Emulates the unique `commerce_order` idempotency index: the first

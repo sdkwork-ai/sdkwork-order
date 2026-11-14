@@ -214,6 +214,8 @@ impl PhysicalCheckoutAdapter {
         let query = ProductSkuRetrieveQuery {
             tenant_id: tenant_id.to_owned(),
             sku_id: sku_id.to_owned(),
+            // The resolver reads structural fields only; `None` keeps the base
+            // locale row, which is what the checkout snapshot stores.
             locale: None,
         };
         match &self.catalog {
@@ -229,6 +231,8 @@ impl PhysicalCheckoutAdapter {
         let query = ProductSpuRetrieveQuery {
             tenant_id: tenant_id.to_owned(),
             spu_id: spu_id.to_owned(),
+            // See `retrieve_sku`: the resolver needs the structural record, not a
+            // translated rendering.
             locale: None,
         };
         match &self.catalog {

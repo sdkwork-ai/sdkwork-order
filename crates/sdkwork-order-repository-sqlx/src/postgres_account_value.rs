@@ -12,6 +12,7 @@ use sdkwork_order_service::{
     TokenBankPlanPeriod, UpsertAccountValuePackageCommand, UpsertTokenBankPlanCommand,
 };
 use sqlx::{Postgres, Row, Transaction};
+use sdkwork_utils_rust::{build_commerce_cashier_url_with_base, commerce_cashier_scene};
 use uuid::Uuid;
 
 use crate::postgres_recharge::PostgresCommerceRechargeStore;
@@ -1065,6 +1066,14 @@ impl PostgresCommerceRechargeStore {
         &self,
         command: CreateAccountRechargeOrderCommand,
     ) -> Result<CreateAccountRechargeOrderOutcome, CommerceServiceError> {
+        // Resolve the operator-configured H5 payment domain before any database
+        // work so a masked/misconfigured setting fails before an order exists.
+        let cashier_base_url = crate::payment_domain_bridge::resolve_h5_cashier_base_url(
+            &self.pool(),
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+        )
+        .await?;
         if let Some(outcome) = self
             .load_account_value_order_by_idempotency(
                 &command.tenant_id,
@@ -1074,7 +1083,10 @@ impl PostgresCommerceRechargeStore {
             )
             .await?
         {
-            return Ok(outcome);
+            return Ok(with_account_value_cashier_deep_link(
+                outcome,
+                cashier_base_url.as_deref(),
+            ));
         }
         let mut tx = self
             .pool()
@@ -1085,7 +1097,10 @@ impl PostgresCommerceRechargeStore {
         tx.commit()
             .await
             .map_err(|error| store_error("failed to commit account recharge order", error))?;
-        Ok(account_value_order_outcome_from_command(&command))
+        Ok(with_account_value_cashier_deep_link(
+            account_value_order_outcome_from_command(&command),
+            cashier_base_url.as_deref(),
+        ))
     }
 
     pub async fn create_coupon_recharge_order(
@@ -1193,7 +1208,7 @@ impl PostgresCommerceRechargeStore {
         row.as_ref().map(map_token_bank_plan).transpose()
     }
 
-    async fn load_token_bank_plan_by_code(
+    pub(crate) async fn load_token_bank_plan_by_code(
         &self,
         tenant_id: &str,
         organization_id: Option<&str>,
@@ -1981,6 +1996,40 @@ fn account_value_order_title(subject: AccountValueOrderSubject) -> &'static str 
     }
 }
 
+/// Adds the H5 cashier deep-link to a paid account-value recharge outcome.
+///
+/// The points recharge path already returns `cashierUrl` as the QR payload; the
+/// account-value path must behave the same way so a desktop dialog can render a
+/// scannable code instead of an empty payload. `nextAction = cashier` tells the
+/// client that no provider intent exists yet. A provider-routed product
+/// (`wechat_native` / `alipay_native`) overwrites these fields after
+/// `pay_owner_order` runs.
+fn with_account_value_cashier_deep_link(
+    outcome: CreateAccountRechargeOrderOutcome,
+    cashier_base_url: Option<&str>,
+) -> CreateAccountRechargeOrderOutcome {
+    if !matches!(
+        outcome.subject,
+        AccountValueOrderSubject::TokenBankRecharge
+            | AccountValueOrderSubject::TokenBankPlanPurchase
+            | AccountValueOrderSubject::TokenBankPlanRenewal
+            | AccountValueOrderSubject::AccountRechargePackage
+    ) {
+        return outcome;
+    }
+    let cashier_url = build_commerce_cashier_url_with_base(
+        commerce_cashier_scene(Some(outcome.subject.as_str())),
+        &outcome.order_id,
+        &outcome.out_trade_no,
+        cashier_base_url,
+    );
+    let mut outcome = outcome;
+    outcome.cashier_url = cashier_url.clone();
+    outcome.qr_code_payload = cashier_url;
+    outcome.next_action = "cashier".to_string();
+    outcome
+}
+
 fn account_value_order_outcome_from_command(
     command: &CreateAccountRechargeOrderCommand,
 ) -> CreateAccountRechargeOrderOutcome {
@@ -2288,4 +2337,59 @@ const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 
 fn store_error(context: &str, error: sqlx::Error) -> CommerceServiceError {
     crate::sql_store_error::map_sqlx_store_error(context, error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn token_bank_recharge_outcome() -> CreateAccountRechargeOrderOutcome {
+        CreateAccountRechargeOrderOutcome {
+            success: true,
+            order_id: "ORDER-1".to_string(),
+            order_no: "AVORDER-1".to_string(),
+            out_trade_no: "ACCOUNTORDER-1".to_string(),
+            subject: AccountValueOrderSubject::TokenBankRecharge,
+            target_asset: AccountValueAssetCode::TokenBank,
+            amount: CommerceMoney::new("5000").expect("amount"),
+            grant_amount: CommerceMoney::new("500000000").expect("grant"),
+            currency_code: "CNY".to_string(),
+            provider_code: String::new(),
+            payment_method: String::new(),
+            payment_product: String::new(),
+            status: "pending".to_string(),
+            next_action: "pay".to_string(),
+            cashier_url: String::new(),
+            qr_code_payload: String::new(),
+            request_payment_payload: None,
+        }
+    }
+
+    #[test]
+    fn account_value_recharge_outcomes_carry_the_cashier_deep_link() {
+        let outcome = with_account_value_cashier_deep_link(
+            token_bank_recharge_outcome(),
+            Some("https://h5.example.com/"),
+        );
+
+        assert_eq!("cashier", outcome.next_action);
+        assert_eq!(outcome.cashier_url, outcome.qr_code_payload);
+        assert!(outcome
+            .cashier_url
+            .starts_with("https://h5.example.com/cashier/ORDER-1"));
+        assert!(outcome.cashier_url.contains("scene=recharge"));
+    }
+
+    #[test]
+    fn coupon_recharge_outcomes_keep_their_fulfillment_action() {
+        let mut outcome = token_bank_recharge_outcome();
+        outcome.subject = AccountValueOrderSubject::CouponRecharge;
+        outcome.next_action = "fulfill".to_string();
+
+        let outcome = with_account_value_cashier_deep_link(outcome, Some("https://h5.example.com"));
+
+        assert_eq!("fulfill", outcome.next_action);
+        assert!(outcome.cashier_url.is_empty());
+        assert!(outcome.qr_code_payload.is_empty());
+    }
 }
