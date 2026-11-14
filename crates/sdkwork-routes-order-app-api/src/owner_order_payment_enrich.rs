@@ -72,6 +72,21 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
                 outcome,
             )
             .await;
+            // The fallback outcome has not been through provider enrichment, which
+            // is where the anonymous cashier token is normally minted. Stamping the
+            // capability here keeps a scanned QR on the no-login cashier even when
+            // the PSP leg is unavailable, instead of silently reverting it to the
+            // login-required link.
+            let fallback = if enriched.is_err() {
+                sdkwork_payment_repository_sqlx::cashier_token::apply_cashier_capability_to_outcome(
+                    &pool,
+                    &tenant_id,
+                    fallback,
+                )
+                .await
+            } else {
+                fallback
+            };
             checkout_enrichment_or_development_fallback(enriched, fallback)
         })
     }
