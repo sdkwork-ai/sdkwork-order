@@ -8,6 +8,6 @@ export interface CashierOrder {
   status: string;
   payable: boolean;
   scene: string;
-  allowedMethods: ('wechat_pay' | 'wechat_h5' | 'alipay' | 'alipay_wap')[];
+  allowedMethods: ('wechat_pay' | 'wechat_h5' | 'wechat_jsapi' | 'alipay' | 'alipay_wap')[];
   expireTime?: string | null;
 }

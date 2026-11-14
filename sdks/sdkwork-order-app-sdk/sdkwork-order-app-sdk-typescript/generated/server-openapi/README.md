@@ -30,6 +30,8 @@ client.setAccessToken('your-access-token');
 const token = 'token';
 const body = {
   paymentMethod: 'wechat_pay',
+  openid: 'openid',
+  openidBinding: 'openidBinding',
 };
 const result = await client.orderCashier.cashier.payments.create(token, body);
 ```
@@ -196,6 +198,8 @@ const result = await client.orderDemandClaims.demandClaims.statistics.retrieve()
 const token = 'token';
 const body = {
   paymentMethod: 'wechat_pay',
+  openid: 'openid',
+  openidBinding: 'openidBinding',
 };
 const result = await client.orderCashier.cashier.payments.create(token, body);
 ```
@@ -209,6 +213,8 @@ try {
   const token = 'token';
   const body = {
     paymentMethod: 'wechat_pay',
+    openid: 'openid',
+    openidBinding: 'openidBinding',
   };
   const result = await client.orderCashier.cashier.payments.create(token, body);
 } catch (error) {

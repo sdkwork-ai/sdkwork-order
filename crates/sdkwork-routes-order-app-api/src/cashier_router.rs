@@ -33,9 +33,9 @@ use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
 };
 use sdkwork_utils_rust::{
-    base64url_decode, cashier_token_secret_from_env, derive_cashier_token_key,
-    extract_client_ip_from_headers, verify_cashier_token, CashierTokenClaims,
-    CASHIER_TOKEN_AUDIENCE,
+    base64url_decode, cashier_openid_binding_message, cashier_token_secret_from_env,
+    derive_cashier_token_key, extract_client_ip_from_headers, hmac_sha256_base64url,
+    secure_compare, verify_cashier_token, CashierTokenClaims, CASHIER_TOKEN_AUDIENCE,
 };
 use sdkwork_web_core::WebRequestContext;
 
@@ -44,10 +44,12 @@ use crate::order_router::OwnerOrderPaymentStore;
 
 /// Payment methods the anonymous cashier may request.
 ///
-/// `balance` is deliberately absent (identity-bound), and `wechat_jsapi` joins
-/// only once the token-bound openid binding exists: without it the adapter would
-/// need an openid the caller supplied, which is exactly what this surface forbids.
-const ANONYMOUS_PAYMENT_METHODS: &[&str] = &["wechat_pay", "wechat_h5", "alipay", "alipay_wap"];
+/// `balance` is deliberately absent (identity-bound). `wechat_jsapi` is allowed
+/// only with an openid issued by the IAM anonymous payment OAuth and bound to this
+/// token (see [`verify_openid_binding`]); the caller can never supply an openid of
+/// its own choosing.
+const ANONYMOUS_PAYMENT_METHODS: &[&str] =
+    &["wechat_pay", "wechat_h5", "wechat_jsapi", "alipay", "alipay_wap"];
 
 #[derive(Clone)]
 pub struct AppCashierState {
@@ -100,6 +102,10 @@ pub struct CashierStatusResponse {
 #[serde(rename_all = "camelCase")]
 struct CreateCashierPaymentRequest {
     payment_method: Option<String>,
+    /// WeChat payer openid issued by the anonymous IAM payment OAuth.
+    openid: Option<String>,
+    /// Signature binding `openid` to this capability token.
+    openid_binding: Option<String>,
 }
 
 /// Builds the anonymous cashier router.
@@ -160,10 +166,13 @@ async fn create_cashier_payment(
     if !order.is_payable() {
         return conflict(ctx, "the order is not payable in its current state");
     }
-    let requested = body
-        .and_then(|Json(value)| value.payment_method)
-        .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| !value.is_empty());
+    let requested_body = body.map(|Json(value)| value);
+    let requested = requested_body
+        .as_ref()
+        .and_then(|value| value.payment_method.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_ascii_lowercase);
     let payment_method = match requested {
         Some(method) if ANONYMOUS_PAYMENT_METHODS.contains(&method.as_str()) => method,
         Some(method) => {
@@ -176,7 +185,40 @@ async fn create_cashier_payment(
             return validation(ctx, "a payment method is required");
         }
     };
-    let payment_metadata = anonymous_payment_metadata(&payment_method, &headers);
+    // `wechat_jsapi` needs the payer openid. It is accepted only when the IAM
+    // anonymous payment OAuth signed it against this very token, so a caller can
+    // never bind an arbitrary openid to the charge.
+    let payer_openid = if payment_method == "wechat_jsapi" {
+        let openid = requested_body
+            .as_ref()
+            .and_then(|value| value.openid.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let binding = requested_body
+            .as_ref()
+            .and_then(|value| value.openid_binding.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        match (openid, binding) {
+            (Some(openid), Some(binding)) => {
+                match verify_openid_binding(&claims.tenant_id, &claims.token_id, openid, binding) {
+                    Some(openid) => Some(openid),
+                    None => {
+                        return validation(ctx, "the WeChat payer authorization is not valid")
+                    }
+                }
+            }
+            _ => {
+                return validation(
+                    ctx,
+                    "wechat_jsapi requires an authorized WeChat payer for this cashier link",
+                )
+            }
+        }
+    } else {
+        None
+    };
+    let payment_metadata = anonymous_payment_metadata(&payment_method, &headers, payer_openid.as_deref());
     let command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: claims.tenant_id.clone(),
         organization_id: order.organization_id.clone(),
@@ -185,7 +227,9 @@ async fn create_cashier_payment(
         owner_user_id: order.owner_user_id.clone(),
         order_id: order.order_id.clone(),
         payment_method: payment_method.clone(),
-        payment_scene: Some(claims.scene.clone()),
+        // The cashier scene is display metadata, not a provider selector: the
+        // provider method key comes from `payment_method`.
+        payment_scene: None,
         payment_attempt_callback_payload: None,
         payment_metadata,
         request_no: format!("cashier-{}", claims.token_id),
@@ -305,12 +349,16 @@ fn to_payment_view(outcome: PayOwnerOrderOutcome) -> CashierPaymentResponse {
 /// Builds provider metadata for the anonymous methods.
 ///
 /// `wechat_h5` needs the payer's real client IP (the provider trade is bound to
-/// it); `wechat_jsapi` is not reachable here until the token-bound openid binding
-/// exists, so it carries no payer identifier at all.
+/// it); `wechat_jsapi` needs the openid that the anonymous payment OAuth bound to
+/// this capability token.
 fn anonymous_payment_metadata(
     payment_method: &str,
     headers: &HeaderMap,
+    payer_openid: Option<&str>,
 ) -> serde_json::Value {
+    if let Some(openid) = payer_openid {
+        return serde_json::json!({ "openid": openid });
+    }
     if payment_method == "wechat_h5" {
         let client_ip = extract_client_ip_from_headers(|name| {
             headers
@@ -321,6 +369,32 @@ fn anonymous_payment_metadata(
         return serde_json::json!({ "client_ip": client_ip.to_string() });
     }
     serde_json::json!({})
+}
+
+/// Verifies that `openid` was issued for this capability token.
+///
+/// The IAM anonymous payment OAuth signs `tokenId|openid` with the tenant's
+/// cashier-token key after the WeChat `snsapi_base` exchange. Recomputing that
+/// signature here means the payer identifier is authenticated without any shared
+/// server-side session: a caller cannot invent an openid, and one issued for a
+/// different token does not verify.
+fn verify_openid_binding(
+    tenant_id: &str,
+    token_id: &str,
+    openid: &str,
+    binding: &str,
+) -> Option<String> {
+    let secret = cashier_token_secret_from_env().ok().flatten()?;
+    let key = derive_cashier_token_key(&secret, tenant_id).ok()?;
+    let expected = hmac_sha256_base64url(
+        cashier_openid_binding_message(token_id, openid).as_bytes(),
+        &key,
+    );
+    if secure_compare(&expected, binding) {
+        Some(openid.to_owned())
+    } else {
+        None
+    }
 }
 
 fn is_paid(status: &str) -> bool {
@@ -400,7 +474,22 @@ mod tests {
     #[test]
     fn balance_is_never_offered_anonymously() {
         assert!(!ANONYMOUS_PAYMENT_METHODS.contains(&"balance"));
-        assert!(!ANONYMOUS_PAYMENT_METHODS.contains(&"wechat_jsapi"));
+        assert!(ANONYMOUS_PAYMENT_METHODS.contains(&"wechat_jsapi"));
+        assert!(ANONYMOUS_PAYMENT_METHODS.contains(&"wechat_h5"));
+        assert!(ANONYMOUS_PAYMENT_METHODS.contains(&"alipay_wap"));
+    }
+
+    #[test]
+    fn openid_binding_message_is_token_scoped() {
+        assert_eq!(
+            cashier_openid_binding_message("jti-1", "o_payer"),
+            "cashier-openid|jti-1|o_payer"
+        );
+        // A binding minted for another token must not collide.
+        assert_ne!(
+            cashier_openid_binding_message("jti-1", "o_payer"),
+            cashier_openid_binding_message("jti-2", "o_payer")
+        );
     }
 
     #[test]
