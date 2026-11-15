@@ -219,6 +219,15 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "cashier",
         "cashier.status.retrieve",
     ),
+    // Legacy QR links (`/cashier/{orderId}?outTradeNo=..`) exchange the pair for
+    // a capability token so an already-printed QR is not a login wall. The route
+    // is public; the out-trade number is the caller's proof.
+    HttpRoute::public(
+        HttpMethod::Post,
+        "/app/v3/api/cashier/links",
+        "cashier",
+        "cashier.links.create",
+    ),
     // === Payment webhooks (PSP callbacks; no user token) ===
     HttpRoute::public(
         HttpMethod::Post,

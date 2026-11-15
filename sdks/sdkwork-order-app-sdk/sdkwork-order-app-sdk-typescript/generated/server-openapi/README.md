@@ -27,13 +27,11 @@ client.setAuthToken('your-auth-token');
 client.setAccessToken('your-access-token');
 
 // Use the SDK
-const token = 'token';
 const body = {
-  paymentMethod: 'wechat_pay',
-  openid: 'openid',
-  openidBinding: 'openidBinding',
+  orderId: 'orderId',
+  outTradeNo: 'outTradeNo',
 };
-const result = await client.orderCashier.cashier.payments.create(token, body);
+const result = await client.orderCashier.cashier.links.create(body);
 ```
 
 ## Authentication
@@ -194,14 +192,12 @@ const result = await client.orderDemandClaims.demandClaims.statistics.retrieve()
 ### order_cashier
 
 ```typescript
-// Create a payment from an anonymous cashier link.
-const token = 'token';
+// Exchange a legacy cashier link for a capability token.
 const body = {
-  paymentMethod: 'wechat_pay',
-  openid: 'openid',
-  openidBinding: 'openidBinding',
+  orderId: 'orderId',
+  outTradeNo: 'outTradeNo',
 };
-const result = await client.orderCashier.cashier.payments.create(token, body);
+const result = await client.orderCashier.cashier.links.create(body);
 ```
 
 ## Error Handling
@@ -210,13 +206,11 @@ const result = await client.orderCashier.cashier.payments.create(token, body);
 import { SdkworkAppClient, NetworkError, TimeoutError, AuthenticationError } from '@sdkwork/order-app-sdk';
 
 try {
-  const token = 'token';
   const body = {
-    paymentMethod: 'wechat_pay',
-    openid: 'openid',
-    openidBinding: 'openidBinding',
+    orderId: 'orderId',
+    outTradeNo: 'outTradeNo',
   };
-  const result = await client.orderCashier.cashier.payments.create(token, body);
+  const result = await client.orderCashier.cashier.links.create(body);
 } catch (error) {
   if (error instanceof AuthenticationError) {
     console.error('Authentication failed:', error.message);

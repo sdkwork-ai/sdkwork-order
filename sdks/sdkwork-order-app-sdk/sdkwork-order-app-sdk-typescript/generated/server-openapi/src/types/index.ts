@@ -65,6 +65,9 @@ export type { CashierPaymentCreateCommand } from './cashier-payment-create-comma
 export type { CashierOrderResponse } from './cashier-order-response';
 export type { CashierPaymentResponse } from './cashier-payment-response';
 export type { CashierStatusResponse } from './cashier-status-response';
+export type { CashierLinkCreateCommand } from './cashier-link-create-command';
+export type { CashierLink } from './cashier-link';
+export type { CashierLinkResponse } from './cashier-link-response';
 export type { OrdersDiscountCreateRequest } from './orders-discount-create-request';
 export type { AfterSalesRequestsCreateResponse201 } from './after-sales-requests-create-response201';
 export type { AfterSalesRequestsRetrieveResponse } from './after-sales-requests-retrieve-response';

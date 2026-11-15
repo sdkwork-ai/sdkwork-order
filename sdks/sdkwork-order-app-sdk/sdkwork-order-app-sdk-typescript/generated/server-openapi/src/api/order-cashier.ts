@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { CashierOrder, CashierPayment, CashierPaymentCreateCommand, CashierStatus } from '../types';
+import type { CashierLink, CashierLinkCreateCommand, CashierOrder, CashierPayment, CashierPaymentCreateCommand, CashierStatus } from '../types';
 
 
 export class OrderCashierCashierStatusApi {
@@ -32,13 +32,29 @@ export class OrderCashierCashierPaymentsApi {
   }
 }
 
+export class OrderCashierCashierLinksApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Exchange a legacy cashier link for a capability token. */
+  async create(body: CashierLinkCreateCommand, requestOptions?: ApiRequestOptions): Promise<CashierLink> {
+    return this.client.request<CashierLink>(appApiPath(`/cashier/links`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', skipAuth: true, sdkworkUnwrapKind: 'item' });
+  }
+}
+
 export class OrderCashierCashierApi {
   private client: HttpClient;
+  public readonly links: OrderCashierCashierLinksApi;
   public readonly payments: OrderCashierCashierPaymentsApi;
   public readonly status: OrderCashierCashierStatusApi;
 
   constructor(client: HttpClient) {
     this.client = client;
+    this.links = new OrderCashierCashierLinksApi(client);
     this.payments = new OrderCashierCashierPaymentsApi(client);
     this.status = new OrderCashierCashierStatusApi(client);
   }
