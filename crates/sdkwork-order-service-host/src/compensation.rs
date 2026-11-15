@@ -143,6 +143,7 @@ async fn run_compensation_pass(
     let membership_port = host.membership_fulfillment_port();
     let app_template_port = host.app_template_fulfillment_port();
     let physical_goods_port = host.physical_goods_fulfillment_port();
+    let virtual_goods_port = host.virtual_goods_fulfillment_port();
     let promotion_discount_port = host.promotion_discount_port();
     let settlement_ports = OwnerOrderSettlementPorts {
         payment_store: &payments,
@@ -155,6 +156,7 @@ async fn run_compensation_pass(
         membership_port: membership_port.as_ref(),
         app_template_port: app_template_port.as_ref(),
         physical_goods_port: physical_goods_port.as_ref(),
+        virtual_goods_port: virtual_goods_port.as_ref(),
         promotion_discount_port: promotion_discount_port.as_ref(),
     };
     // Refund post-processing: request-backed refunds get their account hold

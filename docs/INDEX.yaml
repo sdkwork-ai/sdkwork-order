@@ -16,9 +16,12 @@ entries:
     topic: integrator
   - path: specs/commerce-payment-webhook.spec.json
     topic: payment-webhook-orchestration
+  - path: specs/PAYMENT_CALLBACK_NOTIFY_SPEC.md
+    topic: payment-callback-notification-standard
   - path: docs/guides/operations/PRODUCTION.md
     topic: production-operations
 domains:
   - commerce
   - checkout
   - payment
+  - notifications

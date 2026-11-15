@@ -24,6 +24,7 @@ use sdkwork_order_service::{
     PaymentNotifyVerifyFuture, PaymentNotifyVerifyPort, PointsRechargeCreditOutcome,
     PointsRechargeCreditRequest, PointsRechargeFulfillmentContext, PointsRechargeFulfillmentFuture,
     PointsRechargeFulfillmentStore, UnavailablePhysicalGoodsFulfillmentPort,
+    UnavailableVirtualGoodsFulfillmentPort,
     PAYMENT_NOTIFY_STATUS_ACCEPTED, PAYMENT_NOTIFY_STATUS_ORDER_FAILURE_MARKED,
     PAYMENT_NOTIFY_STATUS_SETTLED, PAYMENT_NOTIFY_STATUS_UNMAPPED,
 };
@@ -198,6 +199,7 @@ fn settlement_ports<'a>(
         membership_port: &UnsupportedMembershipPurchaseFulfillmentPort,
         app_template_port: &NoopAppTemplatePurchaseFulfillmentPort,
         physical_goods_port: &UnavailablePhysicalGoodsFulfillmentPort,
+        virtual_goods_port: &UnavailableVirtualGoodsFulfillmentPort,
         promotion_discount_port: &NoopPromotionDiscountPort,
     }
 }
@@ -256,8 +258,13 @@ async fn succeeded_notify_settles_the_order_through_the_building_block() {
     assert_eq!("webhook-1", outcome.webhook_event_id);
     let settlement = outcome.settlement.expect("settlement outcome");
     assert!(settlement.payment_confirmed);
+    // Virtual goods are a first-class fulfillment family: with no delivery
+    // capability installed the settlement defers on the virtual-goods port
+    // (never on the generic `external` bucket, which owns genuinely external
+    // capability flows). The payment and order state are already advanced, so
+    // this is a deferred delivery, not a failed webhook.
     assert_eq!(
-        "awaiting_external_fulfillment",
+        "awaiting_virtual_goods_fulfillment",
         settlement.fulfillment_status
     );
     assert_eq!(1, payment_store.confirm_calls());

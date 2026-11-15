@@ -84,24 +84,16 @@ impl OrderRuntimeWorkers {
     }
 }
 
+/// Composes the Order API module (app + backend surfaces) with runtime workers
+/// started and owned by the caller.
+///
+/// This is the ONE routing composition: both the standalone gateway and the
+/// embedded cloud gateway reach it, and it delegates to
+/// [`assemble_api_router_without_workers`] so the route set can never diverge
+/// between "who starts the workers" variants.
 pub async fn assemble_api_router(host: Arc<OrderServiceHost>) -> Result<ApiAssembly, String> {
     start_runtime_workers(&host).await;
-    let router = Router::new()
-        .merge(sdkwork_routes_order_app_api::gateway_mount(host.clone()).await)
-        .merge(sdkwork_routes_order_backend_api::gateway_mount(host.clone()).await);
-    let mut routes = Vec::new();
-    routes.extend_from_slice(sdkwork_routes_order_app_api::gateway_route_manifest().routes());
-    routes.extend_from_slice(sdkwork_routes_order_backend_api::gateway_route_manifest().routes());
-    ApiAssemblyContribution::from_manifest(
-        "sdkwork-order",
-        "SDKWork Order API",
-        router,
-        HttpRouteManifest::from_owned_routes(routes),
-        Vec::new(),
-        Arc::new(OrderReadiness {
-            pool: host.database_pool().clone(),
-        }),
-    )
+    assemble_api_router_without_workers(host).await
 }
 
 /// Same as [`assemble_api_router`] but also hands back the background worker

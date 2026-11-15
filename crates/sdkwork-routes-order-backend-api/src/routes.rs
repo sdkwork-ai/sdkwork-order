@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::{
     backend_commerce_admin_router_with_postgres_pool_and_ports,
     backend_order_admin_router_with_postgres_pool, openapi_contract::mount_backend_openapi,
-    payment_confirmation_router_with_postgres_pool_and_integrations,
+    payment_confirmation_router_with_postgres_pool_and_ports,
 };
 
 pub fn build_order_backend_router(host: Arc<OrderServiceHost>) -> Router {
@@ -22,6 +22,7 @@ pub fn build_order_backend_business_router(host: Arc<OrderServiceHost>) -> Route
     let app_template_port = host.app_template_fulfillment_port();
     let reconciliation_port = host.owner_order_payment_reconciliation_port();
     let physical_goods_port = host.physical_goods_fulfillment_port();
+    let virtual_goods_port = host.virtual_goods_fulfillment_port();
     let payment_refund_executor_port = host.payment_refund_executor_port();
     let payment_payout_executor_port = host.payment_payout_executor_port();
     #[allow(unreachable_patterns)]
@@ -43,7 +44,7 @@ pub fn build_order_backend_business_router(host: Arc<OrderServiceHost>) -> Route
             host.physical_inventory_reservation_port(),
         ))
         .merge(
-            payment_confirmation_router_with_postgres_pool_and_integrations(
+            payment_confirmation_router_with_postgres_pool_and_ports(
                 pool.clone(),
                 credit_port,
                 account_value_ledger_port,
@@ -52,6 +53,8 @@ pub fn build_order_backend_business_router(host: Arc<OrderServiceHost>) -> Route
                 app_template_port,
                 reconciliation_port,
                 physical_goods_port,
+                virtual_goods_port,
+                None,
             ),
         )
 }

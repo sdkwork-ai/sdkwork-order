@@ -4,14 +4,51 @@
   "capability": "order",
   "domain": "commerce",
   "role": "payment-webhook-orchestrator",
+  "standard": "specs/PAYMENT_CALLBACK_NOTIFY_SPEC.md",
   "dependencyDirection": "order -> payment (in-process PaymentWebhookStore + payment-providers lib); payment -X-> order",
+  "notifyUrlContract": {
+    "owner": "sdkwork-payment-providers::notify_url",
+    "normalization": "base trimmed of whitespace and trailing '/', provider code normalized (trim -> lowercase -> '-' -> '_')",
+    "paths": {
+      "payment": "/app/v3/api/orders/payments/webhooks/{providerCode}",
+      "refund": "/app/v3/api/orders/refunds/webhooks/{providerCode}"
+    },
+    "resolutionOrder": [
+      "commerce_payment_notify_domain active default (exact organization row, then platform '0' row)",
+      "ORDER_PAYMENT_WEBHOOK_BASE_URL deployment fallback",
+      "none: checkout/refund submission must log and rely on the compensation sweep"
+    ],
+    "httpsRequiredOutside": ["development", "dev", "local", "test", "testing"],
+    "forbidden": [
+      "query string",
+      "fragment",
+      "double slash",
+      "environment-suffixed path",
+      "hand-assembled path outside the notify_url module"
+    ]
+  },
+  "refundNotifyCapability": {
+    "wechat_pay": "dedicated_url",
+    "sandbox": "dedicated_url",
+    "stripe": "payment_url_family",
+    "paypal": "payment_url_family",
+    "alipay": "unsupported",
+    "unknown": "unsupported",
+    "submissionRule": "refund_notify_url_for_channel: forward only for dedicated_url channels, never blank"
+  },
   "ownedRoutes": {
     "app": [
-      "POST /app/v3/api/orders/payments/webhooks/{providerCode}"
+      "POST /app/v3/api/orders/payments/webhooks/{providerCode}",
+      "POST /app/v3/api/orders/refunds/webhooks/{providerCode}"
     ],
     "backend": [
       "POST /backend/v3/api/orders/{orderId}/payment_confirmations"
     ]
+  },
+  "intakeAuth": {
+    "paymentWebhook": "public — the PSP presents its own signature, never a platform token",
+    "refundWebhook": "public — same contract",
+    "backendConfirmation": "backend token + commerce.orders.fulfill; tenant/organization from the access-token request context only"
   },
   "deprecatedRoutes": {
     "paymentApp": [
@@ -21,6 +58,27 @@
       "POST /backend/v3/api/payments/owner-orders/{orderId}/confirmations"
     ],
     "replacement": "order-app-api webhook + order-backend-api payment_confirmations"
+  },
+  "pipeline": [
+    "intake (512 KiB bound before verification)",
+    "verify_webhook_signature",
+    "normalize_provider_event",
+    "normalize_event_identity (provider id, else sha256 fingerprint fallback)",
+    "classify_webhook_event -> Payment | Refund | Unsupported",
+    "webhook_family_policy admission",
+    "tenant-scoped idempotent ingest (tenant_id, provider_scoped_event_id)",
+    "payment applied_status dispatch | refund status dispatch | unsupported audit ack",
+    "business fulfillment dispatch (PaymentNotifyHandlerRegistry)",
+    "standardized ack"
+  ],
+  "eventFamilies": {
+    "payment": "default when the event type is absent; single-URL providers keep delivering here",
+    "refund": "event type contains 'refund'; wins over every other marker",
+    "unsupported": "payout | dispute | chargeback | balance | transfer | settlement — audited + 200 ack, never applied to a payment attempt",
+    "policy": {
+      "paymentsUrl": "All (payment/refund dispatch, unsupported audit ack)",
+      "refundsUrl": "RefundOnly (refund dispatch, payment + unsupported audit 4xx)"
+    }
   },
   "orchestrationSteps": [
     "resolve_provider_account",
@@ -33,6 +91,31 @@
     "failed/canceled/closed -> mark_owner_order_payment_failed (idempotent, terminal-safe)",
     "unmapped -> audit warn + accepted ack (no PSP retry storm)"
   ],
+  "tenantIsolation": {
+    "scopeSource": "persisted commerce_payment_attempt resolved by (provider_code, out_trade_no)",
+    "rules": [
+      "derived attempt scope always wins over caller-supplied scope",
+      "multiple attempts matching one webhook identity -> conflict, never an arbitrary pick",
+      "organization_id '0' is the platform sentinel and matches only when the expected organization is NULL",
+      "pre-verification rejections persist under tenant '0' with a body fingerprint id",
+      "identity projection headers (x-sdkwork-tenant-id, X-Tenant-Id, X-Platform, X-User-Id) MUST NOT be read"
+    ]
+  },
+  "successFulfillmentMatrix": {
+    "product": { "port": "PhysicalGoodsFulfillmentPort", "terminal": "awaiting_shipment" },
+    "virtual_goods": { "port": "VirtualGoodsFulfillmentPort", "terminal": "fulfilled" },
+    "membership": { "port": "MembershipPurchaseFulfillmentPort", "terminal": "fulfilled" },
+    "app_template": { "port": "AppTemplatePurchaseFulfillmentPort", "terminal": "fulfilled" },
+    "points_recharge": { "port": "PointsRechargeFulfillmentStore + AccountPointsCreditPort", "terminal": "fulfilled" },
+    "token_bank_recharge": { "port": "AccountValueFulfillmentStore + AccountValueLedgerPort", "terminal": "fulfilled" },
+    "token_bank_plan_purchase": { "port": "AccountValueFulfillmentStore + AccountValueLedgerPort", "terminal": "fulfilled" },
+    "token_bank_plan_renewal": { "port": "AccountValueFulfillmentStore + AccountValueLedgerPort", "terminal": "fulfilled" },
+    "account_recharge_package": { "port": "AccountValueFulfillmentStore + AccountValueLedgerPort", "terminal": "fulfilled" },
+    "coupon_recharge": { "port": "CouponRedemptionPort + AccountValueLedgerPort", "terminal": "fulfilled" },
+    "external": { "port": "none", "terminal": "awaiting_external_fulfillment" },
+    "unknown": { "port": "none", "terminal": "awaiting_subject_resolution" }
+  },
+  "degradation": "an uninstalled fulfillment capability defers (never fails) the webhook: payment + order state are already advanced and a 5xx would make the PSP retry an event that cannot succeed",
   "compensationWorker": {
     "owner": "sdkwork-order-service-host compensation.rs (spawn_payment_compensation_worker)",
     "role": "webhook 失败补偿：认领 pending/processing 支付与 submitted/processing 退款，查询 PSP 状态，以合成事件（query:{provider}:{out_trade_no}:{mapped_status}）复用 notify 积木（幂等/终态保护/履约键）",
@@ -45,9 +128,11 @@
     "extension": "PaymentNotifyHandler + PaymentNotifyHandlerRegistry (register-only, pipeline unchanged)"
   },
   "successProcessing": {
-    "entrypoint": "settle_owner_order_after_payment_success",
+    "entrypoint": "settle_owner_order_after_payment_success_with_registry",
     "notificationSource": "verified webhook -> persisted exact payment attempt",
     "reconciliationSource": "provider query -> verified exact payment attempt",
+    "operatorSource": "backend payment_confirmations -> reconcile -> same settlement entrypoint",
+    "registryParity": "the webhook intake and the backend operator confirmation MUST share one PaymentNotifyHandlerRegistry instance",
     "transactionRule": "provider I/O happens before the database transaction; exact attempt confirmation uses conditional transactional writes and idempotent replay",
     "supportedProviders": [
       "wechat_pay",
@@ -55,11 +140,25 @@
       "stripe"
     ]
   },
+  "applicationIntegration": {
+    "composer": "sdkwork-routes-order-app-api::build_order_app_business_router (gateway_mount)",
+    "surfaces": [
+      "sdkwork-api-order-standalone-gateway via assemble_api_router_with_runtime_from_env",
+      "sdkwork-api-cloud-gateway via sdkwork-api-order-assembly::web_module_with_pool"
+    ],
+    "forbidden": [
+      "rebuilding the intake paths in a surface crate",
+      "mounting the payment webhook without the refund webhook",
+      "two different PaymentNotifyHandlerRegistry instances for webhook and operator confirmation"
+    ]
+  },
   "paymentPort": {
     "crate": "sdkwork-payment-repository-sqlx",
     "operations": [
       "ingest_provider_webhook_postgres",
-      "confirm_owner_order_payment"
+      "confirm_owner_order_payment",
+      "resolve_provider_notify_urls_postgres",
+      "resolve_refund_notify_url_postgres"
     ],
     "forbiddenInPayment": [
       "HTTP callback to order",
@@ -70,11 +169,14 @@
   "environment": {
     "webhookBaseUrlEnv": "ORDER_PAYMENT_WEBHOOK_BASE_URL",
     "webhookPathPattern": "{base}/app/v3/api/orders/payments/webhooks/{providerCode}",
+    "refundWebhookPathPattern": "{base}/app/v3/api/orders/refunds/webhooks/{providerCode}",
     "legacyPaymentWebhookReturns": "410 Gone with migration ProblemDetail"
   },
   "forbidden": [
     "PSP webhook HTTP handlers in sdkwork-payment (except deprecated 410 shim)",
     "Payment → Order HTTP fulfillment client",
-    "SDKWORK_PAYMENT_ORDER_SERVICE_AUTH_TOKEN"
+    "SDKWORK_PAYMENT_ORDER_SERVICE_AUTH_TOKEN",
+    "applying an unsupported financial event family to a payment attempt",
+    "accepting a caller-supplied tenant/organization scope on a webhook settlement"
   ]
 }

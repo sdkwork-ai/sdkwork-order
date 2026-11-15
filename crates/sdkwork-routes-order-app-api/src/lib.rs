@@ -12,8 +12,8 @@ pub mod openapi_contract;
 pub mod order_router;
 pub mod order_discount_router;
 pub use payment_webhook_framework::{
-    classify_webhook_event, collect_webhook_intake, ProviderWebhookFramework, WebhookEventFamily,
-    WebhookFamilyPolicy, WEBHOOK_BODY_MAX_BYTES,
+    classify_webhook_event, collect_webhook_intake, ProviderWebhookFramework, ProviderWebhookPorts,
+    WebhookEventFamily, WebhookFamilyPolicy, WEBHOOK_BODY_MAX_BYTES,
 };
 pub mod owner_order_cancel;
 pub mod owner_order_payment_enrich;

@@ -34,7 +34,7 @@ use sdkwork_order_service::{
     AccountPointsCreditPort, AccountValueLedgerPort, AppTemplatePurchaseFulfillmentPort,
     CouponRedemptionPort, MembershipPurchaseFulfillmentPort, OwnerOrderSettlementPorts,
     PaymentNotifyHandlerRegistry, PhysicalGoodsFulfillmentPort, PromotionDiscountPort,
-    RefundNotifyHandlerRegistry,
+    RefundNotifyHandlerRegistry, VirtualGoodsFulfillmentPort,
 };
 use sdkwork_payment_providers::normalize_provider_code;
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
@@ -48,21 +48,60 @@ pub const WEBHOOK_BODY_MAX_BYTES: usize = 512 * 1024;
 
 /// Event family of a verified webhook, classified from the payload so
 /// single-URL providers route correctly no matter which intake accepted the
-/// delivery. Open set: dispute/payout/kyc families slot in here without
-/// touching the pipeline stages.
+/// delivery.
+///
+/// The set is intentionally open but *negative-safe*: a family this service
+/// does not implement (payouts, disputes, chargebacks, balance movements) is
+/// classified [`WebhookEventFamily::Unsupported`], audit-recorded and
+/// acknowledged — never routed into the payment pipeline, where a foreign
+/// `succeeded` status could otherwise be applied to a payment attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WebhookEventFamily {
     Payment,
     Refund,
+    /// Recognized financial-event family this service does not own.
+    Unsupported,
 }
 
+/// Markers of financial event families that are NOT payment/refund
+/// notifications. Matched on the normalized event type so the check works for
+/// dotted (`payout.paid`), underscored (`transfer_success`) and uppercase
+/// (`TRANSFER.SUCCESS`) provider vocabularies.
+const NON_PAYMENT_EVENT_MARKERS: &[&str] = &[
+    "payout",
+    "dispute",
+    "chargeback",
+    "balance",
+    "transfer",
+    "settlement",
+];
+
 /// Classifies a verified event by its provider event type.
+///
+/// Order matters: refund wins over everything (a `refund.dispute` is still a
+/// refund-family concern), and an absent/blank event type stays
+/// [`WebhookEventFamily::Payment`] because several providers omit it on the
+/// payment callback.
 pub fn classify_webhook_event(event_type: Option<&str>) -> WebhookEventFamily {
-    if is_refund_event_type(event_type) {
-        WebhookEventFamily::Refund
-    } else {
-        WebhookEventFamily::Payment
+    let Some(value) = event_type.map(str::trim).filter(|value| !value.is_empty()) else {
+        return WebhookEventFamily::Payment;
+    };
+    if is_refund_event_type(Some(value)) {
+        return WebhookEventFamily::Refund;
     }
+    if is_non_payment_event_type(value) {
+        return WebhookEventFamily::Unsupported;
+    }
+    WebhookEventFamily::Payment
+}
+
+/// True when the event type names a financial family this service does not
+/// process (payout / dispute / chargeback / balance / transfer / settlement).
+pub fn is_non_payment_event_type(event_type: &str) -> bool {
+    let normalized = event_type.trim().to_ascii_lowercase();
+    NON_PAYMENT_EVENT_MARKERS
+        .iter()
+        .any(|marker| normalized.contains(marker))
 }
 
 /// Which families an intake URL accepts. The canonical payment URL accepts
@@ -81,11 +120,30 @@ impl WebhookFamilyPolicy {
             (WebhookFamilyPolicy::All, _) => true,
             (WebhookFamilyPolicy::RefundOnly, WebhookEventFamily::Refund) => true,
             (WebhookFamilyPolicy::RefundOnly, WebhookEventFamily::Payment) => false,
+            (WebhookFamilyPolicy::RefundOnly, WebhookEventFamily::Unsupported) => false,
         }
     }
 }
 
-/// Payment-family dispatch dependencies. Held behind [`Option`] so the
+/// Fulfillment dependencies of the payment family, grouped so a deployment
+/// wires ONE value instead of an ever-growing argument list.
+///
+/// Every capability-owned fulfillment gets its own port here; the settlement
+/// pipeline resolves the port from the order's subject kind, so adding a
+/// business family means adding a port + a handler, never editing the
+/// pipeline.
+pub struct ProviderWebhookPorts {
+    pub credit_port: Arc<dyn AccountPointsCreditPort>,
+    pub account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    pub coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    pub membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    pub app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
+    pub physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    pub virtual_goods_port: Arc<dyn VirtualGoodsFulfillmentPort>,
+    pub promotion_discount_port: Arc<dyn PromotionDiscountPort>,
+}
+
+/// Payment-family dispatch dependencies, held behind [`Option`] so the
 /// refund-only intake mount does not need to fabricate payment-side ports:
 /// the family policy rejects payment events before dispatch is reached.
 struct PaymentDispatchPorts {
@@ -97,6 +155,7 @@ struct PaymentDispatchPorts {
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    virtual_goods_port: Arc<dyn VirtualGoodsFulfillmentPort>,
     promotion_discount_port: Arc<dyn PromotionDiscountPort>,
     payment_registry: Arc<dyn PaymentNotifyHandlerRegistry>,
 }
@@ -112,18 +171,12 @@ pub struct ProviderWebhookFramework {
 
 impl ProviderWebhookFramework {
     /// Assembles the full framework (all families) from the concrete
-    /// Postgres stores and the injected business handler registries
-    /// (extension seam; `None` falls back to the defaults).
-    #[allow(clippy::too_many_arguments)]
+    /// Postgres stores, the injected fulfillment ports, and the business
+    /// handler registries (extension seam; `None` is never silently
+    /// substituted — callers pass the default registries explicitly).
     pub fn new(
         pool: sqlx::PgPool,
-        credit_port: Arc<dyn AccountPointsCreditPort>,
-        account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-        coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
-        membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
-        app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
-        physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
-        promotion_discount_port: Arc<dyn PromotionDiscountPort>,
+        ports: ProviderWebhookPorts,
         payment_registry: Arc<dyn PaymentNotifyHandlerRegistry>,
         refund_registry: Arc<dyn RefundNotifyHandlerRegistry>,
     ) -> Self {
@@ -131,13 +184,14 @@ impl ProviderWebhookFramework {
             payment_dispatch: Some(PaymentDispatchPorts {
                 payments: Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool.clone())),
                 recharge: Arc::new(PostgresCommerceRechargeStore::new(pool.clone())),
-                credit_port,
-                account_value_ledger_port,
-                coupon_redemption_port,
-                membership_port,
-                app_template_port,
-                physical_goods_port,
-                promotion_discount_port,
+                credit_port: ports.credit_port,
+                account_value_ledger_port: ports.account_value_ledger_port,
+                coupon_redemption_port: ports.coupon_redemption_port,
+                membership_port: ports.membership_port,
+                app_template_port: ports.app_template_port,
+                physical_goods_port: ports.physical_goods_port,
+                virtual_goods_port: ports.virtual_goods_port,
+                promotion_discount_port: ports.promotion_discount_port,
                 payment_registry,
             }),
             orders: Arc::new(PostgresCommerceOrderStore::new(pool)),
@@ -230,6 +284,7 @@ impl ProviderWebhookFramework {
                     membership_port: dispatch.membership_port.as_ref(),
                     app_template_port: dispatch.app_template_port.as_ref(),
                     physical_goods_port: dispatch.physical_goods_port.as_ref(),
+                    virtual_goods_port: dispatch.virtual_goods_port.as_ref(),
                     promotion_discount_port: dispatch.promotion_discount_port.as_ref(),
                 };
                 match process_payment_notify_verified(
@@ -250,6 +305,31 @@ impl ProviderWebhookFramework {
                     ),
                     Err(error) => map_webhook_service_error(ctx, error),
                 }
+            }
+            WebhookEventFamily::Unsupported => {
+                // A verified delivery from a financial family this service does
+                // not implement. Audit it and ack: the event is persisted for
+                // forensics, no payment attempt is touched, and the provider
+                // stops retrying a delivery nothing here will ever handle.
+                let reason = format!(
+                    "unsupported webhook event family: {}",
+                    event.event_type.as_deref().unwrap_or("(no event type)")
+                );
+                self.reject_misrouted_event(ports, &provider_code, body, family)
+                    .await;
+                tracing::warn!(
+                    target = "order.payment_webhook",
+                    provider_code,
+                    reason,
+                    "unsupported financial event family acked without payment effects"
+                );
+                success_command(
+                    ctx,
+                    None::<String>,
+                    Some(
+                        sdkwork_order_service::PAYMENT_NOTIFY_STATUS_UNSUPPORTED.to_owned(),
+                    ),
+                )
             }
         }
     }
@@ -293,4 +373,104 @@ pub fn collect_webhook_intake(headers: &axum::http::HeaderMap) -> Vec<(String, S
             Some((name.as_str().to_owned(), value.to_str().ok()?.to_owned()))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_payment_vocabularies_all_classify_as_payment() {
+        for event_type in [
+            "TRANSACTION.SUCCESS",
+            "payment_intent.succeeded",
+            "PAYMENT.CAPTURE.COMPLETED",
+            "trade_success",
+            "charge.succeeded",
+            "sandbox.payment.succeeded",
+        ] {
+            assert_eq!(
+                WebhookEventFamily::Payment,
+                classify_webhook_event(Some(event_type)),
+                "{event_type} must stay a payment event"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_event_type_stays_payment() {
+        // Several providers omit the event type on the payment callback; the
+        // payment family must remain the default or every such callback would
+        // be dropped.
+        assert_eq!(WebhookEventFamily::Payment, classify_webhook_event(None));
+        assert_eq!(
+            WebhookEventFamily::Payment,
+            classify_webhook_event(Some("   "))
+        );
+    }
+
+    #[test]
+    fn refund_vocabularies_classify_as_refund() {
+        for event_type in [
+            "REFUND.SUCCESS",
+            "charge.refunded",
+            "PAYMENT.CAPTURE.REFUNDED",
+            "refund_failed",
+        ] {
+            assert_eq!(
+                WebhookEventFamily::Refund,
+                classify_webhook_event(Some(event_type)),
+                "{event_type} must be a refund event"
+            );
+        }
+    }
+
+    #[test]
+    fn refund_family_wins_over_other_markers() {
+        // A dispute about a refund is still resolved by the refund pipeline.
+        assert_eq!(
+            WebhookEventFamily::Refund,
+            classify_webhook_event(Some("refund.dispute.created"))
+        );
+    }
+
+    #[test]
+    fn foreign_financial_families_are_unsupported_not_payment() {
+        for event_type in [
+            "payout.paid",
+            "payout.failed",
+            "charge.dispute.created",
+            "charge.dispute.closed",
+            "charge.dispute.funds_withdrawn",
+            "balance.available",
+            "TRANSFER.SUCCESS",
+            "settlement.completed",
+            "charge.dispute.created",
+        ] {
+            assert_eq!(
+                WebhookEventFamily::Unsupported,
+                classify_webhook_event(Some(event_type)),
+                "{event_type} must never reach the payment pipeline"
+            );
+            assert!(is_non_payment_event_type(event_type));
+        }
+    }
+
+    #[test]
+    fn canonical_payment_intake_accepts_every_family_but_refund_intake_is_strict() {
+        // The all-families intake serves payment, refund, and (as an audited
+        // ack) unsupported families.
+        for family in [
+            WebhookEventFamily::Payment,
+            WebhookEventFamily::Refund,
+            WebhookEventFamily::Unsupported,
+        ] {
+            assert!(WebhookFamilyPolicy::All.admits(family));
+        }
+        // The dedicated refund intake serves refunds only: a payment or a
+        // foreign family is a PSP misconfiguration and is rejected + audited.
+        assert!(WebhookFamilyPolicy::RefundOnly.admits(WebhookEventFamily::Refund));
+        assert!(!WebhookFamilyPolicy::RefundOnly.admits(WebhookEventFamily::Payment));
+        assert!(!WebhookFamilyPolicy::RefundOnly.admits(WebhookEventFamily::Unsupported));
+    }
 }

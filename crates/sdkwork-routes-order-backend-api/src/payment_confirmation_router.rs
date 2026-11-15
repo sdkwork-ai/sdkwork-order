@@ -11,12 +11,14 @@ use sdkwork_order_repository_sqlx::{
     OrderPaymentSettlementContext, PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
 };
 use sdkwork_order_service::{
-    settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
-    AppTemplatePurchaseFulfillmentPort, CouponRedemptionPort, MembershipPurchaseFulfillmentPort,
-    NoopCouponRedemptionPort, NoopPromotionDiscountPort, OwnerOrderPaymentReconciliationPort,
-    OwnerOrderSettlementPorts,
-    PhysicalGoodsFulfillmentPort, ReconcileOwnerOrderPaymentRequest,
-    UnavailableOwnerOrderPaymentReconciliationPort, UnavailablePhysicalGoodsFulfillmentPort,
+    default_payment_notify_handler_registry, settle_owner_order_after_payment_success_with_registry,
+    AccountPointsCreditPort, AccountValueLedgerPort, AppTemplatePurchaseFulfillmentPort,
+    CouponRedemptionPort, MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort,
+    NoopPromotionDiscountPort, OwnerOrderPaymentReconciliationPort, OwnerOrderSettlementPorts,
+    PaymentNotifyHandlerRegistry, PhysicalGoodsFulfillmentPort,
+    ReconcileOwnerOrderPaymentRequest, UnavailableOwnerOrderPaymentReconciliationPort,
+    UnavailablePhysicalGoodsFulfillmentPort, UnavailableVirtualGoodsFulfillmentPort,
+    VirtualGoodsFulfillmentPort,
 };
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
 use sdkwork_web_core::WebRequestContext;
@@ -53,6 +55,14 @@ struct PaymentConfirmationState {
     app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    virtual_goods_port: Arc<dyn VirtualGoodsFulfillmentPort>,
+    /// Fulfillment handler registry used by the manual confirmation path.
+    ///
+    /// It MUST be the same registry the webhook pipeline uses: an operator
+    /// re-confirmation and a provider callback are two entry points into ONE
+    /// payment-success flow, so a business handler registered for the webhook
+    /// path can never be silently bypassed here.
+    payment_notify_handler_registry: Arc<dyn PaymentNotifyHandlerRegistry>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -120,6 +130,37 @@ pub fn payment_confirmation_router_with_postgres_pool_and_integrations(
     reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
 ) -> Router {
+    payment_confirmation_router_with_postgres_pool_and_ports(
+        pool,
+        credit_port,
+        account_value_ledger_port,
+        coupon_redemption_port,
+        membership_port,
+        app_template_port,
+        reconciliation_port,
+        physical_goods_port,
+        Arc::new(UnavailableVirtualGoodsFulfillmentPort),
+        None,
+    )
+}
+
+/// Full assembly seam: the confirmation path receives the deployment's
+/// virtual-goods port and the SAME payment notify handler registry the webhook
+/// intake uses. `None` falls back to the standard registry, which is also what
+/// the webhook intake defaults to, so both entry points stay in lock-step.
+#[allow(clippy::too_many_arguments)]
+pub fn payment_confirmation_router_with_postgres_pool_and_ports(
+    pool: PgPool,
+    credit_port: Arc<dyn AccountPointsCreditPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
+    reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
+    physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    virtual_goods_port: Arc<dyn VirtualGoodsFulfillmentPort>,
+    payment_notify_handler_registry: Option<Arc<dyn PaymentNotifyHandlerRegistry>>,
+) -> Router {
     build_payment_confirmation_router(PaymentConfirmationState {
         store: PaymentConfirmationStoreKind::Postgres {
             payments: Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool.clone())),
@@ -133,6 +174,9 @@ pub fn payment_confirmation_router_with_postgres_pool_and_integrations(
         app_template_port,
         reconciliation_port,
         physical_goods_port,
+        virtual_goods_port,
+        payment_notify_handler_registry: payment_notify_handler_registry
+            .unwrap_or_else(default_payment_notify_handler_registry),
     })
 }
 
@@ -180,6 +224,8 @@ async fn confirm_order_payment(
     let app_template_port = state.app_template_port.clone();
     let reconciliation_port = state.reconciliation_port.clone();
     let physical_goods_port = state.physical_goods_port.clone();
+    let virtual_goods_port = state.virtual_goods_port.clone();
+    let payment_notify_handler_registry = state.payment_notify_handler_registry.clone();
     match state.store {
         PaymentConfirmationStoreKind::Postgres {
             ref payments,
@@ -205,8 +251,10 @@ async fn confirm_order_payment(
                     membership_port: membership_port.as_ref(),
                     app_template_port: app_template_port.as_ref(),
                     physical_goods_port: physical_goods_port.as_ref(),
+                    virtual_goods_port: virtual_goods_port.as_ref(),
                     promotion_discount_port: &promotion_discount_port,
                 },
+                payment_notify_handler_registry.as_ref(),
             )
             .await
         }
@@ -225,6 +273,7 @@ async fn confirm_order_payment_inner(
     order_context_loader: &dyn OrderSettlementContextLoader,
     reconciliation_port: &dyn OwnerOrderPaymentReconciliationPort,
     settlement_ports: OwnerOrderSettlementPorts<'_>,
+    payment_notify_handler_registry: &dyn PaymentNotifyHandlerRegistry,
 ) -> Response {
     let order_context = match order_context_loader
         .load_order_payment_settlement_context(
@@ -261,12 +310,14 @@ async fn confirm_order_payment_inner(
         "payment provider reconciliation confirmed success"
     );
 
-    let settlement_outcome = match settle_owner_order_after_payment_success(
+    let settlement_outcome = match settle_owner_order_after_payment_success_with_registry(
         settlement_ports,
         &reconciliation.attempt,
         Some(order_context.subject.as_str()),
         order_context.membership_purchase.as_ref(),
         request_no,
+        None,
+        payment_notify_handler_registry,
     )
     .await
     {

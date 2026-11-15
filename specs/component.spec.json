@@ -9,6 +9,11 @@
   },
   "localExtensionSpecs": [
     {
+      "file": "PAYMENT_CALLBACK_NOTIFY_SPEC.md",
+      "path": "specs/PAYMENT_CALLBACK_NOTIFY_SPEC.md",
+      "purpose": "Normative unified payment-success/failure/refund callback notification standard: canonical notify URL contract, one verification pipeline, tenant + organization + access-token isolation, virtual/physical/all-subject fulfillment dispatch matrix, refund notification parity, and the application-startup integration contract."
+    },
+    {
       "file": "ACCOUNT_VALUE_ORDER_SPEC.md",
       "path": "specs/ACCOUNT_VALUE_ORDER_SPEC.md",
       "purpose": "Order-owned recharge, Token Bank plan, coupon redemption, refund, and withdrawal orchestration."
