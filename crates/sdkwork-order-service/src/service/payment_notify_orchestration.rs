@@ -36,6 +36,10 @@ pub const PAYMENT_NOTIFY_STATUS_SETTLED: &str = "settled";
 pub const PAYMENT_NOTIFY_STATUS_ORDER_FAILURE_MARKED: &str = "order_failure_marked";
 pub const PAYMENT_NOTIFY_STATUS_ACCEPTED: &str = "accepted";
 pub const PAYMENT_NOTIFY_STATUS_UNMAPPED: &str = "unmapped";
+/// A verified delivery from a financial family this order service does not
+/// implement (payout / dispute / chargeback / balance / transfer). Persisted
+/// for forensics and acknowledged; never applied to a payment attempt.
+pub const PAYMENT_NOTIFY_STATUS_UNSUPPORTED: &str = "unsupported_family";
 
 /// Outcome of one payment notify processing run, projected for the HTTP
 /// response surface.

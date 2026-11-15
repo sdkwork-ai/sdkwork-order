@@ -252,6 +252,17 @@ async fn submit_postgres_provider_refund(
         ensure_provider_account_matches(account.as_ref(), &provider_code)?;
         provider_registry_for_account(credentials, account.as_ref().map(provider_account_binding))
     };
+    // Refund notifications resolve through the same tenant notify domain as
+    // payment success notifications; channels without a dedicated refund
+    // callback contract drop the URL inside `create_provider_refund`.
+    let refund_notify_url = sdkwork_payment_repository_sqlx::resolve_refund_notify_url_postgres(
+        pool,
+        tenant_id,
+        organization_id,
+        &provider_code,
+        credentials.webhook_base_url.as_deref(),
+    )
+    .await?;
     submit_provider_refund(
         &registry,
         &provider_code,
@@ -260,10 +271,12 @@ async fn submit_postgres_provider_refund(
         refund,
         &context.amount,
         reason,
+        refund_notify_url,
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn submit_provider_refund(
     registry: &PaymentProviderRegistry,
     provider_code: &str,
@@ -272,6 +285,7 @@ async fn submit_provider_refund(
     refund: &RefundView,
     total_amount: &str,
     reason: Option<String>,
+    refund_notify_url: Option<String>,
 ) -> Result<ProviderRefundSubmissionState, CommerceServiceError> {
     let total_amount = CommerceMoney::new(total_amount).map_err(CommerceServiceError::storage)?;
     if refund.status == "processing" {
@@ -296,6 +310,7 @@ async fn submit_provider_refund(
         &refund.amount,
         &total_amount,
         reason,
+        refund_notify_url.as_deref(),
     )
     .await
 }

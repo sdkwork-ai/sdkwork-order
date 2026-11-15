@@ -20,14 +20,16 @@ use sdkwork_order_service::{
     AppTemplatePurchaseFulfillmentPort, CouponRedemptionPort, MembershipPurchaseFulfillmentPort,
     NoopCouponRedemptionPort, NoopPromotionDiscountPort, PaymentNotifyHandlerRegistry,
     PhysicalGoodsFulfillmentPort, PromotionDiscountPort, RefundNotifyHandlerRegistry,
-    UnavailablePhysicalGoodsFulfillmentPort,
+    UnavailablePhysicalGoodsFulfillmentPort, UnavailableVirtualGoodsFulfillmentPort,
+    VirtualGoodsFulfillmentPort,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
 use sqlx::PgPool;
 
 use crate::payment_webhook_framework::{
-    collect_webhook_intake, ProviderWebhookFramework, WebhookFamilyPolicy, WEBHOOK_BODY_MAX_BYTES,
+    collect_webhook_intake, ProviderWebhookFramework, ProviderWebhookPorts, WebhookFamilyPolicy,
+    WEBHOOK_BODY_MAX_BYTES,
 };
 
 /// Maximum provider notification body size. Explicit and bounded so oversized
@@ -72,10 +74,12 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_coupon(
         membership_port,
         app_template_port,
         Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
+        Arc::new(UnavailableVirtualGoodsFulfillmentPort),
         Arc::new(NoopPromotionDiscountPort),
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn app_payment_webhook_router_with_postgres_pool_and_integrations(
     pool: PgPool,
     credit_port: Arc<dyn AccountPointsCreditPort>,
@@ -84,6 +88,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations(
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    virtual_goods_port: Arc<dyn VirtualGoodsFulfillmentPort>,
     promotion_discount_port: Arc<dyn PromotionDiscountPort>,
 ) -> Router {
     app_payment_webhook_router_with_postgres_pool_and_integrations_and_registries(
@@ -94,6 +99,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations(
         membership_port,
         app_template_port,
         physical_goods_port,
+        virtual_goods_port,
         promotion_discount_port,
         None,
         None,
@@ -112,6 +118,7 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     app_template_port: Arc<dyn AppTemplatePurchaseFulfillmentPort>,
     physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    virtual_goods_port: Arc<dyn VirtualGoodsFulfillmentPort>,
     promotion_discount_port: Arc<dyn PromotionDiscountPort>,
     payment_notify_handler_registry: Option<Arc<dyn PaymentNotifyHandlerRegistry>>,
     refund_notify_handler_registry: Option<Arc<dyn RefundNotifyHandlerRegistry>>,
@@ -137,13 +144,16 @@ pub fn app_payment_webhook_router_with_postgres_pool_and_integrations_and_regist
     });
     let framework = Arc::new(ProviderWebhookFramework::new(
         pool.clone(),
-        credit_port,
-        account_value_ledger_port,
-        coupon_redemption_port,
-        membership_port,
-        app_template_port,
-        physical_goods_port,
-        promotion_discount_port,
+        ProviderWebhookPorts {
+            credit_port,
+            account_value_ledger_port,
+            coupon_redemption_port,
+            membership_port,
+            app_template_port,
+            physical_goods_port,
+            virtual_goods_port,
+            promotion_discount_port,
+        },
         payment_notify_handler_registry.unwrap_or_else(default_payment_notify_handler_registry),
         refund_registry,
     ));

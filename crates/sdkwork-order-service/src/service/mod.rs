@@ -27,19 +27,20 @@ pub use payment_notify::{
     DefaultPaymentNotifyHandlerRegistry, ExternalFulfillmentNotifyHandler, MembershipNotifyHandler,
     PaymentNotifyContext, PaymentNotifyHandler, PaymentNotifyHandlerFuture,
     PaymentNotifyHandlerRegistry, PaymentNotifyHandlingOutcome, PhysicalGoodsNotifyHandler,
-    PointsRechargeNotifyHandler, UnknownSubjectNotifyHandler,
+    PointsRechargeNotifyHandler, UnknownSubjectNotifyHandler, VirtualGoodsNotifyHandler,
     PAYMENT_NOTIFY_BUSINESS_ACCOUNT_RECHARGE_PACKAGE, PAYMENT_NOTIFY_BUSINESS_APP_TEMPLATE,
     PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE, PAYMENT_NOTIFY_BUSINESS_EXTERNAL,
     PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP, PAYMENT_NOTIFY_BUSINESS_POINTS_RECHARGE,
     PAYMENT_NOTIFY_BUSINESS_PRODUCT, PAYMENT_NOTIFY_BUSINESS_TOKEN_BANK_PLAN_PURCHASE,
     PAYMENT_NOTIFY_BUSINESS_TOKEN_BANK_PLAN_RENEWAL, PAYMENT_NOTIFY_BUSINESS_TOKEN_BANK_RECHARGE,
-    PAYMENT_NOTIFY_BUSINESS_UNKNOWN,
+    PAYMENT_NOTIFY_BUSINESS_UNKNOWN, PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS,
 };
 pub use payment_notify_orchestration::{
     is_refund_event_type, normalize_event_identity, process_payment_notify,
     process_payment_notify_verified, verify_and_normalize_event, PaymentNotifyProcessingOutcome,
     PAYMENT_NOTIFY_STATUS_ACCEPTED, PAYMENT_NOTIFY_STATUS_ORDER_FAILURE_MARKED,
     PAYMENT_NOTIFY_STATUS_SETTLED, PAYMENT_NOTIFY_STATUS_UNMAPPED,
+    PAYMENT_NOTIFY_STATUS_UNSUPPORTED,
 };
 pub use points_recharge_fulfillment::{
     default_fulfill_points_recharge_command, fulfill_points_recharge_order,

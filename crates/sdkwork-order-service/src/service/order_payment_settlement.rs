@@ -7,6 +7,7 @@ use crate::service::payment_notify::{
     PAYMENT_NOTIFY_BUSINESS_EXTERNAL, PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP,
     PAYMENT_NOTIFY_BUSINESS_POINTS_RECHARGE, PAYMENT_NOTIFY_BUSINESS_PRODUCT,
     PAYMENT_NOTIFY_BUSINESS_TOKEN_BANK_RECHARGE, PAYMENT_NOTIFY_BUSINESS_UNKNOWN,
+    PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS,
 };
 use crate::{
     MembershipPurchaseSettlementSnapshot, OrderPaymentSettlementAttempt,
@@ -68,6 +69,11 @@ impl OrderSubjectKind {
         }
     }
 
+    /// Whether this order module owns an in-process fulfillment flow for the
+    /// subject (the account-value/recharge/membership/app-template families).
+    /// Delivery families delegated to a commerce capability — `Product`
+    /// (inventory + shipment) and `VirtualGoods` (entitlement delivery) — are
+    /// reported as `false` and are covered by their own ports instead.
     pub fn is_fulfillment_implemented(self) -> bool {
         matches!(
             self,
@@ -103,11 +109,14 @@ impl OrderSubjectKind {
             Self::AccountRechargePackage => PAYMENT_NOTIFY_BUSINESS_ACCOUNT_RECHARGE_PACKAGE,
             Self::CouponRecharge => PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE,
             Self::Product => PAYMENT_NOTIFY_BUSINESS_PRODUCT,
+            // Virtual goods are a first-class fulfillment family with their own
+            // handler and port, not an alias of the deferred `external` bucket:
+            // payment success IS delivery, so the split must be observable in
+            // settlement status, metrics, and replay tooling.
+            Self::VirtualGoods => PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS,
             Self::Membership => PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP,
             Self::AppTemplate => PAYMENT_NOTIFY_BUSINESS_APP_TEMPLATE,
-            Self::VirtualGoods | Self::CouponPackage | Self::External => {
-                PAYMENT_NOTIFY_BUSINESS_EXTERNAL
-            }
+            Self::CouponPackage | Self::External => PAYMENT_NOTIFY_BUSINESS_EXTERNAL,
             Self::Unknown => PAYMENT_NOTIFY_BUSINESS_UNKNOWN,
         }
     }
@@ -186,6 +195,13 @@ pub struct OwnerOrderSettlementOutcome {
     pub fulfillment_status: String,
 }
 
+/// Dependency bundle of one payment-success settlement.
+///
+/// The fulfillment matrix is closed by subject kind: `Product` →
+/// `physical_goods_port`, `VirtualGoods` → `virtual_goods_port`, every
+/// capability-owned subject (membership, app template, recharge kinds) → its
+/// own port. A paid order never leaves settlement without exactly one
+/// fulfillment decision.
 #[derive(Clone, Copy)]
 pub struct OwnerOrderSettlementPorts<'a> {
     pub payment_store: &'a dyn OwnerOrderPaymentConfirmationPort,
@@ -198,6 +214,7 @@ pub struct OwnerOrderSettlementPorts<'a> {
     pub membership_port: &'a dyn crate::MembershipPurchaseFulfillmentPort,
     pub app_template_port: &'a dyn crate::AppTemplatePurchaseFulfillmentPort,
     pub physical_goods_port: &'a dyn crate::PhysicalGoodsFulfillmentPort,
+    pub virtual_goods_port: &'a dyn crate::VirtualGoodsFulfillmentPort,
     pub promotion_discount_port: &'a dyn crate::PromotionDiscountPort,
 }
 

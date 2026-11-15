@@ -36,6 +36,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
     let physical_checkout_resolver = host.physical_checkout_resolver_port();
     let physical_inventory = host.physical_inventory_reservation_port();
     let physical_goods = host.physical_goods_fulfillment_port();
+    let virtual_goods = host.virtual_goods_fulfillment_port();
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
@@ -103,6 +104,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
                 membership_port,
                 app_template_port,
                 physical_goods,
+                virtual_goods,
                 promotion_discount_port,
             ),
         )

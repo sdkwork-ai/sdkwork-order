@@ -1,10 +1,12 @@
 mod checkout_resolver;
 mod fulfillment;
 mod inventory;
+mod virtual_fulfillment;
 
 pub use checkout_resolver::PhysicalCheckoutAdapter;
 pub use fulfillment::PhysicalFulfillmentAdapter;
 pub use inventory::PhysicalInventoryAdapter;
+pub use virtual_fulfillment::VirtualFulfillmentAdapter;
 
 use std::sync::Arc;
 
@@ -13,15 +15,23 @@ use sdkwork_database_id::IdGenerator;
 use sdkwork_database_sqlx::{create_pool_from_config, DatabasePool};
 use sdkwork_order_service::{
     PhysicalCheckoutResolverPort, PhysicalGoodsFulfillmentPort, PhysicalInventoryReservationPort,
+    VirtualGoodsFulfillmentPort,
 };
 
+/// Commerce fulfillment ports.
+///
+/// `physical` and `virtual` are the two paid-order delivery families: physical
+/// reserves stock and opens a shipment, virtual delivers the entitlement at
+/// payment success. Both are built here because they share the order pool and
+/// the same idempotent `commerce_fulfillment_order` claim.
 pub struct PhysicalCommercePorts {
     pub checkout_resolver: Arc<dyn PhysicalCheckoutResolverPort>,
     pub inventory: Arc<dyn PhysicalInventoryReservationPort>,
     pub fulfillment: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    pub virtual_fulfillment: Arc<dyn VirtualGoodsFulfillmentPort>,
 }
 
-/// Builds the physical-commerce ports.
+/// Builds the physical/virtual commerce ports.
 ///
 /// `ids` is the process Snowflake identity: the checkout resolver writes through the merchandise
 /// catalog tables, whose primary keys are minted by the caller's node id. It is injected rather than
@@ -45,6 +55,7 @@ pub async fn physical_commerce_ports_from_env(
             inventory_pool,
             order_pool.clone(),
         )),
+        virtual_fulfillment: Arc::new(VirtualFulfillmentAdapter::new(order_pool.clone())),
     })
 }
 

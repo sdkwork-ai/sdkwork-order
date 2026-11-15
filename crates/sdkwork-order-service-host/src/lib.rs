@@ -25,6 +25,7 @@ use sdkwork_order_service::{
     PhysicalCheckoutResolverPort, PhysicalGoodsFulfillmentPort,
     PhysicalInventoryReservationPort, PromotionDiscountPort, UnavailablePhysicalCheckoutResolverPort,
     UnavailablePhysicalGoodsFulfillmentPort, UnavailablePhysicalInventoryReservationPort,
+    UnavailableVirtualGoodsFulfillmentPort, VirtualGoodsFulfillmentPort,
 };
 use std::sync::Arc;
 
@@ -56,6 +57,7 @@ pub struct OrderServiceHost {
     physical_checkout_resolver_port: Arc<dyn PhysicalCheckoutResolverPort>,
     physical_inventory_reservation_port: Arc<dyn PhysicalInventoryReservationPort>,
     physical_goods_fulfillment_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+    virtual_goods_fulfillment_port: Arc<dyn VirtualGoodsFulfillmentPort>,
 }
 
 impl OrderServiceHost {
@@ -118,6 +120,7 @@ impl OrderServiceHost {
             physical_checkout_resolver_port: physical_ports.checkout_resolver,
             physical_inventory_reservation_port: physical_ports.inventory,
             physical_goods_fulfillment_port: physical_ports.fulfillment,
+            virtual_goods_fulfillment_port: physical_ports.virtual_fulfillment,
         })
     }
 
@@ -170,6 +173,7 @@ impl OrderServiceHost {
                 UnavailablePhysicalInventoryReservationPort,
             ),
             physical_goods_fulfillment_port: Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
+            virtual_goods_fulfillment_port: Arc::new(UnavailableVirtualGoodsFulfillmentPort),
         }
     }
 
@@ -233,5 +237,13 @@ impl OrderServiceHost {
 
     pub fn physical_goods_fulfillment_port(&self) -> Arc<dyn PhysicalGoodsFulfillmentPort> {
         self.physical_goods_fulfillment_port.clone()
+    }
+
+    /// Virtual-goods delivery port (payment success IS delivery for a virtual
+    /// order). Wired from the same commerce fulfillment family as the physical
+    /// port so no deployment can configure one delivery family and forget the
+    /// other.
+    pub fn virtual_goods_fulfillment_port(&self) -> Arc<dyn VirtualGoodsFulfillmentPort> {
+        self.virtual_goods_fulfillment_port.clone()
     }
 }

@@ -10,6 +10,7 @@ mod physical_purchase;
 mod points_recharge_fulfillment;
 mod promotion_discount;
 mod refund_notify;
+mod virtual_goods;
 
 pub use partner_relation::{
     NoopOrderPartnerRelationPort, OrderPartnerRelationFuture, OrderPartnerRelationPort,
@@ -102,6 +103,11 @@ pub use refund_notify::{
     RefundNotifyIngestFuture, RefundNotifyIngestOutcome, RefundNotifyIngestPort,
     RefundNotifyStatePort, RefundRequestSettlementContext, RefundRequestSettlementFuture,
     RefundRequestSettlementPort, REFUND_NOTIFY_BUSINESS_REFUND,
+};
+pub use virtual_goods::{
+    virtual_goods_fulfillment_idempotency_key, FulfillPaidVirtualOrderRequest,
+    UnavailableVirtualGoodsFulfillmentPort, VirtualGoodsFulfillmentOutcome,
+    VirtualGoodsFulfillmentPort, VirtualGoodsFuture, VIRTUAL_GOODS_FULFILLMENT_PORT,
 };
 
 /// 仓储端口标识符，用于 `CommerceServiceContract` 能力注册。

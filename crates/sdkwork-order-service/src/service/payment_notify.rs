@@ -21,6 +21,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use sdkwork_contract_service::CommerceServiceError;
+use sdkwork_contract_service::CommerceServiceErrorKind;
 
 use crate::{
     app_template_purchase_fulfillment_idempotency_key, default_fulfill_account_value_order_command,
@@ -28,14 +29,16 @@ use crate::{
     fulfill_points_recharge_order, mark_points_recharge_payment_succeeded,
     membership_purchase_fulfillment_idempotency_key, membership_quota_recharge_idempotency_key,
     physical_goods_fulfillment_idempotency_key, points_recharge_payment_success_idempotency_key,
-    redeem_coupon_and_fulfill_account_value_order, AccountPointsCreditPort,
-    AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
-    AppTemplatePurchaseFulfillmentPort, CouponRedemptionPort, FulfillPaidAppTemplateOrderRequest,
-    FulfillPaidPhysicalOrderRequest, MarkPointsRechargePaymentSucceededCommand,
+    redeem_coupon_and_fulfill_account_value_order, virtual_goods_fulfillment_idempotency_key,
+    AccountPointsCreditPort, AccountValueFulfillmentStore, AccountValueLedgerPort,
+    AccountValueOrderSubject, AppTemplatePurchaseFulfillmentPort, CouponRedemptionPort,
+    FulfillPaidAppTemplateOrderRequest, FulfillPaidPhysicalOrderRequest,
+    FulfillPaidVirtualOrderRequest, MarkPointsRechargePaymentSucceededCommand,
     MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
     MembershipPurchaseSettlementSnapshot, MembershipQuotaRechargeFulfillmentRequest,
     OrderPaymentSettlementAttempt, OrderSubjectKind, OwnerOrderSettlementPorts,
     PhysicalGoodsFulfillmentPort, PointsRechargeFulfillmentStore,
+    VirtualGoodsFulfillmentPort,
 };
 
 /// Canonical business type for points recharge orders.
@@ -56,6 +59,9 @@ pub const PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP: &str = "membership";
 pub const PAYMENT_NOTIFY_BUSINESS_APP_TEMPLATE: &str = "app_template";
 /// Canonical business type for physical goods orders.
 pub const PAYMENT_NOTIFY_BUSINESS_PRODUCT: &str = "product";
+/// Canonical business type for virtual goods orders (payment success IS
+/// delivery; fulfilled through the virtual-goods fulfillment port).
+pub const PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS: &str = "virtual_goods";
 /// Canonical business type for virtual goods / external fulfillment orders.
 pub const PAYMENT_NOTIFY_BUSINESS_EXTERNAL: &str = "external";
 /// Fallback business type when the order subject cannot be resolved.
@@ -184,6 +190,7 @@ pub fn default_payment_notify_handler_registry() -> Arc<dyn PaymentNotifyHandler
             .with(Arc::new(MembershipNotifyHandler))
             .with(Arc::new(AppTemplateNotifyHandler))
             .with(Arc::new(PhysicalGoodsNotifyHandler))
+            .with(Arc::new(VirtualGoodsNotifyHandler))
             .with(Arc::new(ExternalFulfillmentNotifyHandler))
             .with(Arc::new(UnknownSubjectNotifyHandler)),
     )
@@ -654,6 +661,84 @@ where
     })
 }
 
+/// Virtual goods fulfillment (idempotent). Payment success IS delivery for a
+/// virtual order, so this handler owns the entitlement hand-off and the
+/// `fulfilled` transition; it is a first-class family, not the deferred
+/// `external` bucket.
+///
+/// A deployment with no virtual-goods capability wired degrades to
+/// `awaiting_virtual_goods_fulfillment` instead of failing the webhook: the
+/// payment and order state are already advanced, the provider is acked, and
+/// the delivery replays idempotently once the capability is installed.
+pub struct VirtualGoodsNotifyHandler;
+impl PaymentNotifyHandler for VirtualGoodsNotifyHandler {
+    fn business_type(&self) -> &'static str {
+        PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS
+    }
+
+    fn handle<'ports, 'data>(
+        &'ports self,
+        ctx: PaymentNotifyContext<'ports, 'data>,
+    ) -> PaymentNotifyHandlerFuture<'ports, 'data>
+    where
+        'data: 'ports,
+    {
+        Box::pin(async move {
+            settle_virtual_goods_subject(
+                ctx.ports.virtual_goods_port,
+                ctx.attempt,
+                ctx.paid_at,
+                ctx.request_no,
+            )
+            .await
+        })
+    }
+}
+
+async fn settle_virtual_goods_subject<P>(
+    virtual_goods_port: &P,
+    attempt: &OrderPaymentSettlementAttempt,
+    paid_at: &str,
+    request_no: &str,
+) -> Result<PaymentNotifyHandlingOutcome, CommerceServiceError>
+where
+    P: VirtualGoodsFulfillmentPort + ?Sized,
+{
+    let outcome = match virtual_goods_port
+        .fulfill_paid_virtual_order(FulfillPaidVirtualOrderRequest {
+            tenant_id: attempt.tenant_id.clone(),
+            organization_id: attempt.organization_id.clone(),
+            owner_user_id: attempt.owner_user_id.clone(),
+            order_id: attempt.order_id.clone(),
+            paid_at: paid_at.to_owned(),
+            request_no: request_no.to_owned(),
+            idempotency_key: virtual_goods_fulfillment_idempotency_key(&attempt.order_id),
+        })
+        .await
+    {
+        Ok(outcome) => outcome,
+        Err(error) if matches!(error.kind(), CommerceServiceErrorKind::ProviderUnavailable) => {
+            tracing::warn!(
+                target = "order.payment_notify",
+                order_id = %attempt.order_id,
+                reason = %error.message(),
+                "virtual goods fulfillment capability is not installed; delivery deferred"
+            );
+            return Ok(PaymentNotifyHandlingOutcome::deferred(
+                "awaiting_virtual_goods_fulfillment",
+            ));
+        }
+        Err(error) => return Err(error),
+    };
+
+    Ok(PaymentNotifyHandlingOutcome {
+        accepted: outcome.accepted,
+        replayed: outcome.replayed,
+        points_credited: 0,
+        status: outcome.fulfillment_status,
+    })
+}
+
 /// Virtual goods / coupon package / external capability orders: payment is
 /// confirmed and fulfillment is owned by external commerce capabilities.
 pub struct ExternalFulfillmentNotifyHandler;
@@ -717,6 +802,7 @@ impl PaymentNotifyHandler for UnknownSubjectNotifyHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{VirtualGoodsFulfillmentOutcome, VirtualGoodsFuture};
 
     #[test]
     fn registry_resolves_built_in_business_types() {
@@ -729,7 +815,9 @@ mod tests {
             PAYMENT_NOTIFY_BUSINESS_ACCOUNT_RECHARGE_PACKAGE,
             PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE,
             PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP,
+            PAYMENT_NOTIFY_BUSINESS_APP_TEMPLATE,
             PAYMENT_NOTIFY_BUSINESS_PRODUCT,
+            PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS,
             PAYMENT_NOTIFY_BUSINESS_EXTERNAL,
             PAYMENT_NOTIFY_BUSINESS_UNKNOWN,
         ] {
@@ -768,8 +856,9 @@ mod tests {
             ),
             ("coupon_recharge", PAYMENT_NOTIFY_BUSINESS_COUPON_RECHARGE),
             ("membership", PAYMENT_NOTIFY_BUSINESS_MEMBERSHIP),
+            ("app_template", PAYMENT_NOTIFY_BUSINESS_APP_TEMPLATE),
             ("product", PAYMENT_NOTIFY_BUSINESS_PRODUCT),
-            ("virtual_goods", PAYMENT_NOTIFY_BUSINESS_EXTERNAL),
+            ("virtual_goods", PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS),
             ("coupon_package", PAYMENT_NOTIFY_BUSINESS_EXTERNAL),
             ("some_machine_flow", PAYMENT_NOTIFY_BUSINESS_EXTERNAL),
             ("display title", PAYMENT_NOTIFY_BUSINESS_UNKNOWN),
@@ -790,5 +879,126 @@ mod tests {
         assert!(!outcome.replayed);
         assert_eq!(0, outcome.points_credited);
         assert_eq!("awaiting_subject_resolution", outcome.status);
+    }
+
+    struct RecordingVirtualGoodsPort {
+        outcome: Result<VirtualGoodsFulfillmentOutcome, CommerceServiceError>,
+        seen: std::sync::Mutex<Vec<FulfillPaidVirtualOrderRequest>>,
+    }
+
+    impl RecordingVirtualGoodsPort {
+        fn accepting() -> Self {
+            Self {
+                outcome: Ok(VirtualGoodsFulfillmentOutcome {
+                    accepted: true,
+                    replayed: false,
+                    fulfillment_status: "fulfilled".to_owned(),
+                }),
+                seen: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+
+        fn unavailable() -> Self {
+            Self {
+                outcome: Err(CommerceServiceError::provider_unavailable(
+                    "virtual goods fulfillment is not configured",
+                )),
+                seen: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+
+        fn requests(&self) -> Vec<FulfillPaidVirtualOrderRequest> {
+            self.seen.lock().expect("requests").clone()
+        }
+    }
+
+    impl VirtualGoodsFulfillmentPort for RecordingVirtualGoodsPort {
+        fn fulfill_paid_virtual_order<'a>(
+            &'a self,
+            request: FulfillPaidVirtualOrderRequest,
+        ) -> crate::VirtualGoodsFuture<'a, VirtualGoodsFulfillmentOutcome> {
+            self.seen.lock().expect("requests").push(request);
+            let outcome = self
+                .outcome
+                .as_ref()
+                .map(Clone::clone)
+                .map_err(Clone::clone);
+            Box::pin(async move { outcome })
+        }
+    }
+
+    fn virtual_attempt() -> OrderPaymentSettlementAttempt {
+        OrderPaymentSettlementAttempt {
+            tenant_id: "tenant-1".to_owned(),
+            organization_id: Some("org-1".to_owned()),
+            owner_user_id: "user-1".to_owned(),
+            order_id: "order-virtual-1".to_owned(),
+            payment_attempt_id: Some("attempt-1".to_owned()),
+            out_trade_no: Some("trade-1".to_owned()),
+        }
+    }
+
+    #[tokio::test]
+    async fn virtual_goods_success_delivers_once_with_the_tenant_scope() {
+        let port = RecordingVirtualGoodsPort::accepting();
+
+        let outcome = settle_virtual_goods_subject(&port, &virtual_attempt(), "2026-01-01T00:00:00Z", "req-1")
+            .await
+            .expect("virtual settlement");
+
+        assert!(outcome.accepted);
+        assert!(!outcome.replayed);
+        assert_eq!("fulfilled", outcome.status);
+        let requests = port.requests();
+        assert_eq!(1, requests.len());
+        // Tenant + organization isolation travels with the delivery: the port
+        // never has to re-derive the scope from a request token the PSP cannot
+        // present.
+        assert_eq!("tenant-1", requests[0].tenant_id);
+        assert_eq!(Some("org-1"), requests[0].organization_id.as_deref());
+        assert_eq!("order-virtual-1", requests[0].order_id);
+        assert_eq!("req-1", requests[0].request_no);
+        assert_eq!(
+            virtual_goods_fulfillment_idempotency_key("order-virtual-1"),
+            requests[0].idempotency_key
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_virtual_goods_capability_defers_instead_of_failing_the_webhook() {
+        // A deployment that has not installed the delivery capability must not
+        // turn a confirmed payment into a failing webhook (which would make the
+        // PSP retry forever): the order stays paid and the delivery is deferred.
+        let port = RecordingVirtualGoodsPort::unavailable();
+
+        let outcome = settle_virtual_goods_subject(&port, &virtual_attempt(), "2026-01-01T00:00:00Z", "req-2")
+            .await
+            .expect("deferred virtual settlement");
+
+        assert!(!outcome.accepted);
+        assert_eq!("awaiting_virtual_goods_fulfillment", outcome.status);
+        assert_eq!(1, port.requests().len());
+    }
+
+    #[test]
+    fn virtual_goods_is_a_first_class_business_type_not_the_external_bucket() {
+        assert_ne!(PAYMENT_NOTIFY_BUSINESS_EXTERNAL, PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS);
+        let registry = default_payment_notify_handler_registry();
+        let handler = registry
+            .resolve(PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS)
+            .expect("virtual goods handler must be registered");
+        assert_eq!(
+            PAYMENT_NOTIFY_BUSINESS_VIRTUAL_GOODS,
+            handler.business_type()
+        );
+        assert!(matches!(
+            OrderSubjectKind::parse(Some("virtual_goods")),
+            OrderSubjectKind::VirtualGoods
+        ));
+        // The deferred external bucket still owns genuinely external flows.
+        assert_eq!(
+            PAYMENT_NOTIFY_BUSINESS_EXTERNAL,
+            OrderSubjectKind::parse(Some("some_machine_flow")).business_type()
+        );
     }
 }
