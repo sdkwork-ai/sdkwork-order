@@ -81,6 +81,10 @@ impl OrderServiceHost {
     async fn from_database_with_env_integrations(
         database: OrderDatabaseHost,
     ) -> Result<Self, String> {
+        // Cashier capability tokens are verified with the payment-center managed
+        // signing secret; install the deployment-KEK provider once per process so
+        // a standalone order gateway can open the stored secret too.
+        sdkwork_utils_rust::install_local_file_cashier_signing_key_cipher_from_env()?;
         let account_credit_port = account_points_credit_port_from_database_pool(database.pool())?;
         let account_value_ledger_port =
             account_value_ledger_port_from_database_pool(database.pool())?;

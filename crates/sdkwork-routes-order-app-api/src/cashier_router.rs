@@ -39,7 +39,7 @@ use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
 };
 use sdkwork_utils_rust::{
-    cashier_openid_binding_message, cashier_token_secret_from_env, commerce_cashier_scene,
+    cashier_openid_binding_message, commerce_cashier_scene,
     derive_cashier_token_key_with_epoch, extract_client_ip_from_headers, hmac_sha256_base64url,
     secure_compare, CashierTokenClaims,
 };
@@ -510,24 +510,21 @@ async fn verify_openid_binding(
     openid: &str,
     binding: &str,
 ) -> Option<String> {
-    let resolved = load_cashier_token_signing_secrets_postgres(pool, tenant_id)
+    let Some(resolved) = load_cashier_token_signing_secrets_postgres(pool, tenant_id)
         .await
         .ok()
-        .flatten();
-    let secrets: Vec<Vec<u8>> = match resolved {
-        Some(resolved) => {
-            let mut secrets = vec![resolved.current_secret];
-            if let Some(previous) = resolved.previous_secret {
-                secrets.push(previous);
-            }
-            secrets
-        }
-        None => cashier_token_secret_from_env()
-            .ok()
-            .flatten()
-            .into_iter()
-            .collect(),
+        .flatten()
+    else {
+        return None;
     };
+    // A disabled tenant (or an unreadable stored secret) fails closed.
+    if !resolved.enabled {
+        return None;
+    }
+    let mut secrets = vec![resolved.current_secret];
+    if let Some(previous) = resolved.previous_secret {
+        secrets.push(previous);
+    }
     for secret in secrets {
         let Ok(key) = derive_cashier_token_key_with_epoch(&secret, tenant_id, key_epoch) else {
             continue;

@@ -312,19 +312,9 @@ async fn create_membership_order(
                 Ok(material) => material,
                 Err(error) => return map_service_error(ctx, error),
             },
-            None => match sdkwork_utils_rust::cashier_token_secret_from_env() {
-                Ok(secret) => {
-                    secret.map(|secret| (secret, sdkwork_utils_rust::CASHIER_TOKEN_EPOCH_DEFAULT))
-                }
-                Err(error) => {
-                    return map_service_error(
-                        ctx,
-                        CommerceServiceError::storage(format!(
-                            "cashier token secret is invalid: {error}"
-                        )),
-                    )
-                }
-            },
+            // Without a database pool there is no stored signing secret; keep
+            // the legacy link instead of falling back to a deployment secret.
+            None => None,
         };
         let outcome = apply_cashier_capability(outcome, &subject.tenant_id, material);
         return success_created_item(
