@@ -6,7 +6,7 @@
 //! an unbound customer is a harmless SKIPPED event.
 
 use chrono::{DateTime, Utc};
-use sdkwork_commerce_partner_repository_sqlx::order_intake::record_order_commission_event;
+use sdkwork_commerce_partner_repository_sqlx::order_intake::record_and_settle_order_commission;
 use sdkwork_commerce_partner_service::domain::parse_money_to_cents;
 use sdkwork_contract_service::CommerceServiceError;
 use sqlx::PgPool;
@@ -54,7 +54,9 @@ pub async fn record_paid_order_commission(
     let event_at = DateTime::parse_from_rfc3339(paid_at.trim())
         .map(|value| value.with_timezone(&Utc))
         .unwrap_or_else(|_| Utc::now());
-    let event_id = record_order_commission_event(
+    // Settle a bounded batch on the payment path so the buyer's distributor sees
+    // the commission without waiting for an admin settlement run.
+    let (event_id, _outcome) = record_and_settle_order_commission(
         pool,
         tenant_id,
         organization_id,
@@ -62,6 +64,7 @@ pub async fn record_paid_order_commission(
         customer_user_id,
         revenue_cents,
         event_at,
+        20,
     )
     .await?;
     Ok(Some(event_id))
