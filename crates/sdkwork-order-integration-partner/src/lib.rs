@@ -5,8 +5,10 @@
 //! one-directional: `sdkwork-order` consumes the partner capability through
 //! this adapter only; the partner domain never reads order tables.
 
+mod commission;
 mod resolver;
 
+pub use commission::record_paid_order_commission;
 pub use resolver::StoreOrderPartnerRelationAdapter;
 
 use std::sync::Arc;

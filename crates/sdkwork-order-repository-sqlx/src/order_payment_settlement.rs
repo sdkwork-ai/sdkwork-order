@@ -114,6 +114,26 @@ impl PostgresCommerceOrderStore {
                 error,
             )
         })?;
+        // Commission intake is best-effort: a partner outage must never fail a
+        // confirmed payment. Late/duplicate callbacks do not create commissions.
+        if !late_payment && !duplicate_payment {
+            if let Err(error) = sdkwork_order_integration_partner::record_paid_order_commission(
+                self.pool(),
+                &attempt.tenant_id,
+                attempt.organization_id.as_deref(),
+                &attempt.owner_user_id,
+                &attempt.order_id,
+                paid_at,
+            )
+            .await
+            {
+                tracing::warn!(
+                    order_id = %attempt.order_id,
+                    error = error.message(),
+                    "partner commission intake failed after payment success"
+                );
+            }
+        }
         Ok(OwnerOrderPaymentStateOutcome {
             order_status: if terminal_order_preserved {
                 order_status

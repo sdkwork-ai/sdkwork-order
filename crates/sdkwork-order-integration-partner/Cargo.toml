@@ -21,4 +21,5 @@ sdkwork_commerce_partner_service.workspace = true
 sdkwork_commerce_partner_repository_sqlx.workspace = true
 sdkwork-database-sqlx.workspace = true
 sqlx = { workspace = true }
+chrono = { workspace = true }
 tracing = { workspace = true }
