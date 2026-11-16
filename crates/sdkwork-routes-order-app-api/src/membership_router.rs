@@ -16,10 +16,8 @@ use sdkwork_order_service::{
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::cashier_token::{
-    cashier_url_for_token, mint_cashier_token_with_secret, CashierTokenSubject,
-};
-use sdkwork_payment_repository_sqlx::cashier_token_setting::{
-    load_cashier_token_epoch_postgres, DEFAULT_CASHIER_TOKEN_EPOCH,
+    cashier_url_for_token, mint_cashier_token_with_secret, resolve_cashier_token_mint_material,
+    CashierTokenSubject,
 };
 use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
@@ -308,16 +306,17 @@ async fn create_membership_order(
     };
 
     if payment_product == DEFAULT_PAYMENT_PRODUCT {
-        let key_epoch = match state.pool.as_ref() {
-            Some(pool) => load_cashier_token_epoch_postgres(pool, &subject.tenant_id)
-                .await
-                .unwrap_or(DEFAULT_CASHIER_TOKEN_EPOCH),
-            None => DEFAULT_CASHIER_TOKEN_EPOCH,
+        let material = match state.pool.as_ref() {
+            Some(pool) => match resolve_cashier_token_mint_material(pool, &subject.tenant_id).await
+            {
+                Ok(material) => material,
+                Err(error) => return map_service_error(ctx, error),
+            },
+            // Without a database pool there is no stored signing secret; keep
+            // the legacy link instead of falling back to a deployment secret.
+            None => None,
         };
-        let outcome = match apply_cashier_capability(outcome, &subject.tenant_id, key_epoch) {
-            Ok(outcome) => outcome,
-            Err(error) => return map_service_error(ctx, error),
-        };
+        let outcome = apply_cashier_capability(outcome, &subject.tenant_id, material);
         return success_created_item(
             ctx,
             map_membership_order_outcome(outcome, &payment_product, None, request.grant_quantity()),
@@ -561,22 +560,22 @@ fn build_create_membership_command(
 fn apply_cashier_capability(
     outcome: CreateMembershipOrderOutcome,
     tenant_id: &str,
-    key_epoch: i64,
-) -> Result<CreateMembershipOrderOutcome, CommerceServiceError> {
-    // An absent secret keeps the legacy link (the documented rollout switch). A
-    // secret that is present but invalid fails the request instead of silently
-    // emitting a login-required link (contract §2.1: no silent degradation).
-    let secret = sdkwork_utils_rust::cashier_token_secret_from_env().map_err(|error| {
-        CommerceServiceError::storage(format!("cashier token secret is invalid: {error}"))
-    })?;
-    Ok(apply_cashier_capability_with_secret(
+    material: Option<(Vec<u8>, i64)>,
+) -> CreateMembershipOrderOutcome {
+    let Some((secret, key_epoch)) = material else {
+        // No stored or deployment secret keeps the legacy link (the documented
+        // rollout switch). A configured-but-invalid secret already fails the
+        // request before reaching here.
+        return outcome;
+    };
+    apply_cashier_capability_with_secret(
         outcome,
         tenant_id,
         key_epoch,
-        secret.as_deref(),
+        Some(&secret),
         sdkwork_utils_rust::now().timestamp(),
         &Uuid::new_v4().to_string(),
-    ))
+    )
 }
 
 /// Testable core of [`apply_cashier_capability`].
@@ -736,18 +735,16 @@ mod tests {
             validate_membership_action(Some(" ADD_SEATS ")).expect("seat expansion action"),
             "add_seats"
         );
-        for action in [
-            "purchase",
-            "renew",
-            "upgrade",
-            "recharge",
-        ] {
+        for action in ["purchase", "renew", "upgrade", "recharge"] {
             assert_eq!(
                 validate_membership_action(Some(action)).expect("existing membership action"),
                 action
             );
         }
-        assert_eq!(validate_membership_action(None).expect("default action"), "purchase");
+        assert_eq!(
+            validate_membership_action(None).expect("default action"),
+            "purchase"
+        );
         assert!(validate_membership_action(Some("expand")).is_err());
     }
 
@@ -848,11 +845,9 @@ mod tests {
 
         // The operator-configured origin survives; the URL now carries only a
         // signed token (no order id, no outTradeNo query).
-        assert!(
-            tokenized
-                .cashier_url
-                .starts_with("https://platform.birdcoder.com/cashier/v1.")
-        );
+        assert!(tokenized
+            .cashier_url
+            .starts_with("https://platform.birdcoder.com/cashier/v1."));
         assert!(!tokenized.cashier_url.contains("order-1"));
         assert!(!tokenized.cashier_url.contains("outTradeNo="));
 
