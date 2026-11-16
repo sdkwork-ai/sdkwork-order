@@ -550,7 +550,7 @@ export function CashierPage({
         {extraActions}
         <button
           onClick={goToOrderDetail}
-          className="w-full bg-primary-blue active:opacity-80 text-white font-medium text-[15px] py-3 rounded-xl transition-opacity"
+          className="w-full bg-brand-fill active:opacity-80 text-on-brand font-medium text-[15px] py-3 rounded-xl transition-opacity"
         >
           {t("orders.cashier_view_order", "查看订单")}
         </button>
@@ -628,7 +628,7 @@ export function CashierPage({
                     </span>
                     <button
                       onClick={launchH5Cashier}
-                      className="w-full max-w-[220px] bg-primary-blue active:opacity-80 text-white font-medium text-[14px] py-2.5 rounded-lg transition-opacity"
+                      className="w-full max-w-[220px] bg-brand-fill active:opacity-80 text-on-brand font-medium text-[14px] py-2.5 rounded-lg transition-opacity"
                     >
                       {t("orders.cashier_jump_fallback", "未跳转？点击继续支付")}
                     </button>
@@ -656,7 +656,7 @@ export function CashierPage({
                   </span>
                   <button
                     onClick={retryPayment}
-                    className="w-full max-w-[220px] bg-primary-blue active:opacity-80 text-white font-medium text-[14px] py-2.5 rounded-lg transition-opacity"
+                    className="w-full max-w-[220px] bg-brand-fill active:opacity-80 text-on-brand font-medium text-[14px] py-2.5 rounded-lg transition-opacity"
                   >
                     {t("orders.cashier_pay_now", "立即支付")}
                   </button>
@@ -708,7 +708,7 @@ export function CashierPage({
                   // badge instead of crashing the cashier.
                   const meta = PAYMENT_METHOD_META[method] ?? {
                     badge: "支",
-                    badgeClass: "bg-primary-blue",
+                    badgeClass: "bg-brand-fill",
                     descKey: `orders.payment_method_desc_${method}`,
                     descDefault: method,
                   };
@@ -802,7 +802,7 @@ export function CashierPage({
             <XCircle className="w-16 h-16 text-[#FA5151]" />,
             <button
               onClick={retryPayment}
-              className="w-full bg-primary-blue active:opacity-80 text-white font-medium text-[15px] py-3 rounded-xl transition-opacity"
+              className="w-full bg-brand-fill active:opacity-80 text-on-brand font-medium text-[15px] py-3 rounded-xl transition-opacity"
             >
               {t("orders.cashier_retry", "重新支付")}
             </button>,

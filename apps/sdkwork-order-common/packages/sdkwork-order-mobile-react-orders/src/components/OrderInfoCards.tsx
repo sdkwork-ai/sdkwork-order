@@ -10,6 +10,40 @@ import {
   type OrderPaymentMethod,
 } from "../services/OrderService";
 
+const PAYMENT_METHOD_ALIASES: Readonly<Record<string, OrderPaymentMethod>> = {
+  wechat: "wechat_pay",
+  wxpay: "wechat_pay",
+  wechat_native: "wechat_pay",
+  wechat_jsapi: "wechat_jsapi",
+  alipay: "alipay",
+  alipay_qr: "alipay",
+  alipay_wap: "alipay_wap",
+  balance: "balance",
+  paypal: "paypal",
+  stripe: "stripe_card",
+  card: "stripe_card",
+};
+
+const EXTRA_PAYMENT_LABELS: Readonly<Record<string, string>> = {
+  unionpay: "银联支付",
+  cash: "货到付款",
+  cod: "货到付款",
+  wallet: "钱包余额",
+};
+
+function normalizePaymentMethodCode(code: string): string {
+  return code.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function resolvePaymentMethodLabel(code: string): string {
+  const normalized = normalizePaymentMethodCode(code);
+  const alias = PAYMENT_METHOD_ALIASES[normalized];
+  if (alias) {
+    return ORDER_PAYMENT_METHOD_LABELS[alias];
+  }
+  return EXTRA_PAYMENT_LABELS[normalized] ?? code;
+}
+
 interface OrderInfoCardsProps {
   order: Order;
 }
@@ -41,7 +75,7 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
             <span className="text-[13px] text-text-main">{order.orderSn}</span>
             <button
               onClick={copyOrderId}
-              className="text-[11px] text-primary-blue border border-primary-blue/30 px-1.5 py-0.5 rounded cursor-pointer active:bg-primary-blue/10"
+              className="min-h-8 rounded border border-primary-blue/30 px-2 py-1 text-[12px] text-primary-blue active:bg-primary-blue/10"
             >
               {t("orders.copy", "复制")}
             </button>
@@ -84,8 +118,8 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
             </span>
             <span className="text-[13px] text-text-main">
               {t(
-                `orders.payment_method_${order.paymentMethod}`,
-                ORDER_PAYMENT_METHOD_LABELS[order.paymentMethod as OrderPaymentMethod] ?? order.paymentMethod,
+                `orders.payment_method_${normalizePaymentMethodCode(order.paymentMethod)}`,
+                resolvePaymentMethodLabel(order.paymentMethod),
               )}
             </span>
           </div>
