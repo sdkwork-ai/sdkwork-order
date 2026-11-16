@@ -11,6 +11,14 @@ use sdkwork_commerce_partner_service::domain::parse_money_to_cents;
 use sdkwork_contract_service::CommerceServiceError;
 use sqlx::PgPool;
 
+const SELECT_ACTIVE_BINDING: &str = r#"
+SELECT EXISTS(
+    SELECT 1 FROM partner_customer_binding
+    WHERE tenant_id = $1 AND organization_id = $2 AND customer_user_id = $3
+      AND status = 'ACTIVE'
+) AS bound
+"#;
+
 const SELECT_ORDER_REVENUE: &str = r#"
 SELECT CAST(COALESCE((
         SELECT b.payable_amount
@@ -43,6 +51,20 @@ pub async fn record_paid_order_commission(
     let Ok(customer_user_id) = owner_user_id.trim().parse::<i64>() else {
         return Ok(None);
     };
+    // Orders from unbound customers cannot earn commission: skip the event
+    // entirely instead of queuing one that settlement would only mark SKIPPED.
+    let bound = sqlx::query_scalar::<_, bool>(SELECT_ACTIVE_BINDING)
+        .bind(tenant_id)
+        .bind(organization_id)
+        .bind(customer_user_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|error| {
+            CommerceServiceError::storage(format!("failed to resolve partner binding: {error}"))
+        })?;
+    if !bound {
+        return Ok(None);
+    }
     let revenue = sqlx::query_scalar::<_, String>(SELECT_ORDER_REVENUE)
         .bind(tenant_id.to_string())
         .bind(order_id)
