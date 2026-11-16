@@ -330,8 +330,39 @@ export function toOrderStatusWire(status: string): OrderStatus | string {
     return "pending_payment";
   }
   const lowered = normalized.toLowerCase();
-  if (lowered === "unpaid" || lowered === "wait_pay" || lowered === "created" || lowered === "draft") {
+  // The order app-api emits UPPER_SNAKE statuses ("PENDING_RECEIPT",
+  // "PENDING_SHIPMENT"); map every wire synonym the backend publishes onto the
+  // mobile union so action buttons and status styling do not disappear when a
+  // host talks to the order service rather than the brick's demo mocks.
+  if (
+    lowered === "unpaid"
+    || lowered === "wait_pay"
+    || lowered === "created"
+    || lowered === "draft"
+    || lowered === "pending_payment"
+  ) {
     return "pending_payment";
+  }
+  if (lowered === "paid" || lowered === "pending_shipment" || lowered === "wait_ship" || lowered === "wait_send") {
+    return "paid";
+  }
+  if (
+    lowered === "fulfilled"
+    || lowered === "pending_receipt"
+    || lowered === "wait_receive"
+    || lowered === "shipped"
+    || lowered === "delivered"
+  ) {
+    return "fulfilled";
+  }
+  if (lowered === "completed" || lowered === "finished") {
+    return "completed";
+  }
+  if (lowered === "refunding") {
+    return "refunding";
+  }
+  if (lowered === "refunded") {
+    return "refunded";
   }
   if (lowered === "canceled" || lowered === "closed" || lowered === "timeout") {
     return lowered === "timeout" ? "expired" : "cancelled";
@@ -379,6 +410,52 @@ function mapOrderItem(value: Record<string, unknown>): OrderItem {
     unitPrice: toOptionalString(value.unitPrice) ?? "0",
     totalAmount: toOptionalString(value.totalAmount) ?? "0",
   };
+}
+
+/**
+ * Normalizes channel payment parameters.
+ *
+ * The wire may carry them as an object, a JSON string, or snake_case keys
+ * (`code_url`, `cashier_url`, `qr_code_payload`). The cashier renders a QR or
+ * jumps to the provider cashier only when it can read one of those values, so
+ * normalize here instead of letting a casing/encoding difference hide the QR.
+ */
+function normalizePaymentParams(value: Record<string, unknown>): Record<string, string> {
+  const raw = value.paymentParams ?? value.payment_params;
+  let params: Record<string, string> = {};
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        params = parsed as Record<string, string>;
+      }
+    } catch {
+      params = {};
+    }
+  } else if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    params = raw as Record<string, string>;
+  }
+  const read = (key: string): string | undefined => {
+    const direct = params[key];
+    if (typeof direct === "string" && direct) {
+      return direct;
+    }
+    return undefined;
+  };
+  const qrCodePayload =
+    read("qrCodePayload") ?? read("qr_code_payload") ?? read("code_url") ?? read("codeUrl");
+  if (qrCodePayload) {
+    params.qrCodePayload = qrCodePayload;
+  }
+  const qrCodeUrl = read("qrCodeUrl") ?? read("qr_code_url");
+  if (qrCodeUrl) {
+    params.qrCodeUrl = qrCodeUrl;
+  }
+  const cashierUrl = read("cashierUrl") ?? read("cashier_url");
+  if (cashierUrl) {
+    params.cashierUrl = cashierUrl;
+  }
+  return params;
 }
 
 function mapOrderSummary(value: Record<string, unknown>): Order {
@@ -517,7 +594,7 @@ export class OrderService {
       outTradeNo: toOptionalString(value.outTradeNo) ?? "",
       paymentId,
       paymentMethod: toOptionalString(value.paymentMethod) ?? paymentMethod,
-      paymentParams: (value.paymentParams as Record<string, string> | undefined) ?? {},
+      paymentParams: normalizePaymentParams(value),
     };
   }
 
