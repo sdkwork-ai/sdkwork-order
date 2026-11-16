@@ -32,19 +32,16 @@ use sdkwork_order_repository_sqlx::cashier_order::{
     load_cashier_link_order_postgres, load_cashier_order_postgres, CashierOrderRecord,
 };
 use sdkwork_payment_repository_sqlx::cashier_token::{
-    mint_cashier_token, CashierTokenSubject,
+    mint_cashier_token_with_secret, CashierTokenSubject,
 };
-use sdkwork_payment_repository_sqlx::cashier_token_setting::{
-    load_cashier_token_epoch_postgres, DEFAULT_CASHIER_TOKEN_EPOCH,
-};
+use sdkwork_payment_repository_sqlx::cashier_token_setting::load_cashier_token_signing_secrets_postgres;
 use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
 };
 use sdkwork_utils_rust::{
-    base64url_decode, cashier_openid_binding_message, cashier_token_secret_from_env,
-    commerce_cashier_scene, derive_cashier_token_key_with_epoch, extract_client_ip_from_headers,
-    hmac_sha256_base64url, peek_cashier_token_epoch, secure_compare, verify_cashier_token,
-    CashierTokenClaims, CASHIER_TOKEN_AUDIENCE,
+    cashier_openid_binding_message, cashier_token_secret_from_env, commerce_cashier_scene,
+    derive_cashier_token_key_with_epoch, extract_client_ip_from_headers, hmac_sha256_base64url,
+    secure_compare, CashierTokenClaims,
 };
 use sdkwork_web_core::WebRequestContext;
 
@@ -59,8 +56,13 @@ use crate::order_router::OwnerOrderPaymentStore;
 /// only with an openid issued by the IAM anonymous payment OAuth and bound to this
 /// token (see [`verify_openid_binding`]); the caller can never supply an openid of
 /// its own choosing.
-const ANONYMOUS_PAYMENT_METHODS: &[&str] =
-    &["wechat_pay", "wechat_h5", "wechat_jsapi", "alipay", "alipay_wap"];
+const ANONYMOUS_PAYMENT_METHODS: &[&str] = &[
+    "wechat_pay",
+    "wechat_h5",
+    "wechat_jsapi",
+    "alipay",
+    "alipay_wap",
+];
 
 #[derive(Clone)]
 pub struct AppCashierState {
@@ -120,10 +122,7 @@ struct CreateCashierPaymentRequest {
 }
 
 /// Builds the anonymous cashier router.
-pub fn build_app_cashier_router(
-    pool: PgPool,
-    payments: Arc<dyn OwnerOrderPaymentStore>,
-) -> Router {
+pub fn build_app_cashier_router(pool: PgPool, payments: Arc<dyn OwnerOrderPaymentStore>) -> Router {
     Router::new()
         // A legacy QR carries `{orderId}?outTradeNo=..` instead of a signed
         // token. The page exchanges that pair for a token, so an already-issued
@@ -135,7 +134,10 @@ pub fn build_app_cashier_router(
             "/app/v3/api/cashier/{token}/payments",
             post(create_cashier_payment),
         )
-        .route("/app/v3/api/cashier/{token}/status", get(retrieve_cashier_status))
+        .route(
+            "/app/v3/api/cashier/{token}/status",
+            get(retrieve_cashier_status),
+        )
         .with_state(AppCashierState { pool, payments })
 }
 
@@ -203,9 +205,23 @@ async fn create_cashier_link(
         return not_found(ctx, "cashier link is not payable");
     };
     let scene = commerce_cashier_scene(Some(order.subject.as_str()));
-    let key_epoch = load_cashier_token_epoch_postgres(&state.pool, &link.tenant_id)
-        .await
-        .unwrap_or(DEFAULT_CASHIER_TOKEN_EPOCH);
+    let material =
+        sdkwork_payment_repository_sqlx::cashier_token::resolve_cashier_token_mint_material(
+            &state.pool,
+            &link.tenant_id,
+        )
+        .await;
+    let material = match material {
+        Ok(material) => material,
+        // A configured-but-unreadable stored secret is an infrastructure error,
+        // not an unknown link: surface it instead of collapsing to 404.
+        Err(error) => return map_service_error(ctx, error),
+    };
+    let Some((secret, key_epoch)) = material else {
+        // No stored secret and no deployment secret: the anonymous cashier is
+        // not enabled, so the page keeps the login-required entry.
+        return not_found(ctx, "cashier link is not payable");
+    };
     let subject = CashierTokenSubject {
         tenant_id: &link.tenant_id,
         order_id: &order.order_id,
@@ -215,8 +231,14 @@ async fn create_cashier_link(
         scene,
         key_epoch,
     };
-    match mint_cashier_token(&subject) {
-        Ok(Some(token)) => {
+    let token_id = uuid::Uuid::new_v4().to_string();
+    match mint_cashier_token_with_secret(
+        &secret,
+        &subject,
+        sdkwork_utils_rust::now().timestamp(),
+        &token_id,
+    ) {
+        Ok(token) => {
             // Audit fields only; the raw token must never reach logs.
             tracing::info!(
                 tenant_id = %link.tenant_id,
@@ -226,9 +248,6 @@ async fn create_cashier_link(
             );
             success_created_item(ctx, CashierLinkResponse { token })
         }
-        // No deployment secret: the anonymous cashier is not enabled, so the
-        // page keeps the login-required entry.
-        Ok(None) => not_found(ctx, "cashier link is not payable"),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -239,7 +258,7 @@ async fn retrieve_cashier(
     Path(token): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let claims = match verify_request_token(&token) {
+    let claims = match verify_request_token(&state.pool, &token).await {
         Some(claims) => claims,
         None => return not_found(ctx, "cashier link is not payable"),
     };
@@ -260,7 +279,7 @@ async fn create_cashier_payment(
     body: Option<Json<CreateCashierPaymentRequest>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let claims = match verify_request_token(&token) {
+    let claims = match verify_request_token(&state.pool, &token).await {
         Some(claims) => claims,
         None => return not_found(ctx, "cashier link is not payable"),
     };
@@ -312,16 +331,17 @@ async fn create_cashier_payment(
         match (openid, binding) {
             (Some(openid), Some(binding)) => {
                 match verify_openid_binding(
+                    &state.pool,
                     &claims.tenant_id,
                     &claims.token_id,
                     claims.epoch,
                     openid,
                     binding,
-                ) {
+                )
+                .await
+                {
                     Some(openid) => Some(openid),
-                    None => {
-                        return validation(ctx, "the WeChat payer authorization is not valid")
-                    }
+                    None => return validation(ctx, "the WeChat payer authorization is not valid"),
                 }
             }
             _ => {
@@ -334,7 +354,8 @@ async fn create_cashier_payment(
     } else {
         None
     };
-    let payment_metadata = anonymous_payment_metadata(&payment_method, &headers, payer_openid.as_deref());
+    let payment_metadata =
+        anonymous_payment_metadata(&payment_method, &headers, payer_openid.as_deref());
     let command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: claims.tenant_id.clone(),
         organization_id: order.organization_id.clone(),
@@ -366,7 +387,7 @@ async fn retrieve_cashier_status(
     Path(token): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let claims = match verify_request_token(&token) {
+    let claims = match verify_request_token(&state.pool, &token).await {
         Some(claims) => claims,
         None => return not_found(ctx, "cashier link is not payable"),
     };
@@ -386,31 +407,16 @@ async fn retrieve_cashier_status(
 /// Verifies the capability token, returning `None` for every failure mode.
 ///
 /// The failure modes are deliberately indistinguishable to the caller; the caller
-/// must not learn whether a link was unknown, tampered, or expired.
-fn verify_request_token(token: &str) -> Option<CashierTokenClaims> {
-    let secret = cashier_token_secret_from_env().ok().flatten()?;
-    // The tenant and epoch are read from the (still unverified) payload only to
-    // select the derivation key. The signature must then validate under *that
-    // tenant's epoch key*, so a token claiming a foreign tenant or epoch cannot
-    // be signed without the deployment secret.
-    let tenant_id = peek_claimed_tenant(token)?;
-    let epoch = peek_cashier_token_epoch(token);
-    let signing_key = derive_cashier_token_key_with_epoch(&secret, &tenant_id, epoch).ok()?;
-    let now_unix = sdkwork_utils_rust::now().timestamp();
-    verify_cashier_token(token, &signing_key, now_unix, CASHIER_TOKEN_AUDIENCE).ok()
-}
-
-/// Reads the tenant claim without trusting it.
-fn peek_claimed_tenant(token: &str) -> Option<String> {
-    let payload = token.split('.').nth(1)?;
-    let bytes = base64url_decode(payload)?;
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Peeked {
-        tenant_id: String,
-    }
-    let peeked: Peeked = serde_json::from_slice(&bytes).ok()?;
-    Some(peeked.tenant_id.trim().to_owned()).filter(|value| !value.is_empty())
+/// must not learn whether a link was unknown, tampered, or expired. Verification
+/// uses the payment-center managed signing secret (active and the rotation grace
+/// secret) and falls back to the deployment secret for legacy installs.
+async fn verify_request_token(pool: &PgPool, token: &str) -> Option<CashierTokenClaims> {
+    sdkwork_payment_repository_sqlx::cashier_token::verify_cashier_token_from_store(
+        pool,
+        token,
+        sdkwork_utils_rust::now().timestamp(),
+    )
+    .await
 }
 
 async fn load_order(
@@ -496,24 +502,45 @@ fn anonymous_payment_metadata(
 /// signature here means the payer identifier is authenticated without any shared
 /// server-side session: a caller cannot invent an openid, and one issued for a
 /// different token does not verify.
-fn verify_openid_binding(
+async fn verify_openid_binding(
+    pool: &PgPool,
     tenant_id: &str,
     token_id: &str,
     key_epoch: i64,
     openid: &str,
     binding: &str,
 ) -> Option<String> {
-    let secret = cashier_token_secret_from_env().ok().flatten()?;
-    let key = derive_cashier_token_key_with_epoch(&secret, tenant_id, key_epoch).ok()?;
-    let expected = hmac_sha256_base64url(
-        cashier_openid_binding_message(token_id, openid).as_bytes(),
-        &key,
-    );
-    if secure_compare(&expected, binding) {
-        Some(openid.to_owned())
-    } else {
-        None
+    let resolved = load_cashier_token_signing_secrets_postgres(pool, tenant_id)
+        .await
+        .ok()
+        .flatten();
+    let secrets: Vec<Vec<u8>> = match resolved {
+        Some(resolved) => {
+            let mut secrets = vec![resolved.current_secret];
+            if let Some(previous) = resolved.previous_secret {
+                secrets.push(previous);
+            }
+            secrets
+        }
+        None => cashier_token_secret_from_env()
+            .ok()
+            .flatten()
+            .into_iter()
+            .collect(),
+    };
+    for secret in secrets {
+        let Ok(key) = derive_cashier_token_key_with_epoch(&secret, tenant_id, key_epoch) else {
+            continue;
+        };
+        let expected = hmac_sha256_base64url(
+            cashier_openid_binding_message(token_id, openid).as_bytes(),
+            &key,
+        );
+        if secure_compare(&expected, binding) {
+            return Some(openid.to_owned());
+        }
     }
+    None
 }
 
 fn is_paid(status: &str) -> bool {
@@ -535,7 +562,7 @@ mod tests {
             amount: amount.to_owned(),
             currency_code: currency.to_owned(),
             scene: "checkout".to_owned(),
-            audience: CASHIER_TOKEN_AUDIENCE.to_owned(),
+            audience: sdkwork_utils_rust::CASHIER_TOKEN_AUDIENCE.to_owned(),
             epoch: 1,
             issued_at: 0,
             expires_at: i64::MAX,
@@ -619,6 +646,12 @@ mod tests {
         let tampered = "v1.eyJ0ZW5hbnRJZCI6IjEwMDAwMSJ9.not-a-signature";
         let secret = b"sdkwork-cashier-token-test-secret-0001";
         let key = derive_cashier_token_key_with_epoch(secret, "100001", 1).expect("key");
-        assert!(verify_cashier_token(tampered, &key, 0, CASHIER_TOKEN_AUDIENCE).is_err());
+        assert!(sdkwork_utils_rust::verify_cashier_token(
+            tampered,
+            &key,
+            0,
+            sdkwork_utils_rust::CASHIER_TOKEN_AUDIENCE
+        )
+        .is_err());
     }
 }
