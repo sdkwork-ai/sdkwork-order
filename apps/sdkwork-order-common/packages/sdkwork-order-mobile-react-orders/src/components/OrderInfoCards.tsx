@@ -1,4 +1,6 @@
 import { useTranslation } from "react-i18next";
+
+import { formatOrderDateTime } from "../services/datetime";
 import React from "react";
 import { showToast } from "@sdkwork/ui-mobile-react";
 import {
@@ -49,14 +51,14 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
           <span className="text-[13px] text-text-sub">
             {t("orders.create_time", "创建时间")}
           </span>
-          <span className="text-[13px] text-text-main">{order.createdAt}</span>
+          <span className="text-[13px] text-text-main">{formatOrderDateTime(order.createdAt, i18n.language)}</span>
         </div>
         {order.payTime && (
           <div className="flex items-center justify-between">
             <span className="text-[13px] text-text-sub">
               {t("orders.pay_time", "付款时间")}
             </span>
-            <span className="text-[13px] text-text-main">{order.payTime}</span>
+            <span className="text-[13px] text-text-main">{formatOrderDateTime(order.payTime, i18n.language)}</span>
           </div>
         )}
         {order.expireTime && (

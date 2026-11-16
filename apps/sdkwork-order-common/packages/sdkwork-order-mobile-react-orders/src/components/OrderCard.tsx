@@ -47,7 +47,9 @@ export const OrderCard: React.FC<OrderCardProps> = ({
         </span>
       </div>
 
-      {/* Items */}
+      {/* Items — a summary list (order center) carries no line items; the card
+          then renders header/total/actions only instead of an empty gap. */}
+      {order.items.length > 0 ? (
       <div className="flex flex-col gap-3">
         {order.items.map((item) => (
           <div key={item.id} className="flex gap-2.5">
@@ -72,6 +74,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
           </div>
         ))}
       </div>
+      ) : null}
 
       {/* Total */}
       <div className="flex justify-end items-center gap-1 mt-1">

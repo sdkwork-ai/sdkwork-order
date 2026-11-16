@@ -264,8 +264,15 @@ export function CashierPage({
         return null;
       }
       // Provider deep links (a Stripe cashier URL) are launchable, not
-      // scannable: only http(s) targets render as QR content.
-      if (!/^https?:/i.test(payload) && !payload.startsWith("data:image/")) {
+      // scannable: only payloads a scanner can consume render as QR content.
+      // WeChat Native pay returns `weixin://wxpay/bizpayurl?...` and Alipay
+      // returns `alipays://`/`alipay://`, so the http-only guard hid the QR for
+      // the two most common channels.
+      const scannable =
+        /^https?:/i.test(payload)
+        || /^data:image\//i.test(payload)
+        || /^(weixin|wxpay|alipays?|alipay|unionpay):/i.test(payload);
+      if (!scannable) {
         return null;
       }
       return QRCode.toDataURL(payload, { width: 220, margin: 1 });
@@ -682,7 +689,7 @@ export function CashierPage({
                 <div className="flex items-center gap-1 mt-3 text-[#FA5151]">
                   <Clock className="w-4 h-4" />
                   <span className="text-[13px] font-medium">
-                    {t("orders.cashier_auto_close", "剩余 {countdown} 自动关闭", {
+                    {t("orders.cashier_auto_close", "剩余 {{countdown}} 自动关闭", {
                       countdown: formatCashierCountdown(remainingSeconds),
                     })}
                   </span>

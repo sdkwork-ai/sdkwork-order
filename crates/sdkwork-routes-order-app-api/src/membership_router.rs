@@ -16,8 +16,7 @@ use sdkwork_order_service::{
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::cashier_token::{
-    cashier_url_for_token, mint_cashier_token_with_secret, resolve_cashier_token_mint_material,
-    CashierTokenSubject,
+    cashier_url_for_token, CashierTokenSubject,
 };
 use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
@@ -306,17 +305,15 @@ async fn create_membership_order(
     };
 
     if payment_product == DEFAULT_PAYMENT_PRODUCT {
-        let material = match state.pool.as_ref() {
-            Some(pool) => match resolve_cashier_token_mint_material(pool, &subject.tenant_id).await
-            {
-                Ok(material) => material,
+        // Mint the short `/cashier/s1.<22>` link; the real signed token stays in
+        // the payment-side mapping and never enters the QR.
+        let outcome = match state.pool.as_ref() {
+            Some(pool) => match apply_cashier_short_link(pool, outcome, &subject.tenant_id).await {
+                Ok(outcome) => outcome,
                 Err(error) => return map_service_error(ctx, error),
             },
-            // Without a database pool there is no stored signing secret; keep
-            // the legacy link instead of falling back to a deployment secret.
-            None => None,
+            None => outcome,
         };
-        let outcome = apply_cashier_capability(outcome, &subject.tenant_id, material);
         return success_created_item(
             ctx,
             map_membership_order_outcome(outcome, &payment_product, None, request.grant_quantity()),
@@ -546,39 +543,43 @@ fn build_create_membership_command(
     )
 }
 
-/// Replaces the order-bound legacy cashier link with a signed capability token.
-///
-/// The `mobile_cashier_h5` product deliberately does not create a payment
-/// attempt at order time: the payer picks a method later on the H5 cashier. That
-/// also means the provider enrichment (which normally mints the token) never
-/// runs, so without this step every membership QR stays on
-/// `/cashier/{orderId}?scene=..&outTradeNo=..` and therefore on the login wall.
-///
-/// The configured H5 origin is preserved by reusing the origin of the legacy URL;
-/// when no deployment secret is configured minting returns `None` and the caller
-/// keeps the legacy link (the documented rollout switch).
-fn apply_cashier_capability(
-    outcome: CreateMembershipOrderOutcome,
+/// Rewrites the legacy membership cashier link to the short `/cashier/s1.<22>`
+/// form and stores the real signed token in the payment-side mapping.
+async fn apply_cashier_short_link(
+    pool: &sqlx::PgPool,
+    mut outcome: CreateMembershipOrderOutcome,
     tenant_id: &str,
-    material: Option<(Vec<u8>, i64)>,
-) -> CreateMembershipOrderOutcome {
-    let Some((secret, key_epoch)) = material else {
-        // No stored or deployment secret keeps the legacy link (the documented
-        // rollout switch). A configured-but-invalid secret already fails the
-        // request before reaching here.
-        return outcome;
+) -> Result<CreateMembershipOrderOutcome, CommerceServiceError> {
+    let Some(base_url) = cashier_base_url_from_legacy_url(&outcome.cashier_url) else {
+        return Ok(outcome);
     };
-    apply_cashier_capability_with_secret(
-        outcome,
+    let subject = CashierTokenSubject {
         tenant_id,
-        key_epoch,
-        Some(&secret),
-        sdkwork_utils_rust::now().timestamp(),
-        &Uuid::new_v4().to_string(),
-    )
+        order_id: &outcome.order_id,
+        out_trade_no: &outcome.out_trade_no,
+        amount: outcome.amount.as_str(),
+        currency_code: &outcome.currency_code,
+        scene: sdkwork_utils_rust::commerce_cashier_scene(Some("membership")),
+        key_epoch: 1,
+    };
+    let segment =
+        sdkwork_payment_repository_sqlx::cashier_link::mint_cashier_short_link_postgres(
+            pool, &subject,
+        )
+        .await?;
+    let Some(segment) = segment else {
+        return Ok(outcome);
+    };
+    let Some(cashier_url) = cashier_url_for_token(&segment, Some(&base_url)) else {
+        return Ok(outcome);
+    };
+    outcome.cashier_url = cashier_url;
+    Ok(outcome)
 }
 
-/// Testable core of [`apply_cashier_capability`].
+/// Minting is now done by [`apply_cashier_short_link`]; this legacy helper is
+/// kept only for the unit test of the pre-short-link behavior.
+#[cfg(test)]
 fn apply_cashier_capability_with_secret(
     mut outcome: CreateMembershipOrderOutcome,
     tenant_id: &str,
@@ -602,7 +603,9 @@ fn apply_cashier_capability_with_secret(
         scene: sdkwork_utils_rust::commerce_cashier_scene(Some("membership")),
         key_epoch,
     };
-    let Ok(token) = mint_cashier_token_with_secret(secret, &subject, issued_at, token_id) else {
+    let Ok(token) = sdkwork_payment_repository_sqlx::cashier_token::mint_cashier_token_with_secret(
+        secret, &subject, issued_at, token_id,
+    ) else {
         return outcome;
     };
     let Some(cashier_url) = cashier_url_for_token(&token, Some(&base_url)) else {

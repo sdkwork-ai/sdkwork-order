@@ -14,6 +14,7 @@ import {
   type RefundTargetAsset,
 } from "../services/RefundTypes";
 import { toUserErrorMessage } from "../services/errorMessage";
+import { formatOrderDateTime } from "../services/datetime";
 import { localizeOrderTitle } from "../services/orderTitle";
 
 /**
@@ -45,8 +46,23 @@ const REFUND_STATUS_BADGE_CLASSES: Readonly<Record<string, string>> = {
   rejected: "bg-[#FA5151]/10 text-[#FA5151]",
 };
 
+/** Wire status aliases that collapse onto the rendered fallback keys. */
+const REFUND_STATUS_ALIASES: Readonly<Record<string, string>> = {
+  pending: "requested",
+  pending_review: "requested",
+  in_review: "processing",
+  denied: "rejected",
+  payout: "paid_out",
+};
+
+/** Normalizes the app-api wire status (`PENDING`) onto the fallback keys. */
+function refundStatusKey(status: string): string {
+  const lowered = status.trim().toLowerCase();
+  return REFUND_STATUS_ALIASES[lowered] ?? lowered;
+}
+
 function refundStatusBadgeClass(status: string): string {
-  return REFUND_STATUS_BADGE_CLASSES[status] ?? "bg-active-bg text-text-sub";
+  return REFUND_STATUS_BADGE_CLASSES[refundStatusKey(status)] ?? "bg-active-bg text-text-sub";
 }
 
 /** Renders the request amount in the unit its target asset implies. */
@@ -79,7 +95,7 @@ interface RefundFormState {
 }
 
 export function RefundRequestsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedOrderId = searchParams.get("orderId") ?? "";
 
@@ -200,8 +216,8 @@ export function RefundRequestsPage() {
                     className={`rounded-full px-2 py-0.5 text-[11px] ${refundStatusBadgeClass(request.status)}`}
                   >
                     {t(
-                      `orders.refund_status_${request.status}`,
-                      REFUND_STATUS_FALLBACKS[request.status] ?? request.status,
+                      `orders.refund_status_${refundStatusKey(request.status)}`,
+                      REFUND_STATUS_FALLBACKS[refundStatusKey(request.status)] ?? request.status,
                     )}
                   </span>
                 </div>
@@ -221,7 +237,7 @@ export function RefundRequestsPage() {
                 )}
                 <div className="flex items-center justify-between">
                   <RefundAmount request={request} />
-                  <span className="text-[12px] text-text-sub">{request.createdAt}</span>
+                  <span className="text-[12px] text-text-sub">{formatOrderDateTime(request.createdAt, i18n.language)}</span>
                 </div>
               </div>
             ))

@@ -411,9 +411,24 @@ async fn retrieve_cashier_status(
 /// uses the payment-center managed signing secret (active and the rotation grace
 /// secret) and falls back to the deployment secret for legacy installs.
 async fn verify_request_token(pool: &PgPool, token: &str) -> Option<CashierTokenClaims> {
+    // The QR carries `s1.<22>`; resolve it to the signed token stored encrypted
+    // in the payment-side mapping, then run the existing signature verification.
+    let signed_token = if sdkwork_utils_rust::is_cashier_short_link_segment(token) {
+        let short_id = token
+            .trim()
+            .strip_prefix(sdkwork_utils_rust::CASHIER_SHORT_LINK_PREFIX)?;
+        sdkwork_payment_repository_sqlx::cashier_link::resolve_cashier_short_link_token_postgres(
+            pool, short_id,
+        )
+        .await
+        .ok()
+        .flatten()?
+    } else {
+        token.to_owned()
+    };
     sdkwork_payment_repository_sqlx::cashier_token::verify_cashier_token_from_store(
         pool,
-        token,
+        &signed_token,
         sdkwork_utils_rust::now().timestamp(),
     )
     .await
