@@ -29,6 +29,14 @@ export const OrderCard: React.FC<OrderCardProps> = ({
       className="bg-chat-other-bg rounded-xl p-3 flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-transform"
     >
       {/* Order Header */}
+      {order.partnerName && (
+        <div className="flex items-center gap-1 text-[11px] text-primary-blue/80">
+          <span className="rounded bg-primary-blue/10 px-1.5 py-0.5 font-medium">
+            {t("orders.partner_badge", "分销伙伴")}
+          </span>
+          <span>{order.partnerName}</span>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 cursor-pointer active:opacity-70">
           <Store className="w-4 h-4 text-text-main" />
