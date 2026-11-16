@@ -164,6 +164,9 @@ export interface Order {
   readonly payTime?: string;
   readonly expireTime?: string;
   readonly paymentMethod?: string;
+  /** Distributor the buyer was bound to when the order was created. */
+  readonly partnerName?: string;
+  readonly partnerLevelNo?: string;
   readonly items: readonly OrderItem[];
   readonly outTradeNo?: string;
   readonly transactionId?: string;
@@ -479,6 +482,8 @@ function mapOrderSummary(value: Record<string, unknown>): Order {
     payTime: toOptionalString(value.payTime),
     expireTime: toOptionalString(value.expireTime),
     paymentMethod: toOptionalString(value.paymentMethod),
+    partnerName: toOptionalString(value.partnerName),
+    partnerLevelNo: toOptionalString(value.partnerLevelNo),
     items: itemsValue.map((item) => mapOrderItem(item as Record<string, unknown>)),
     outTradeNo: toOptionalString(value.outTradeNo),
     transactionId: toOptionalString(value.transactionId),
