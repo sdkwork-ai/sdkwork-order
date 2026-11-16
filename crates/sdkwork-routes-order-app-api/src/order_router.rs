@@ -186,6 +186,13 @@ struct OrderSummaryResponse {
     /// concepts and are rendered as separate columns.
     #[serde(skip_serializing_if = "Option::is_none")]
     points: Option<i64>,
+    /// Distributor the order's customer was bound to at creation time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partner_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partner_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partner_level_no: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -908,6 +915,9 @@ fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {
         payment_provider: None,
         product_image: None,
         points: value.points,
+        partner_id: value.partner.as_ref().map(|partner| partner.partner_id.clone()),
+        partner_name: value.partner.as_ref().map(|partner| partner.name.clone()),
+        partner_level_no: value.partner.as_ref().map(|partner| partner.level_no.clone()),
     }
 }
 
