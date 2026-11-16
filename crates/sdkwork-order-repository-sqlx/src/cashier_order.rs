@@ -123,6 +123,113 @@ pub async fn load_cashier_order_postgres(
     }))
 }
 
+/// Trade numbers a legacy (token-less) cashier link may carry.
+///
+/// A legacy link is `{base}/cashier/{orderId}?scene=..&outTradeNo=..`; the page
+/// exchanges it for a signed capability token so the payer does not need a
+/// session. The exchange must prove the caller saw the QR, which means matching
+/// the URL's `outTradeNo` against a value only the order owner's checkout could
+/// have produced:
+///
+/// - `request_no` holds the membership/app-template out-trade number,
+/// - `order_no` is the fallback used by the cashier read model, and
+/// - the latest payment attempt holds the provider out-trade number used by the
+///   standard checkout flow.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CashierLinkOrderRecord {
+    /// Tenant that owns the order.
+    pub tenant_id: String,
+    /// Merchant trade number stored on the order row.
+    pub request_no: String,
+    /// Business order number.
+    pub order_no: String,
+    /// Provider trade number of the latest payment attempt, when one exists.
+    pub attempt_out_trade_no: Option<String>,
+}
+
+impl CashierLinkOrderRecord {
+    /// Returns the stored trade number that matches `candidate`.
+    ///
+    /// The comparison is constant-time so the endpoint cannot be used as a
+    /// timing oracle to discover an order's out-trade number.
+    #[must_use]
+    pub fn matched_out_trade_no(&self, candidate: &str) -> Option<&str> {
+        let candidate = candidate.trim();
+        if candidate.is_empty() {
+            return None;
+        }
+        [
+            Some(self.request_no.as_str()),
+            Some(self.order_no.as_str()),
+            self.attempt_out_trade_no.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|value| !value.trim().is_empty())
+        .find(|value| sdkwork_utils_rust::secure_compare(value.trim(), candidate))
+    }
+
+    /// True when `candidate` matches any trade number bound to this order.
+    #[must_use]
+    pub fn matches_out_trade_no(&self, candidate: &str) -> bool {
+        self.matched_out_trade_no(candidate).is_some()
+    }
+}
+
+/// Loads the trade numbers a legacy cashier link may present for `order_id`.
+///
+/// The lookup is by order primary key (globally unique), not tenant-scoped: an
+/// anonymous caller has no tenant, and the returned tenant is only used after
+/// the out-trade number check succeeds.
+pub async fn load_cashier_link_order_postgres(
+    pool: &PgPool,
+    order_id: &str,
+) -> Result<Option<CashierLinkOrderRecord>, CommerceServiceError> {
+    let row = sqlx::query(
+        r#"
+        SELECT
+            o.tenant_id,
+            COALESCE(NULLIF(o.request_no, ''), '') AS request_no,
+            COALESCE(NULLIF(o.order_no, ''), '') AS order_no,
+            (
+                SELECT NULLIF(pa.out_trade_no, '')
+                FROM commerce_payment_attempt pa
+                WHERE pa.tenant_id = o.tenant_id
+                  AND pa.order_id = o.id
+                ORDER BY pa.created_at DESC
+                LIMIT 1
+            ) AS attempt_out_trade_no
+        FROM commerce_order o
+        WHERE o.id = CAST($1 AS TEXT)
+        LIMIT 1
+        "#,
+    )
+    .bind(order_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| {
+        CommerceServiceError::storage(format!("failed to load cashier link order: {error}"))
+    })?;
+
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    let tenant_id = string_cell(&row, "tenant_id");
+    if tenant_id.trim().is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(CashierLinkOrderRecord {
+        tenant_id,
+        request_no: string_cell(&row, "request_no"),
+        order_no: string_cell(&row, "order_no"),
+        attempt_out_trade_no: row
+            .try_get::<Option<String>, _>("attempt_out_trade_no")
+            .ok()
+            .flatten(),
+    }))
+}
+
 /// Reads a text column, defaulting to an empty string.
 fn string_cell(row: &sqlx::postgres::PgRow, column: &str) -> String {
     row.try_get::<String, _>(column).unwrap_or_default()
@@ -155,5 +262,41 @@ mod tests {
         assert!(!record("draft").is_payable());
         assert!(!record("cancelled").is_payable());
         assert!(!record("expired").is_payable());
+    }
+
+    fn link_record() -> CashierLinkOrderRecord {
+        CashierLinkOrderRecord {
+            tenant_id: "100001".to_owned(),
+            request_no: "MEMBERSHIP-1".to_owned(),
+            order_no: "MB-1".to_owned(),
+            attempt_out_trade_no: Some("PROVIDER-1".to_owned()),
+        }
+    }
+
+    #[test]
+    fn legacy_link_accepts_every_bound_trade_number() {
+        let link = link_record();
+        assert!(link.matches_out_trade_no("MEMBERSHIP-1"));
+        assert!(link.matches_out_trade_no("MB-1"));
+        assert!(link.matches_out_trade_no("PROVIDER-1"));
+        assert!(link.matches_out_trade_no("  MEMBERSHIP-1  "));
+        // The matched stored value is what the token binds, not the raw request.
+        assert_eq!(link.matched_out_trade_no("  MEMBERSHIP-1  "), Some("MEMBERSHIP-1"));
+        assert_eq!(link.matched_out_trade_no("PROVIDER-1"), Some("PROVIDER-1"));
+    }
+
+    #[test]
+    fn legacy_link_rejects_unknown_or_blank_trade_numbers() {
+        let link = link_record();
+        assert!(!link.matches_out_trade_no("MEMBERSHIP-2"));
+        assert!(!link.matches_out_trade_no(""));
+        assert!(!link.matches_out_trade_no("   "));
+
+        let without_attempt = CashierLinkOrderRecord {
+            attempt_out_trade_no: None,
+            ..link_record()
+        };
+        assert!(without_attempt.matches_out_trade_no("MEMBERSHIP-1"));
+        assert!(!without_attempt.matches_out_trade_no("PROVIDER-1"));
     }
 }

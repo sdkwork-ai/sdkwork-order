@@ -15,6 +15,12 @@ use sdkwork_order_service::{
     CreateMembershipOrderCommand, CreateMembershipOrderOutcome, MAX_MEMBERSHIP_ORDER_QUANTITY,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
+use sdkwork_payment_repository_sqlx::cashier_token::{
+    cashier_url_for_token, mint_cashier_token_with_secret, CashierTokenSubject,
+};
+use sdkwork_payment_repository_sqlx::cashier_token_setting::{
+    load_cashier_token_epoch_postgres, DEFAULT_CASHIER_TOKEN_EPOCH,
+};
 use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
 };
@@ -54,6 +60,9 @@ pub trait CommerceMembershipOrderStore: Send + Sync {
 struct AppMembershipOrderState {
     store: Arc<dyn CommerceMembershipOrderStore>,
     payments: Option<Arc<dyn OwnerOrderPaymentStore>>,
+    /// Payment database pool; used to resolve the tenant's cashier key epoch.
+    /// Absent in tests/embedded hosts that do not mint H5 cashier links.
+    pool: Option<PgPool>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -177,33 +186,39 @@ pub fn app_membership_order_router_with_postgres_pool_and_payments(
     credentials: ProviderCredentialBundle,
 ) -> Router {
     let payments = enriched_postgres_owner_order_payments(pool.clone(), registry, credentials);
-    build_app_membership_order_router_with_payments(
-        Arc::new(PostgresCommerceMembershipOrderStore::new(pool)),
-        payments,
+    build_app_membership_order_router_state(
+        Arc::new(PostgresCommerceMembershipOrderStore::new(pool.clone())),
+        Some(payments),
+        Some(pool),
     )
 }
 
 pub fn build_app_membership_order_router(store: Arc<dyn CommerceMembershipOrderStore>) -> Router {
-    build_app_membership_order_router_state(store, None)
+    build_app_membership_order_router_state(store, None, None)
 }
 
 pub fn build_app_membership_order_router_with_payments(
     store: Arc<dyn CommerceMembershipOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
 ) -> Router {
-    build_app_membership_order_router_state(store, Some(payments))
+    build_app_membership_order_router_state(store, Some(payments), None)
 }
 
 fn build_app_membership_order_router_state(
     store: Arc<dyn CommerceMembershipOrderStore>,
     payments: Option<Arc<dyn OwnerOrderPaymentStore>>,
+    pool: Option<PgPool>,
 ) -> Router {
     Router::new()
         .route(
             "/app/v3/api/memberships/orders",
             post(create_membership_order),
         )
-        .with_state(AppMembershipOrderState { store, payments })
+        .with_state(AppMembershipOrderState {
+            store,
+            payments,
+            pool,
+        })
 }
 
 async fn create_membership_order(
@@ -293,6 +308,16 @@ async fn create_membership_order(
     };
 
     if payment_product == DEFAULT_PAYMENT_PRODUCT {
+        let key_epoch = match state.pool.as_ref() {
+            Some(pool) => load_cashier_token_epoch_postgres(pool, &subject.tenant_id)
+                .await
+                .unwrap_or(DEFAULT_CASHIER_TOKEN_EPOCH),
+            None => DEFAULT_CASHIER_TOKEN_EPOCH,
+        };
+        let outcome = match apply_cashier_capability(outcome, &subject.tenant_id, key_epoch) {
+            Ok(outcome) => outcome,
+            Err(error) => return map_service_error(ctx, error),
+        };
         return success_created_item(
             ctx,
             map_membership_order_outcome(outcome, &payment_product, None, request.grant_quantity()),
@@ -522,6 +547,88 @@ fn build_create_membership_command(
     )
 }
 
+/// Replaces the order-bound legacy cashier link with a signed capability token.
+///
+/// The `mobile_cashier_h5` product deliberately does not create a payment
+/// attempt at order time: the payer picks a method later on the H5 cashier. That
+/// also means the provider enrichment (which normally mints the token) never
+/// runs, so without this step every membership QR stays on
+/// `/cashier/{orderId}?scene=..&outTradeNo=..` and therefore on the login wall.
+///
+/// The configured H5 origin is preserved by reusing the origin of the legacy URL;
+/// when no deployment secret is configured minting returns `None` and the caller
+/// keeps the legacy link (the documented rollout switch).
+fn apply_cashier_capability(
+    outcome: CreateMembershipOrderOutcome,
+    tenant_id: &str,
+    key_epoch: i64,
+) -> Result<CreateMembershipOrderOutcome, CommerceServiceError> {
+    // An absent secret keeps the legacy link (the documented rollout switch). A
+    // secret that is present but invalid fails the request instead of silently
+    // emitting a login-required link (contract §2.1: no silent degradation).
+    let secret = sdkwork_utils_rust::cashier_token_secret_from_env().map_err(|error| {
+        CommerceServiceError::storage(format!("cashier token secret is invalid: {error}"))
+    })?;
+    Ok(apply_cashier_capability_with_secret(
+        outcome,
+        tenant_id,
+        key_epoch,
+        secret.as_deref(),
+        sdkwork_utils_rust::now().timestamp(),
+        &Uuid::new_v4().to_string(),
+    ))
+}
+
+/// Testable core of [`apply_cashier_capability`].
+fn apply_cashier_capability_with_secret(
+    mut outcome: CreateMembershipOrderOutcome,
+    tenant_id: &str,
+    key_epoch: i64,
+    secret: Option<&[u8]>,
+    issued_at: i64,
+    token_id: &str,
+) -> CreateMembershipOrderOutcome {
+    let Some(secret) = secret else {
+        return outcome;
+    };
+    let Some(base_url) = cashier_base_url_from_legacy_url(&outcome.cashier_url) else {
+        return outcome;
+    };
+    let subject = CashierTokenSubject {
+        tenant_id,
+        order_id: &outcome.order_id,
+        out_trade_no: &outcome.out_trade_no,
+        amount: outcome.amount.as_str(),
+        currency_code: &outcome.currency_code,
+        scene: sdkwork_utils_rust::commerce_cashier_scene(Some("membership")),
+        key_epoch,
+    };
+    let Ok(token) = mint_cashier_token_with_secret(secret, &subject, issued_at, token_id) else {
+        return outcome;
+    };
+    let Some(cashier_url) = cashier_url_for_token(&token, Some(&base_url)) else {
+        return outcome;
+    };
+    outcome.cashier_url = cashier_url;
+    outcome
+}
+
+/// Extracts the operator-configured origin from a legacy cashier URL.
+///
+/// `https://h5.example.com/cashier/ORD-1?scene=virtual&outTradeNo=OT-1`
+/// yields `https://h5.example.com`. Returns `None` when the URL has no cashier
+/// path or no origin, so a malformed link is left untouched instead of being
+/// rewritten against the deployment default.
+fn cashier_base_url_from_legacy_url(url: &str) -> Option<String> {
+    let trimmed = url.trim();
+    let index = trimmed.find("/cashier/")?;
+    let base = trimmed.get(..index)?.trim_end_matches('/');
+    if base.is_empty() {
+        return None;
+    }
+    Some(base.to_owned())
+}
+
 fn map_membership_order_outcome(
     value: CreateMembershipOrderOutcome,
     payment_product: &str,
@@ -611,8 +718,12 @@ mod tests {
 
     use sdkwork_contract_service::CommerceMoney;
     use sdkwork_order_service::CreateMembershipOrderOutcome;
+    use sdkwork_utils_rust::{
+        derive_cashier_token_key, verify_cashier_token, CASHIER_TOKEN_AUDIENCE,
+    };
 
     use super::{
+        apply_cashier_capability_with_secret, cashier_base_url_from_legacy_url,
         map_membership_order_outcome, membership_order_organization_scope, payment_scene,
         provider_qr_code, validate_membership_action, validate_membership_quantity,
         validate_payment_method, validate_payment_product, CreateMembershipOrderRequest,
@@ -677,6 +788,89 @@ mod tests {
     fn native_products_map_to_provider_supported_scenes() {
         assert_eq!(payment_scene("wechat_native"), "wechat_native");
         assert_eq!(payment_scene("alipay_native"), "alipay_qr");
+    }
+
+    #[test]
+    fn legacy_cashier_url_origin_is_preserved_for_token_links() {
+        assert_eq!(
+            cashier_base_url_from_legacy_url(
+                "https://platform.birdcoder.com/cashier/ORD-1?scene=virtual&outTradeNo=OT-1"
+            )
+            .as_deref(),
+            Some("https://platform.birdcoder.com")
+        );
+        assert_eq!(
+            cashier_base_url_from_legacy_url(
+                "https://h5.example.com/cashier/ORD-1?scene=virtual&outTradeNo=OT-1"
+            )
+            .as_deref(),
+            Some("https://h5.example.com")
+        );
+        assert_eq!(
+            cashier_base_url_from_legacy_url("/cashier/ORD-1?scene=virtual&outTradeNo=OT-1"),
+            None
+        );
+        assert_eq!(
+            cashier_base_url_from_legacy_url("https://h5.example.com/orders/ORD-1"),
+            None
+        );
+    }
+
+    #[test]
+    fn membership_cashier_url_is_tokenized_with_the_order_claims() {
+        const SECRET: &[u8] = b"sdkwork-cashier-token-test-secret-0001";
+        let outcome = CreateMembershipOrderOutcome::new(
+            "order-1",
+            "purchase",
+            "MB-1",
+            "MEMBERSHIP-1",
+            CommerceMoney::new("9900").expect("membership amount"),
+            "CNY",
+            "package-1",
+            "Pro Token Plan",
+            30,
+            "2026-11-16T00:00:00Z",
+            "wechat_pay",
+            "pending_payment",
+            false,
+            "https://platform.birdcoder.com/cashier/order-1?scene=virtual&outTradeNo=MEMBERSHIP-1",
+        )
+        .expect("membership outcome");
+
+        let tokenized = apply_cashier_capability_with_secret(
+            outcome,
+            "100001",
+            1,
+            Some(SECRET),
+            1_700_000_000,
+            "jti-1",
+        );
+
+        // The operator-configured origin survives; the URL now carries only a
+        // signed token (no order id, no outTradeNo query).
+        assert!(
+            tokenized
+                .cashier_url
+                .starts_with("https://platform.birdcoder.com/cashier/v1.")
+        );
+        assert!(!tokenized.cashier_url.contains("order-1"));
+        assert!(!tokenized.cashier_url.contains("outTradeNo="));
+
+        let token = tokenized
+            .cashier_url
+            .rsplit('/')
+            .next()
+            .expect("token path segment");
+        let key = derive_cashier_token_key(SECRET, "100001").expect("signing key");
+        let claims = verify_cashier_token(token, &key, 1_700_000_100, CASHIER_TOKEN_AUDIENCE)
+            .expect("cashier token");
+        assert_eq!(claims.order_id, "order-1");
+        assert_eq!(claims.out_trade_no, "MEMBERSHIP-1");
+        assert_eq!(claims.amount, "9900");
+        assert_eq!(claims.currency_code, "CNY");
+        assert_eq!(claims.scene, "virtual");
+        assert_eq!(claims.token_id, "jti-1");
+        assert_eq!(claims.epoch, 1);
     }
 
     #[test]

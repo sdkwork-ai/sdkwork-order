@@ -6863,6 +6863,76 @@
         "x-sdkwork-api-surface": "app-api"
       }
     },
+    "/app/v3/api/cashier/links": {
+      "post": {
+        "tags": [
+          "orderCashier"
+        ],
+        "summary": "Exchange a legacy cashier link for a capability token.",
+        "description": "A QR printed before capability tokens existed carries `/cashier/{orderId}?outTradeNo=..`. The payer presents both values and receives a short-lived signed token, so the already-issued link opens the no-login cashier instead of a login wall. The order id alone is not sufficient: the out-trade number bound to the order or its latest payment attempt must match.",
+        "operationId": "cashier.links.create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashierLinkCreateCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashierLinkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The legacy cashier link is unknown or the out-trade number does not match",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-sdkwork-auth-mode": "anonymous",
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "cashier",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
     "/app/v3/api/cashier/{token}": {
       "get": {
         "tags": [
@@ -10075,6 +10145,69 @@
                 "properties": {
                   "item": {
                     "$ref": "#/components/schemas/CashierStatus"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CashierLinkCreateCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "outTradeNo"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Order primary key carried by the legacy cashier URL."
+          },
+          "outTradeNo": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Merchant trade number carried by the legacy cashier URL. It must match the number bound to the order or its latest payment attempt."
+          }
+        }
+      },
+      "CashierLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "description": "Signed capability token for the anonymous cashier endpoints."
+          }
+        }
+      },
+      "CashierLinkResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CashierLink"
                   }
                 }
               }
