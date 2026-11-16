@@ -86,6 +86,16 @@ function RefundAmount({ request }: { request: RefundRequestView }) {
   );
 }
 
+/** Common refund reasons; the wire keeps the stable code, the UI shows the label. */
+const REFUND_REASON_OPTIONS: ReadonlyArray<{ code: string; label: string }> = [
+  { code: "", label: "未选择" },
+  { code: "quality", label: "质量问题" },
+  { code: "not_received", label: "未收到货" },
+  { code: "not_as_described", label: "与描述不符" },
+  { code: "damaged", label: "商品破损" },
+  { code: "other", label: "其他" },
+];
+
 interface RefundFormState {
   orderId: string;
   targetAsset: RefundTargetAsset;
@@ -175,6 +185,7 @@ export function RefundRequestsPage() {
 
   return (
     <PageLayout title={t("orders.refund_title", "我的退款")}>
+      <h1 className="sr-only">{t("orders.refund_title", "我的退款")}</h1>
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-3 py-3 pb-6">
         <section className="flex flex-col gap-3">
           <h3 className="text-[14px] font-bold text-text-main">
@@ -306,14 +317,19 @@ export function RefundRequestsPage() {
               <span className="text-[12px] text-text-sub">
                 {t("orders.refund_reason_code", "原因类型（选填）")}
               </span>
-              <input
+              <select
                 className="rounded-lg border border-border-color bg-bg-color px-3 py-2 text-[13px] text-text-main outline-none focus:border-primary-blue"
                 onChange={(event) =>
                   setForm((previous) => ({ ...previous, reasonCode: event.target.value }))
                 }
-                placeholder={t("orders.refund_reason_code_placeholder", "如 quality / not_received")}
                 value={form.reasonCode}
-              />
+              >
+                {REFUND_REASON_OPTIONS.map((option) => (
+                  <option key={option.code || "none"} value={option.code}>
+                    {t(`orders.refund_reason_${option.code || "none"}`, option.label)}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="flex flex-col gap-1">

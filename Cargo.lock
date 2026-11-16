@@ -2561,6 +2561,7 @@ dependencies = [
 name = "sdkwork-order-integration-partner"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "sdkwork-commerce-partner-repository-sqlx",
  "sdkwork-commerce-partner-service",
  "sdkwork-contract-service",
@@ -2630,6 +2631,7 @@ dependencies = [
  "sdkwork-database-config",
  "sdkwork-database-sqlx",
  "sdkwork-order-integration-deployments",
+ "sdkwork-order-integration-partner",
  "sdkwork-order-repository-sqlx",
  "sdkwork-order-service",
  "sdkwork-payment-repository-sqlx",
