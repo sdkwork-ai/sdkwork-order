@@ -111,6 +111,17 @@ export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
             <span className="text-[13px] text-text-main">{order.outTradeNo}</span>
           </div>
         )}
+        {order.partnerName && (
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-text-sub">
+              {t("orders.partner", "分销伙伴")}
+            </span>
+            <span className="text-[13px] text-text-main">
+              {order.partnerName}
+              {order.partnerLevelNo ? ` · L${order.partnerLevelNo}` : ""}
+            </span>
+          </div>
+        )}
         {order.paymentMethod && (
           <div className="flex items-center justify-between">
             <span className="text-[13px] text-text-sub">

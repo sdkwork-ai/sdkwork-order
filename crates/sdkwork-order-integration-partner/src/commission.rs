@@ -70,7 +70,9 @@ pub async fn record_paid_order_commission(
         .bind(order_id)
         .fetch_optional(pool)
         .await
-        .map_err(|error| CommerceServiceError::storage(format!("failed to load order revenue: {error}")))?
+        .map_err(|error| {
+            CommerceServiceError::storage(format!("failed to load order revenue: {error}"))
+        })?
         .unwrap_or_else(|| "0".to_owned());
     let revenue_cents = parse_money_to_cents("revenue", &revenue)?;
     let event_at = DateTime::parse_from_rfc3339(paid_at.trim())
