@@ -2,11 +2,12 @@
 
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{
-    CreateShipmentPackageCommand, ShipmentDetailQuery, ShipmentManagementDetailQuery,
-    ShipmentManagementListPage, ShipmentManagementListQuery, ShipmentPackageListQuery,
-    ShipmentPackageManagementListQuery, ShipmentPackagePage, ShipmentPackageView,
-    ShipmentTrackingEventListQuery, ShipmentTrackingEventPage, ShipmentTrackingEventView,
-    ShipmentView, UpdateShipmentPackageCommand,
+    CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand, ShipmentDetailQuery,
+    ShipmentManagementDetailQuery, ShipmentManagementListPage, ShipmentManagementListQuery,
+    ShipmentPackageListQuery, ShipmentPackageManagementListQuery, ShipmentPackagePage,
+    ShipmentPackageView, ShipmentTrackingEventListQuery, ShipmentTrackingEventManagementListQuery,
+    ShipmentTrackingEventPage, ShipmentTrackingEventView, ShipmentView,
+    UpdateShipmentPackageCommand,
 };
 use sqlx::Row;
 
@@ -333,6 +334,163 @@ impl PostgresCommerceOrderStore {
         })
     }
 
+    /// 运营端列出物流轨迹事件。
+    ///
+    /// The shipment is resolved through the management scope first, so an
+    /// operator can never read the timeline of a shipment outside their tenant
+    /// and organization.
+    pub async fn list_management_shipment_tracking_events(
+        &self,
+        query: ShipmentTrackingEventManagementListQuery,
+    ) -> Result<ShipmentTrackingEventPage, CommerceServiceError> {
+        if self
+            .retrieve_management_shipment(ShipmentManagementDetailQuery {
+                tenant_id: query.tenant_id.clone(),
+                organization_id: query.organization_id.clone(),
+                shipment_id: query.shipment_id.clone(),
+            })
+            .await?
+            .is_none()
+        {
+            return Err(CommerceServiceError::not_found("shipment was not found"));
+        }
+
+        let organization_id = query.organization_id.clone().unwrap_or_default();
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                id,
+                shipment_id,
+                tracking_event_no,
+                event_type,
+                event_status,
+                event_time,
+                location_text,
+                COUNT(*) OVER() AS total_count
+            FROM commerce_shipment_tracking_event
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND shipment_id = CAST($2 AS TEXT)
+              AND ($3 = '' OR organization_id = CAST($3 AS TEXT))
+            ORDER BY event_time ASC, id ASC
+            LIMIT $4 OFFSET $5
+           "#,
+        )
+        .bind(&query.tenant_id)
+        .bind(&query.shipment_id)
+        .bind(&organization_id)
+        .bind(query.limit())
+        .bind(query.offset())
+        .fetch_all(self.pool())
+        .await
+        .map_err(|error| store_error("failed to list management shipment tracking events", error))?;
+
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+
+        let items = rows
+            .into_iter()
+            .map(|row| ShipmentTrackingEventView {
+                event_id: string_cell(&row, "id"),
+                shipment_id: string_cell(&row, "shipment_id"),
+                tracking_event_no: string_cell(&row, "tracking_event_no"),
+                event_type: string_cell(&row, "event_type"),
+                event_status: optional_string_cell(&row, "event_status"),
+                event_time: string_cell(&row, "event_time"),
+                location_text: optional_string_cell(&row, "location_text"),
+            })
+            .collect();
+
+        Ok(ShipmentTrackingEventPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
+    }
+
+    /// 运营端追加物流轨迹事件。
+    ///
+    /// The event id is derived from the shipment and the write command's
+    /// idempotency key, so retrying the same carrier scan is a no-op instead of
+    /// duplicating the timeline.
+    pub async fn create_management_shipment_tracking_event(
+        &self,
+        command: CreateShipmentTrackingEventCommand,
+    ) -> Result<ShipmentTrackingEventView, CommerceServiceError> {
+        if self
+            .retrieve_management_shipment(ShipmentManagementDetailQuery {
+                tenant_id: command.tenant_id.clone(),
+                organization_id: command.organization_id.clone(),
+                shipment_id: command.shipment_id.clone(),
+            })
+            .await?
+            .is_none()
+        {
+            return Err(CommerceServiceError::not_found("shipment was not found"));
+        }
+
+        let event_id = shipment_tracking_event_storage_id(&command);
+        let now = current_timestamp_string();
+        let event_time = command.event_time.clone().unwrap_or_else(|| now.clone());
+        let tracking_event_no = format!("TE-{}", command.request_no);
+        let organization_id = command
+            .organization_id
+            .clone()
+            .unwrap_or_else(|| "0".to_owned());
+
+        sqlx::query(
+            r#"
+            INSERT INTO commerce_shipment_tracking_event
+                (id, tenant_id, organization_id, shipment_id, tracking_event_no,
+                 event_type, event_status, event_time, location_text, created_at)
+            VALUES
+                ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT (id) DO NOTHING
+            "#,
+        )
+        .bind(&event_id)
+        .bind(&command.tenant_id)
+        .bind(&organization_id)
+        .bind(&command.shipment_id)
+        .bind(&tracking_event_no)
+        .bind(&command.event_type)
+        .bind(command.event_status.as_deref())
+        .bind(&event_time)
+        .bind(command.location_text.as_deref())
+        .bind(&now)
+        .execute(self.pool())
+        .await
+        .map_err(|error| store_error("failed to create shipment tracking event", error))?;
+
+        let row = sqlx::query(
+            r#"
+            SELECT id, shipment_id, tracking_event_no, event_type, event_status,
+                   event_time, location_text
+            FROM commerce_shipment_tracking_event
+            WHERE tenant_id = CAST($1 AS TEXT) AND id = CAST($2 AS TEXT)
+            LIMIT 1
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(&event_id)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to reload shipment tracking event", error))?
+        .ok_or_else(|| CommerceServiceError::storage("created tracking event was not found"))?;
+
+        Ok(ShipmentTrackingEventView {
+            event_id: string_cell(&row, "id"),
+            shipment_id: string_cell(&row, "shipment_id"),
+            tracking_event_no: string_cell(&row, "tracking_event_no"),
+            event_type: string_cell(&row, "event_type"),
+            event_status: optional_string_cell(&row, "event_status"),
+            event_time: string_cell(&row, "event_time"),
+            location_text: optional_string_cell(&row, "location_text"),
+        })
+    }
+
     pub async fn create_management_shipment_package(
         &self,
         command: CreateShipmentPackageCommand,
@@ -649,6 +807,15 @@ async fn advance_owner_order_to_shipped(
 fn shipment_package_storage_id(command: &CreateShipmentPackageCommand) -> String {
     stable_storage_id(&[
         "shipment-package",
+        &command.tenant_id,
+        &command.shipment_id,
+        &command.idempotency_key,
+    ])
+}
+
+fn shipment_tracking_event_storage_id(command: &CreateShipmentTrackingEventCommand) -> String {
+    stable_storage_id(&[
+        "shipment-tracking-event",
         &command.tenant_id,
         &command.shipment_id,
         &command.idempotency_key,

@@ -11,6 +11,7 @@ pub mod postgres_account_value;
 pub mod postgres_after_sales;
 pub mod postgres_app_template_order;
 pub mod postgres_checkout;
+pub mod postgres_carrier;
 pub mod postgres_demand_claim;
 pub mod postgres_expiration;
 pub mod postgres_fulfillment;

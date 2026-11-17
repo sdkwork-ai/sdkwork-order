@@ -16,15 +16,17 @@ use sdkwork_order_service::{
     AccountValueOrderSubject, AccountValuePackageItem, AccountValuePackageListPage,
     AccountValueRequestListPage, AccountValueRequestListQuery, AccountValueRequestReviewAction,
     AccountValueRequestView, AfterSalesManagementDetailQuery, AfterSalesManagementListQuery,
-    AfterSalesRequestView, CreateShipmentPackageCommand, NoopAccountValueLedgerPort,
+    AfterSalesRequestView, CarrierListQuery, CarrierPage, CarrierView, CreateCarrierCommand,
+    CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand, NoopAccountValueLedgerPort,
     NoopPaymentPayoutExecutorPort, NoopPaymentRefundExecutorPort, OrderOwnerDetailQuery,
     PaymentPayoutExecutorPort, PaymentRefundExecutorPort, PhysicalInventoryReservationPort,
     ReleasePhysicalOrderInventoryRequest, RetireAccountValuePackageCommand,
     RetireTokenBankPlanCommand, ReviewAccountValueRequestCommand, ReviewAfterSalesRequestCommand,
     ShipmentManagementDetailQuery, ShipmentManagementListQuery, ShipmentPackageManagementListQuery,
-    ShipmentPackageView, ShipmentView, TokenBankPlanItem, TokenBankPlanListPage,
-    TokenBankPlanPeriod, UnavailablePhysicalInventoryReservationPort, UpdateShipmentPackageCommand,
-    UpsertAccountValuePackageCommand, UpsertTokenBankPlanCommand,
+    ShipmentPackageView, ShipmentTrackingEventManagementListQuery, ShipmentTrackingEventPage,
+    ShipmentTrackingEventView, ShipmentView, TokenBankPlanItem, TokenBankPlanListPage,
+    TokenBankPlanPeriod, UnavailablePhysicalInventoryReservationPort, UpdateCarrierCommand,
+    UpdateShipmentPackageCommand, UpsertAccountValuePackageCommand, UpsertTokenBankPlanCommand,
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
@@ -90,6 +92,32 @@ struct ShipmentListParams {
 struct PackageListParams {
     page: Option<i64>,
     page_size: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CarrierListParams {
+    status: Option<String>,
+    page: Option<i64>,
+    page_size: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateCarrierBody {
+    carrier_code: String,
+    carrier_name: String,
+    tracking_url_template: Option<String>,
+    sort_order: Option<i32>,
+    status: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateCarrierBody {
+    carrier_name: Option<String>,
+    tracking_url_template: Option<String>,
+    sort_order: Option<i32>,
+    status: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -259,6 +287,40 @@ struct ShipmentPackageResponse {
     status: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ShipmentTrackingEventResponse {
+    event_id: String,
+    tracking_event_no: String,
+    event_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event_status: Option<String>,
+    event_time: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    location_text: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateTrackingEventBody {
+    event_type: String,
+    event_status: Option<String>,
+    event_time: Option<String>,
+    location_text: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CarrierResponse {
+    carrier_id: String,
+    carrier_code: String,
+    carrier_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tracking_url_template: Option<String>,
+    status: String,
+    sort_order: i64,
+}
+
 impl BackendCommerceAdminStore {
     async fn list_management_after_sales(
         &self,
@@ -363,6 +425,55 @@ impl BackendCommerceAdminStore {
             Self::Postgres { orders, .. } => {
                 orders.update_management_shipment_package(command).await
             }
+        }
+    }
+
+    async fn list_management_tracking_events(
+        &self,
+        query: ShipmentTrackingEventManagementListQuery,
+    ) -> Result<ShipmentTrackingEventPage, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => {
+                orders.list_management_shipment_tracking_events(query).await
+            }
+        }
+    }
+
+    async fn create_management_tracking_event(
+        &self,
+        command: CreateShipmentTrackingEventCommand,
+    ) -> Result<ShipmentTrackingEventView, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => {
+                orders.create_management_shipment_tracking_event(command).await
+            }
+        }
+    }
+
+    async fn list_management_carriers(
+        &self,
+        query: CarrierListQuery,
+    ) -> Result<CarrierPage, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => orders.list_management_carriers(query).await,
+        }
+    }
+
+    async fn create_management_carrier(
+        &self,
+        command: CreateCarrierCommand,
+    ) -> Result<CarrierView, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => orders.create_management_carrier(command).await,
+        }
+    }
+
+    async fn update_management_carrier(
+        &self,
+        command: UpdateCarrierCommand,
+    ) -> Result<CarrierView, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => orders.update_management_carrier(command).await,
         }
     }
 
@@ -576,6 +687,18 @@ fn build_backend_commerce_admin_router(
         .route(
             "/backend/v3/api/shipments/{shipmentId}/packages/{packageId}",
             patch(update_management_shipment_package),
+        )
+        .route(
+            "/backend/v3/api/shipments/{shipmentId}/tracking_events",
+            get(list_management_shipment_tracking_events).post(create_management_shipment_tracking_event),
+        )
+        .route(
+            "/backend/v3/api/carriers",
+            get(list_management_carriers).post(create_management_carrier),
+        )
+        .route(
+            "/backend/v3/api/carriers/{carrierId}",
+            patch(update_management_carrier),
         )
         .with_state(BackendCommerceAdminState {
             store,
@@ -1608,6 +1731,208 @@ async fn list_management_shipment_packages(
     }
 }
 
+async fn list_management_shipment_tracking_events(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    Path(shipment_id): Path<String>,
+    Query(params): Query<PackageListParams>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_READ) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
+        Ok(value) => value,
+        Err(response) => return *response,
+    };
+    let query = match ShipmentTrackingEventManagementListQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &shipment_id,
+        Some(page_params.page),
+        Some(page_params.page_size),
+    ) {
+        Ok(query) => query,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+
+    match state.store.list_management_tracking_events(query).await {
+        Ok(page) => success_items(
+            ctx,
+            page.items
+                .into_iter()
+                .map(map_shipment_tracking_event)
+                .collect(),
+            page.total,
+            page_params,
+        ),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn create_management_shipment_tracking_event(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(shipment_id): Path<String>,
+    Json(body): Json<CreateTrackingEventBody>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let write_headers =
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("te-{shipment_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
+    let mut command = match CreateShipmentTrackingEventCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &shipment_id,
+        &body.event_type,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+    command.event_status = body.event_status;
+    command.event_time = body.event_time;
+    command.location_text = body.location_text;
+
+    match state.store.create_management_tracking_event(command).await {
+        Ok(event) => success_created_item(ctx, map_shipment_tracking_event(event)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn list_management_carriers(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    Query(params): Query<CarrierListParams>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_READ) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
+        Ok(value) => value,
+        Err(response) => return *response,
+    };
+    let query = match CarrierListQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        params.status.as_deref(),
+        Some(page_params.page),
+        Some(page_params.page_size),
+    ) {
+        Ok(query) => query,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+
+    match state.store.list_management_carriers(query).await {
+        Ok(page) => success_items(
+            ctx,
+            page.items.into_iter().map(map_carrier).collect(),
+            page.total,
+            page_params,
+        ),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn create_management_carrier(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Json(body): Json<CreateCarrierBody>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let write_headers =
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("carrier-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
+    let mut command = match CreateCarrierCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &body.carrier_code,
+        &body.carrier_name,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+    command.tracking_url_template = body.tracking_url_template;
+    command.sort_order = body.sort_order.map(i64::from).unwrap_or(0);
+    if let Some(status) = body.status {
+        command.status = status;
+    }
+
+    match state.store.create_management_carrier(command).await {
+        Ok(carrier) => success_created_item(ctx, map_carrier(carrier)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn update_management_carrier(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(carrier_id): Path<String>,
+    Json(body): Json<UpdateCarrierBody>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let write_headers =
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("carrier-{carrier_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
+    let mut command = match UpdateCarrierCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &carrier_id,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+    command.carrier_name = body.carrier_name;
+    command.tracking_url_template = body.tracking_url_template;
+    command.sort_order = body.sort_order.map(i64::from);
+    command.status = body.status;
+
+    match state.store.update_management_carrier(command).await {
+        Ok(carrier) => success_item(ctx, map_carrier(carrier)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
 async fn create_management_shipment_package(
     State(state): State<BackendCommerceAdminState>,
     runtime_context: Option<Extension<IamAppContext>>,
@@ -1769,5 +2094,27 @@ fn map_shipment_package(value: ShipmentPackageView) -> ShipmentPackageResponse {
         package_type: value.package_type,
         tracking_no: value.tracking_no,
         status: value.status,
+    }
+}
+
+fn map_shipment_tracking_event(value: ShipmentTrackingEventView) -> ShipmentTrackingEventResponse {
+    ShipmentTrackingEventResponse {
+        event_id: value.event_id,
+        tracking_event_no: value.tracking_event_no,
+        event_type: value.event_type,
+        event_status: value.event_status,
+        event_time: value.event_time,
+        location_text: value.location_text,
+    }
+}
+
+fn map_carrier(value: CarrierView) -> CarrierResponse {
+    CarrierResponse {
+        carrier_id: value.carrier_id,
+        carrier_code: value.carrier_code,
+        carrier_name: value.carrier_name,
+        tracking_url_template: value.tracking_url_template,
+        status: value.status,
+        sort_order: value.sort_order,
     }
 }

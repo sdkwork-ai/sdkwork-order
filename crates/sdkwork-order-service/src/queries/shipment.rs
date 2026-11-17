@@ -407,3 +407,240 @@ impl UpdateShipmentPackageCommand {
         })
     }
 }
+
+/// 运营端物流轨迹列表查询。
+///
+/// The owner-facing `ShipmentTrackingEventListQuery` carries `owner_user_id`
+/// because a buyer may only read their own shipment; an operator scope is
+/// tenant + organization only.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShipmentTrackingEventManagementListQuery {
+    pub organization_id: Option<String>,
+    pub page: i64,
+    pub page_size: i64,
+    pub shipment_id: String,
+    pub tenant_id: String,
+}
+
+impl ShipmentTrackingEventManagementListQuery {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        shipment_id: &str,
+        page: Option<i64>,
+        page_size: Option<i64>,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("shipment_id", shipment_id)?;
+        let (page, page_size) = crate::validation::offset_list_params(page, page_size)?;
+        Ok(Self {
+            organization_id: optional_text(organization_id),
+            page,
+            page_size,
+            shipment_id: shipment_id.trim().to_string(),
+            tenant_id: tenant_id.trim().to_string(),
+        })
+    }
+
+    pub fn limit(&self) -> i64 {
+        self.page_size
+    }
+
+    pub fn offset(&self) -> i64 {
+        (self.page - 1) * self.page_size
+    }
+}
+
+/// 运营端追加物流轨迹事件命令。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateShipmentTrackingEventCommand {    pub event_status: Option<String>,
+    pub event_time: Option<String>,
+    pub event_type: String,
+    pub idempotency_key: String,
+    pub location_text: Option<String>,
+    pub organization_id: Option<String>,
+    pub request_no: String,
+    pub shipment_id: String,
+    pub tenant_id: String,
+}
+
+impl CreateShipmentTrackingEventCommand {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        shipment_id: &str,
+        event_type: &str,
+        request_no: &str,
+        idempotency_key: &str,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("shipment_id", shipment_id)?;
+        crate::validation::require_non_empty("event_type", event_type)?;
+        crate::validation::require_non_empty("request_no", request_no)?;
+        crate::validation::require_non_empty("idempotency_key", idempotency_key)?;
+        Ok(Self {
+            event_status: None,
+            event_time: None,
+            event_type: event_type.trim().to_string(),
+            idempotency_key: idempotency_key.trim().to_string(),
+            location_text: None,
+            organization_id: optional_text(organization_id),
+            request_no: request_no.trim().to_string(),
+            shipment_id: shipment_id.trim().to_string(),
+            tenant_id: tenant_id.trim().to_string(),
+        })
+    }
+}
+
+/// 运营端承运商列表查询。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CarrierListQuery {
+    pub organization_id: Option<String>,
+    pub page: i64,
+    pub page_size: i64,
+    pub status: Option<String>,
+    pub tenant_id: String,
+}
+
+impl CarrierListQuery {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        status: Option<&str>,
+        page: Option<i64>,
+        page_size: Option<i64>,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        let (page, page_size) = crate::validation::offset_list_params(page, page_size)?;
+        Ok(Self {
+            organization_id: optional_text(organization_id),
+            page,
+            page_size,
+            status: optional_text(status),
+            tenant_id: tenant_id.trim().to_string(),
+        })
+    }
+
+    pub fn limit(&self) -> i64 {
+        self.page_size
+    }
+
+    pub fn offset(&self) -> i64 {
+        (self.page - 1) * self.page_size
+    }
+}
+
+/// 承运商档案。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CarrierView {
+    pub carrier_code: String,
+    pub carrier_id: String,
+    pub carrier_name: String,
+    pub sort_order: i64,
+    pub status: String,
+    pub tracking_url_template: Option<String>,
+}
+
+/// 运营端承运商分页结果。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CarrierPage {
+    pub items: Vec<CarrierView>,
+    pub page: i64,
+    pub page_size: i64,
+    pub total: i64,
+}
+
+impl CarrierPage {
+    pub fn has_more(&self) -> bool {
+        self.page.saturating_mul(self.page_size) < self.total
+    }
+
+    pub fn total_pages(&self) -> i64 {
+        if self.page_size <= 0 {
+            return 0;
+        }
+        (self.total + self.page_size - 1) / self.page_size
+    }
+}
+
+/// 创建承运商命令。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateCarrierCommand {
+    pub carrier_code: String,
+    pub carrier_name: String,
+    pub idempotency_key: String,
+    pub organization_id: Option<String>,
+    pub request_no: String,
+    pub sort_order: i64,
+    pub status: String,
+    pub tenant_id: String,
+    pub tracking_url_template: Option<String>,
+}
+
+impl CreateCarrierCommand {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        carrier_code: &str,
+        carrier_name: &str,
+        request_no: &str,
+        idempotency_key: &str,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("carrier_code", carrier_code)?;
+        crate::validation::require_non_empty("carrier_name", carrier_name)?;
+        crate::validation::require_non_empty("request_no", request_no)?;
+        crate::validation::require_non_empty("idempotency_key", idempotency_key)?;
+        Ok(Self {
+            carrier_code: carrier_code.trim().to_lowercase(),
+            carrier_name: carrier_name.trim().to_string(),
+            idempotency_key: idempotency_key.trim().to_string(),
+            organization_id: optional_text(organization_id),
+            request_no: request_no.trim().to_string(),
+            sort_order: 0,
+            status: "active".to_string(),
+            tenant_id: tenant_id.trim().to_string(),
+            tracking_url_template: None,
+        })
+    }
+}
+
+/// 更新承运商命令。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpdateCarrierCommand {
+    pub carrier_id: String,
+    pub carrier_name: Option<String>,
+    pub idempotency_key: String,
+    pub organization_id: Option<String>,
+    pub request_no: String,
+    pub sort_order: Option<i64>,
+    pub status: Option<String>,
+    pub tenant_id: String,
+    pub tracking_url_template: Option<String>,
+}
+
+impl UpdateCarrierCommand {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        carrier_id: &str,
+        request_no: &str,
+        idempotency_key: &str,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("carrier_id", carrier_id)?;
+        crate::validation::require_non_empty("request_no", request_no)?;
+        crate::validation::require_non_empty("idempotency_key", idempotency_key)?;
+        Ok(Self {
+            carrier_id: carrier_id.trim().to_string(),
+            carrier_name: None,
+            idempotency_key: idempotency_key.trim().to_string(),
+            organization_id: optional_text(organization_id),
+            request_no: request_no.trim().to_string(),
+            sort_order: None,
+            status: None,
+            tenant_id: tenant_id.trim().to_string(),
+            tracking_url_template: None,
+        })
+    }
+}
