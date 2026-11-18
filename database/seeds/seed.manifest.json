@@ -6,7 +6,9 @@
   "profiles": {
     "standard": {
       "common": [
-        "001_bootstrap.sql"
+        "001_bootstrap.sql",
+        "002_carriers.sql",
+        "003_demo_shipments.sql"
       ],
       "locales": {}
     }
