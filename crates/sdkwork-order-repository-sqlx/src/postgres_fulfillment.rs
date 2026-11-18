@@ -1,12 +1,76 @@
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{
-    FulfillmentDetailQuery, FulfillmentListPage, FulfillmentListQuery, FulfillmentView,
+    FulfillmentDetailQuery, FulfillmentListPage, FulfillmentListQuery,
+    FulfillmentManagementListQuery, FulfillmentView,
 };
 use sqlx::Row;
 
 use crate::postgres_order::PostgresCommerceOrderStore;
 
 impl PostgresCommerceOrderStore {
+    /// 列出履约（运营端）。
+    ///
+    /// 与 owner 域不同，运营列表不按 `owner_user_id` 过滤：调用者已经通过
+    /// `commerce.orders.read` 与组织范围校验，列表只限定租户/组织并支持按订单与状态过滤。
+    pub async fn list_management_fulfillments(
+        &self,
+        query: FulfillmentManagementListQuery,
+    ) -> Result<FulfillmentListPage, CommerceServiceError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                f.id,
+                f.fulfillment_no,
+                f.order_id,
+                f.fulfillment_type,
+                f.status,
+                COUNT(*) OVER() AS total_count
+            FROM commerce_fulfillment_order f
+            WHERE f.tenant_id = CAST($1 AS TEXT)
+              AND ((f.organization_id = CAST($2 AS TEXT)) OR (f.organization_id = '0' AND $3 IS NULL))
+              AND ($4 IS NULL OR f.order_id = CAST($5 AS TEXT))
+              AND ($6 IS NULL OR LOWER(f.status) = LOWER(CAST($7 AS TEXT)))
+            ORDER BY f.created_at DESC, f.id DESC
+            LIMIT $8 OFFSET $9
+            "#,
+        )
+        .bind(&query.tenant_id)
+        .bind(query.organization_id.as_deref())
+        .bind(query.organization_id.as_deref())
+        .bind(query.order_id.as_deref())
+        .bind(query.order_id.as_deref())
+        .bind(query.status.as_deref())
+        .bind(query.status.as_deref())
+        .bind(query.limit())
+        .bind(query.offset())
+        .fetch_all(self.pool())
+        .await
+        .map_err(|error| store_error("failed to list management fulfillments", error))?;
+
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+
+        let items = rows
+            .into_iter()
+            .map(|row| FulfillmentView {
+                fulfillment_id: string_cell(&row, "id"),
+                fulfillment_no: string_cell(&row, "fulfillment_no"),
+                order_id: string_cell(&row, "order_id"),
+                fulfillment_type: string_cell(&row, "fulfillment_type"),
+                status: string_cell(&row, "status"),
+            })
+            .collect();
+
+        Ok(FulfillmentListPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
+    }
+
     /// 列出履约（owner 域）。
     ///
     /// 通过 `INNER JOIN commerce_order` 限定 `owner_user_id` 归属，避免越权读取。

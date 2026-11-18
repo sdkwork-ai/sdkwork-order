@@ -2264,6 +2264,7 @@ name = "sdkwork-content-course-service"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "sdkwork-utils-rust",
  "serde",
  "serde_json",
  "sqlx",

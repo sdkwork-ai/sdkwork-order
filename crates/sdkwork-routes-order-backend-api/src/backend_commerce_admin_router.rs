@@ -17,7 +17,8 @@ use sdkwork_order_service::{
     AccountValueRequestListPage, AccountValueRequestListQuery, AccountValueRequestReviewAction,
     AccountValueRequestView, AfterSalesManagementDetailQuery, AfterSalesManagementListQuery,
     AfterSalesRequestView, CarrierListQuery, CarrierPage, CarrierView, CreateCarrierCommand,
-    CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand, NoopAccountValueLedgerPort,
+    CreateShipmentCommand, CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand,
+    FulfillmentListPage, FulfillmentManagementListQuery, FulfillmentView, NoopAccountValueLedgerPort,
     NoopPaymentPayoutExecutorPort, NoopPaymentRefundExecutorPort, OrderOwnerDetailQuery,
     PaymentPayoutExecutorPort, PaymentRefundExecutorPort, PhysicalInventoryReservationPort,
     ReleasePhysicalOrderInventoryRequest, RetireAccountValuePackageCommand,
@@ -89,9 +90,35 @@ struct ShipmentListParams {
 }
 
 #[derive(Debug, Deserialize)]
-struct PackageListParams {
+struct FulfillmentListParams {
+    #[serde(rename = "orderId", alias = "order_id")]
+    order_id: Option<String>,
+    status: Option<String>,
     page: Option<i64>,
     page_size: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateShipmentBody {
+    fulfillment_id: String,
+    carrier_code: String,
+    tracking_no: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FulfillmentResponse {
+    fulfillment_id: String,
+    fulfillment_no: String,
+    order_id: String,
+    fulfillment_type: String,
+    status: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PackageListParams {
+    page: Option<i64>,    page_size: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -477,6 +504,24 @@ impl BackendCommerceAdminStore {
         }
     }
 
+    async fn list_management_fulfillments(
+        &self,
+        query: FulfillmentManagementListQuery,
+    ) -> Result<FulfillmentListPage, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => orders.list_management_fulfillments(query).await,
+        }
+    }
+
+    async fn create_management_shipment(
+        &self,
+        command: CreateShipmentCommand,
+    ) -> Result<ShipmentView, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => orders.create_management_shipment(command).await,
+        }
+    }
+
     async fn list_account_value_packages(
         &self,
         query: AccountValueCatalogListQuery,
@@ -675,7 +720,14 @@ fn build_backend_commerce_admin_router(
             "/backend/v3/api/after_sales/requests/{afterSalesRequestId}/reviews",
             post(review_after_sales_request),
         )
-        .route("/backend/v3/api/shipments", get(list_management_shipments))
+        .route(
+            "/backend/v3/api/shipments",
+            get(list_management_shipments).post(create_management_shipment),
+        )
+        .route(
+            "/backend/v3/api/fulfillments",
+            get(list_management_fulfillments),
+        )
         .route(
             "/backend/v3/api/shipments/{shipmentId}",
             get(retrieve_management_shipment),
@@ -1892,6 +1944,82 @@ async fn create_management_carrier(
     }
 }
 
+async fn list_management_fulfillments(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    Query(params): Query<FulfillmentListParams>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_READ) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
+        Ok(value) => value,
+        Err(response) => return *response,
+    };
+    let query = match FulfillmentManagementListQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        params.order_id.as_deref(),
+        params.status.as_deref(),
+        Some(page_params.page),
+        Some(page_params.page_size),
+    ) {
+        Ok(query) => query,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+
+    match state.store.list_management_fulfillments(query).await {
+        Ok(page) => success_items(
+            ctx,
+            page.items.into_iter().map(map_fulfillment).collect(),
+            page.total,
+            page_params,
+        ),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn create_management_shipment(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Json(body): Json<CreateShipmentBody>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let write_headers =
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("shipment-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
+    let mut command = match CreateShipmentCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &body.fulfillment_id,
+        &body.carrier_code,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+    command.tracking_no = body.tracking_no;
+
+    match state.store.create_management_shipment(command).await {
+        Ok(shipment) => success_created_item(ctx, map_shipment(shipment)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
 async fn update_management_carrier(
     State(state): State<BackendCommerceAdminState>,
     runtime_context: Option<Extension<IamAppContext>>,
@@ -2116,5 +2244,15 @@ fn map_carrier(value: CarrierView) -> CarrierResponse {
         tracking_url_template: value.tracking_url_template,
         status: value.status,
         sort_order: value.sort_order,
+    }
+}
+
+fn map_fulfillment(value: FulfillmentView) -> FulfillmentResponse {
+    FulfillmentResponse {
+        fulfillment_id: value.fulfillment_id,
+        fulfillment_no: value.fulfillment_no,
+        order_id: value.order_id,
+        fulfillment_type: value.fulfillment_type,
+        status: value.status,
     }
 }

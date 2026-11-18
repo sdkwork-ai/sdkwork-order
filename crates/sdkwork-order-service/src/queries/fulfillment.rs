@@ -1,6 +1,46 @@
 use sdkwork_contract_service::CommerceServiceError;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FulfillmentManagementListQuery {
+    pub organization_id: Option<String>,
+    pub order_id: Option<String>,
+    pub status: Option<String>,
+    pub tenant_id: String,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+impl FulfillmentManagementListQuery {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        order_id: Option<&str>,
+        status: Option<&str>,
+        page: Option<i64>,
+        page_size: Option<i64>,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        let (page, page_size) = crate::validation::offset_list_params(page, page_size)?;
+        Ok(Self {
+            organization_id: optional_text(organization_id),
+            order_id: optional_text(order_id),
+            status: optional_text(status),
+            tenant_id: tenant_id.trim().to_string(),
+            page,
+            page_size,
+        })
+    }
+
+    pub fn limit(&self) -> i64 {
+        self.page_size
+    }
+
+    pub fn offset(&self) -> i64 {
+        (self.page - 1) * self.page_size
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FulfillmentListQuery {
     pub organization_id: Option<String>,
     pub owner_user_id: String,
@@ -110,4 +150,32 @@ fn optional_text(value: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FulfillmentManagementListQuery;
+
+    #[test]
+    fn management_query_defaults_to_the_first_page() {
+        let query = FulfillmentManagementListQuery::new(
+            "t-1",
+            None,
+            Some(" order-1 "),
+            None,
+            None,
+            None,
+        )
+        .expect("valid query");
+        assert_eq!(query.page, 1);
+        assert!(query.page_size > 0);
+        assert_eq!(query.offset(), 0);
+        assert_eq!(query.order_id.as_deref(), Some("order-1"));
+        assert_eq!(query.organization_id, None);
+    }
+
+    #[test]
+    fn management_query_rejects_an_empty_tenant() {
+        assert!(FulfillmentManagementListQuery::new("", None, None, None, None, None).is_err());
+    }
 }

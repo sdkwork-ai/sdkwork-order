@@ -246,6 +246,19 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "carriers.update",
     )
     .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/fulfillments",
+        "commerce",
+        "fulfillments.management.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/shipments",
+        "commerce",
+        "shipments.create",
+    )
+    .with_idempotent(true),
 ];
 
 pub fn backend_route_manifest() -> HttpRouteManifest {

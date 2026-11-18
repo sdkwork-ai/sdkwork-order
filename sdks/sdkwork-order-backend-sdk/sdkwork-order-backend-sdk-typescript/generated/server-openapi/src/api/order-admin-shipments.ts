@@ -1,8 +1,44 @@
 import { backendApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { CarrierSummary, CreateCarrierRequest, CreateShipmentPackageRequest, CreateShipmentTrackingEventRequest, PageInfo, ShipmentPackageSummary, ShipmentSummary, ShipmentTrackingEventSummary, UpdateCarrierRequest, UpdateShipmentPackageRequest } from '../types';
+import type { CarrierSummary, CreateCarrierRequest, CreateShipmentPackageRequest, CreateShipmentRequest, CreateShipmentTrackingEventRequest, FulfillmentSummary, PageInfo, ShipmentPackageSummary, ShipmentSummary, ShipmentTrackingEventSummary, UpdateCarrierRequest, UpdateShipmentPackageRequest } from '../types';
 
+
+export interface OrderAdminShipmentsFulfillmentsManagementListParams {
+  orderId?: string;
+  status?: string;
+  page?: string;
+  pageSize?: string;
+}
+
+export class OrderAdminShipmentsFulfillmentsManagementApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** List fulfillments for operators */
+  async list(params?: OrderAdminShipmentsFulfillmentsManagementListParams, requestOptions?: ApiRequestOptions): Promise<{ items: FulfillmentSummary[]; pageInfo: PageInfo; }> {
+    const query = buildQueryString([
+      { name: 'order_id', value: params?.orderId, style: 'form', explode: true, allowReserved: false },
+      { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.request<{ items: FulfillmentSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/fulfillments`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+  }
+}
+
+export class OrderAdminShipmentsFulfillmentsApi {
+  public readonly management: OrderAdminShipmentsFulfillmentsManagementApi;
+
+  constructor(client: HttpClient) {
+    this.management = new OrderAdminShipmentsFulfillmentsManagementApi(client);
+  }
+
+}
 
 export interface OrderAdminShipmentsCarriersListParams {
   status?: string;
@@ -180,6 +216,10 @@ export interface OrderAdminShipmentsShipmentsListParams {
   pageSize?: string;
 }
 
+export interface OrderAdminShipmentsShipmentsCreateParams {
+  idempotencyKey: string;
+}
+
 export class OrderAdminShipmentsShipmentsApi {
   private client: HttpClient;
   public readonly packages: OrderAdminShipmentsShipmentsPackagesApi;
@@ -204,6 +244,17 @@ export class OrderAdminShipmentsShipmentsApi {
     return this.client.request<{ items: ShipmentSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/shipments`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
+/** Create a shipment for a fulfillment */
+  async create(body: CreateShipmentRequest, params: OrderAdminShipmentsShipmentsCreateParams, requestOptions?: ApiRequestOptions): Promise<ShipmentSummary> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<ShipmentSummary>(backendApiPath(`/shipments`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
+  }
+
 /** Retrieve shipment for operator review */
   async retrieve(shipmentId: string, requestOptions?: ApiRequestOptions): Promise<ShipmentSummary> {
     return this.client.request<ShipmentSummary>(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
@@ -213,10 +264,12 @@ export class OrderAdminShipmentsShipmentsApi {
 export class OrderAdminShipmentsApi {
   public readonly shipments: OrderAdminShipmentsShipmentsApi;
   public readonly carriers: OrderAdminShipmentsCarriersApi;
+  public readonly fulfillments: OrderAdminShipmentsFulfillmentsApi;
 
   constructor(client: HttpClient) {
     this.shipments = new OrderAdminShipmentsShipmentsApi(client);
     this.carriers = new OrderAdminShipmentsCarriersApi(client);
+    this.fulfillments = new OrderAdminShipmentsFulfillmentsApi(client);
   }
 
 }

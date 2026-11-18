@@ -644,3 +644,65 @@ impl UpdateCarrierCommand {
         })
     }
 }
+
+/// 运营端创建发货单命令。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateShipmentCommand {
+    pub carrier_code: String,
+    pub fulfillment_id: String,
+    pub idempotency_key: String,
+    pub organization_id: Option<String>,
+    pub request_no: String,
+    pub tenant_id: String,
+    pub tracking_no: Option<String>,
+}
+
+impl CreateShipmentCommand {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        fulfillment_id: &str,
+        carrier_code: &str,
+        request_no: &str,
+        idempotency_key: &str,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("fulfillment_id", fulfillment_id)?;
+        crate::validation::require_non_empty("carrier_code", carrier_code)?;
+        crate::validation::require_non_empty("request_no", request_no)?;
+        crate::validation::require_non_empty("idempotency_key", idempotency_key)?;
+        Ok(Self {
+            carrier_code: carrier_code.trim().to_lowercase(),
+            fulfillment_id: fulfillment_id.trim().to_string(),
+            idempotency_key: idempotency_key.trim().to_string(),
+            organization_id: optional_text(organization_id),
+            request_no: request_no.trim().to_string(),
+            tenant_id: tenant_id.trim().to_string(),
+            tracking_no: None,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CreateShipmentCommand;
+
+    #[test]
+    fn create_shipment_command_normalizes_the_carrier_code() {
+        let command =
+            CreateShipmentCommand::new("t-1", Some("org-1"), "f-1", " SF ", "req-1", "key-1")
+                .expect("valid command");
+        assert_eq!(command.carrier_code, "sf");
+        assert_eq!(command.organization_id.as_deref(), Some("org-1"));
+        assert_eq!(command.tracking_no, None);
+    }
+
+    #[test]
+    fn create_shipment_command_rejects_missing_keys() {
+        assert!(CreateShipmentCommand::new("", None, "f-1", "sf", "req-1", "key-1").is_err());
+        assert!(CreateShipmentCommand::new("t-1", None, "", "sf", "req-1", "key-1").is_err());
+        assert!(CreateShipmentCommand::new("t-1", None, "f-1", "", "req-1", "key-1").is_err());
+        assert!(CreateShipmentCommand::new("t-1", None, "f-1", "sf", "", "key-1").is_err());
+        assert!(CreateShipmentCommand::new("t-1", None, "f-1", "sf", "req-1", "").is_err());
+    }
+}

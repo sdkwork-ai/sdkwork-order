@@ -2,12 +2,12 @@
 
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{
-    CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand, ShipmentDetailQuery,
-    ShipmentManagementDetailQuery, ShipmentManagementListPage, ShipmentManagementListQuery,
-    ShipmentPackageListQuery, ShipmentPackageManagementListQuery, ShipmentPackagePage,
-    ShipmentPackageView, ShipmentTrackingEventListQuery, ShipmentTrackingEventManagementListQuery,
-    ShipmentTrackingEventPage, ShipmentTrackingEventView, ShipmentView,
-    UpdateShipmentPackageCommand,
+    CreateShipmentCommand, CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand,
+    ShipmentDetailQuery, ShipmentManagementDetailQuery, ShipmentManagementListPage,
+    ShipmentManagementListQuery, ShipmentPackageListQuery, ShipmentPackageManagementListQuery,
+    ShipmentPackagePage, ShipmentPackageView, ShipmentTrackingEventListQuery,
+    ShipmentTrackingEventManagementListQuery, ShipmentTrackingEventPage, ShipmentTrackingEventView,
+    ShipmentView, UpdateShipmentPackageCommand,
 };
 use sqlx::Row;
 
@@ -802,6 +802,121 @@ async fn advance_owner_order_to_shipped(
         .await
         .map_err(|error| store_error("failed to commit shipment advance transaction", error))?;
     Ok(())
+}
+
+impl PostgresCommerceOrderStore {
+    /// 运营端创建发货单。
+    ///
+    /// 发货单必须挂在一个存在且可见的履约单上；存储 id 由租户/履约/幂等键派生，
+    /// 因此重复提交返回已存在的发货单而不是新增一条。
+    pub async fn create_management_shipment(
+        &self,
+        command: CreateShipmentCommand,
+    ) -> Result<ShipmentView, CommerceServiceError> {
+        let fulfillment = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT id FROM commerce_fulfillment_order
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND id = CAST($2 AS TEXT)
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
+            LIMIT 1
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(&command.fulfillment_id)
+        .bind(command.organization_id.as_deref())
+        .bind(command.organization_id.as_deref())
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to load fulfillment for shipment creation", error))?;
+        if fulfillment.is_none() {
+            return Err(CommerceServiceError::not_found("fulfillment was not found"));
+        }
+
+        let shipment_id = management_shipment_storage_id(&command);
+        if let Some(existing) = self
+            .load_management_shipment_by_id(
+                &command.tenant_id,
+                command.organization_id.as_deref(),
+                &shipment_id,
+            )
+            .await?
+        {
+            return Ok(existing);
+        }
+
+        let now = current_timestamp_string();
+        let organization_id = command
+            .organization_id
+            .clone()
+            .unwrap_or_else(|| "0".to_owned());
+        let shipment_no = format!("SHP-{}", command.request_no);
+
+        sqlx::query(
+            r#"
+            INSERT INTO commerce_shipment
+                (id, tenant_id, organization_id, shipment_no, fulfillment_id,
+                 carrier_code, tracking_no, status, created_at, updated_at)
+            VALUES
+                ($1, $2, $3, $4, $5, $6, $7, 'created', $8, $8)
+            "#,
+        )
+        .bind(&shipment_id)
+        .bind(&command.tenant_id)
+        .bind(&organization_id)
+        .bind(&shipment_no)
+        .bind(&command.fulfillment_id)
+        .bind(&command.carrier_code)
+        .bind(command.tracking_no.as_deref())
+        .bind(&now)
+        .execute(self.pool())
+        .await
+        .map_err(|error| store_error("failed to create shipment", error))?;
+
+        self.load_management_shipment_by_id(
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+            &shipment_id,
+        )
+        .await?
+        .ok_or_else(|| CommerceServiceError::storage("created shipment was not found"))
+    }
+
+    async fn load_management_shipment_by_id(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        shipment_id: &str,
+    ) -> Result<Option<ShipmentView>, CommerceServiceError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, shipment_no, fulfillment_id, carrier_code, tracking_no, status
+            FROM commerce_shipment
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND id = CAST($2 AS TEXT)
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id = '0' AND $4 IS NULL))
+            LIMIT 1
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(shipment_id)
+        .bind(organization_id)
+        .bind(organization_id)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to load shipment", error))?;
+
+        row.map(map_shipment_row).transpose()
+    }
+}
+
+fn management_shipment_storage_id(command: &CreateShipmentCommand) -> String {
+    stable_storage_id(&[
+        "shipment",
+        &command.tenant_id,
+        &command.fulfillment_id,
+        &command.idempotency_key,
+    ])
 }
 
 fn shipment_package_storage_id(command: &CreateShipmentPackageCommand) -> String {

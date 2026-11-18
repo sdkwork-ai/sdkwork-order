@@ -1002,6 +1002,61 @@
         "x-sdkwork-owner": "sdkwork-order",
         "x-sdkwork-api-authority": "sdkwork-order-backend-api",
         "x-sdkwork-permission": "commerce.orders.read"
+      },
+      "post": {
+        "operationId": "shipments.create",
+        "summary": "Create a shipment for a fulfillment",
+        "tags": [
+          "orderAdminShipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShipmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created shipment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentItemResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/shipments/{shipmentId}": {
@@ -1265,336 +1320,416 @@
         "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
-      "/backend/v3/api/shipments/{shipmentId}/tracking_events": {
-        "get": {
-          "operationId": "shipments.trackingEvents.management.list",
-          "summary": "List shipment tracking events",
-          "tags": [
-            "orderAdminShipments"
-          ],
-          "x-sdkwork-api-surface": "backend-api",
-          "parameters": [
-            {
-              "name": "shipmentId",
-              "in": "path",
-              "required": true,
-              "schema": {
-                "type": "string"
-              }
-            },
-            {
-              "name": "page",
-              "in": "query",
-              "schema": {
-                "type": "string",
-                "format": "int64",
-                "minimum": 1,
-                "default": 1,
-                "x-sdkwork-int64-string": true
-              }
-            },
-            {
-              "name": "page_size",
-              "in": "query",
-              "schema": {
-                "type": "string",
-                "format": "int64",
-                "minimum": 1,
-                "maximum": 200,
-                "default": 20,
-                "x-sdkwork-int64-string": true
-              }
+    "/backend/v3/api/shipments/{shipmentId}/tracking_events": {
+      "get": {
+        "operationId": "shipments.trackingEvents.management.list",
+        "summary": "List shipment tracking events",
+        "tags": [
+          "orderAdminShipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
-          ],
-          "responses": {
-            "200": {
-              "description": "Shipment tracking event list",
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/ShipmentTrackingEventListResponse"
-                  }
-                }
-              }
-            },
-            "default": {
-              "description": "Error",
-              "content": {
-                "application/problem+json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/ProblemDetail"
-                  }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "int64",
+              "minimum": 1,
+              "default": 1,
+              "x-sdkwork-int64-string": true
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20,
+              "x-sdkwork-int64-string": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shipment tracking event list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentTrackingEventListResponse"
                 }
               }
             }
           },
-          "security": [
-            {
-              "AuthToken": [],
-              "AccessToken": []
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
             }
-          ],
-          "x-sdkwork-owner": "sdkwork-order",
-          "x-sdkwork-api-authority": "sdkwork-order-backend-api",
-          "x-sdkwork-permission": "commerce.orders.read"
+          }
         },
-        "post": {
-          "operationId": "shipments.trackingEvents.create",
-          "summary": "Append a shipment tracking event",
-          "tags": [
-            "orderAdminShipments"
-          ],
-          "x-sdkwork-api-surface": "backend-api",
-          "parameters": [
-            {
-              "name": "shipmentId",
-              "in": "path",
-              "required": true,
-              "schema": {
-                "type": "string"
-              }
-            },
-            {
-              "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-            }
-          ],
-          "requestBody": {
-            "required": true,
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateShipmentTrackingEventRequest"
-                }
-              }
-            }
-          },
-          "responses": {
-            "201": {
-              "description": "Created shipment tracking event",
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/ShipmentTrackingEventItemResponse"
-                  }
-                }
-              }
-            },
-            "default": {
-              "description": "Error",
-              "content": {
-                "application/problem+json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/ProblemDetail"
-                  }
-                }
-              }
-            }
-          },
-          "security": [
-            {
-              "AuthToken": [],
-              "AccessToken": []
-            }
-          ],
-          "x-sdkwork-idempotent": true,
-          "x-sdkwork-owner": "sdkwork-order",
-          "x-sdkwork-api-authority": "sdkwork-order-backend-api",
-          "x-sdkwork-permission": "commerce.orders.manage"
-        }
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       },
-      "/backend/v3/api/carriers": {
-        "get": {
-          "operationId": "carriers.list",
-          "summary": "List carriers",
-          "tags": [
-            "orderAdminShipments"
-          ],
-          "x-sdkwork-api-surface": "backend-api",
-          "parameters": [
-            {
-              "name": "status",
-              "in": "query",
-              "schema": {
-                "type": "string"
-              }
-            },
-            {
-              "name": "page",
-              "in": "query",
-              "schema": {
-                "type": "string",
-                "format": "int64",
-                "minimum": 1,
-                "default": 1,
-                "x-sdkwork-int64-string": true
-              }
-            },
-            {
-              "name": "page_size",
-              "in": "query",
-              "schema": {
-                "type": "string",
-                "format": "int64",
-                "minimum": 1,
-                "maximum": 200,
-                "default": 20,
-                "x-sdkwork-int64-string": true
-              }
-            }
-          ],
-          "responses": {
-            "200": {
-              "description": "Carrier list",
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/CarrierListResponse"
-                  }
-                }
-              }
-            },
-            "default": {
-              "description": "Error",
-              "content": {
-                "application/problem+json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/ProblemDetail"
-                  }
-                }
-              }
+      "post": {
+        "operationId": "shipments.trackingEvents.create",
+        "summary": "Append a shipment tracking event",
+        "tags": [
+          "orderAdminShipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           },
-          "security": [
-            {
-              "AuthToken": [],
-              "AccessToken": []
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShipmentTrackingEventRequest"
+              }
             }
-          ],
-          "x-sdkwork-owner": "sdkwork-order",
-          "x-sdkwork-api-authority": "sdkwork-order-backend-api",
-          "x-sdkwork-permission": "commerce.orders.read"
+          }
         },
-        "post": {
-          "operationId": "carriers.create",
-          "summary": "Create a carrier",
-          "tags": [
-            "orderAdminShipments"
-          ],
-          "x-sdkwork-api-surface": "backend-api",
-          "parameters": [
-            {
-              "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-            }
-          ],
-          "requestBody": {
-            "required": true,
+        "responses": {
+          "201": {
+            "description": "Created shipment tracking event",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateCarrierRequest"
+                  "$ref": "#/components/schemas/ShipmentTrackingEventItemResponse"
                 }
               }
             }
           },
-          "responses": {
-            "201": {
-              "description": "Created carrier",
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/CarrierItemResponse"
-                  }
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            },
-            "default": {
-              "description": "Error",
-              "content": {
-                "application/problem+json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/ProblemDetail"
-                  }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
+      }
+    },
+    "/backend/v3/api/carriers": {
+      "get": {
+        "operationId": "carriers.list",
+        "summary": "List carriers",
+        "tags": [
+          "orderAdminShipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "int64",
+              "minimum": 1,
+              "default": 1,
+              "x-sdkwork-int64-string": true
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20,
+              "x-sdkwork-int64-string": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Carrier list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarrierListResponse"
                 }
               }
             }
           },
-          "security": [
-            {
-              "AuthToken": [],
-              "AccessToken": []
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
             }
-          ],
-          "x-sdkwork-idempotent": true,
-          "x-sdkwork-owner": "sdkwork-order",
-          "x-sdkwork-api-authority": "sdkwork-order-backend-api",
-          "x-sdkwork-permission": "commerce.orders.manage"
-        }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       },
-      "/backend/v3/api/carriers/{carrierId}": {
-        "patch": {
-          "operationId": "carriers.update",
-          "summary": "Update a carrier",
-          "tags": [
-            "orderAdminShipments"
-          ],
-          "x-sdkwork-api-surface": "backend-api",
-          "parameters": [
-            {
-              "name": "carrierId",
-              "in": "path",
-              "required": true,
+      "post": {
+        "operationId": "carriers.create",
+        "summary": "Create a carrier",
+        "tags": [
+          "orderAdminShipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
               "schema": {
-                "type": "string"
+                "$ref": "#/components/schemas/CreateCarrierRequest"
               }
-            },
-            {
-              "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
             }
-          ],
-          "requestBody": {
-            "required": true,
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created carrier",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UpdateCarrierRequest"
+                  "$ref": "#/components/schemas/CarrierItemResponse"
                 }
               }
             }
           },
-          "responses": {
-            "200": {
-              "description": "Updated carrier",
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/CarrierItemResponse"
-                  }
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            },
-            "default": {
-              "description": "Error",
-              "content": {
-                "application/problem+json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/ProblemDetail"
-                  }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
+      }
+    },
+    "/backend/v3/api/carriers/{carrierId}": {
+      "patch": {
+        "operationId": "carriers.update",
+        "summary": "Update a carrier",
+        "tags": [
+          "orderAdminShipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "carrierId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCarrierRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated carrier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarrierItemResponse"
                 }
               }
             }
           },
-          "security": [
-            {
-              "AuthToken": [],
-              "AccessToken": []
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
             }
-          ],
-          "x-sdkwork-idempotent": true,
-          "x-sdkwork-owner": "sdkwork-order",
-          "x-sdkwork-api-authority": "sdkwork-order-backend-api",
-          "x-sdkwork-permission": "commerce.orders.manage"
-        }
-      },
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
+      }
+    },
+    "/backend/v3/api/fulfillments": {
+      "get": {
+        "operationId": "fulfillments.management.list",
+        "summary": "List fulfillments for operators",
+        "tags": [
+          "orderAdminShipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "int64",
+              "minimum": 1,
+              "default": 1,
+              "x-sdkwork-int64-string": true
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20,
+              "x-sdkwork-int64-string": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fulfillment list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FulfillmentListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
+      }
+    },
     "/backend/v3/api/account_value_packages": {
       "get": {
         "tags": [
@@ -4282,257 +4417,338 @@
           }
         ]
       },
-        "ShipmentTrackingEventSummary": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "eventId",
-            "trackingEventNo",
-            "eventType",
-            "eventTime"
-          ],
-          "properties": {
-            "eventId": {
-              "type": "string"
-            },
-            "trackingEventNo": {
-              "type": "string"
-            },
-            "eventType": {
-              "type": "string"
-            },
-            "eventStatus": {
-              "type": "string"
-            },
-            "eventTime": {
-              "type": "string"
-            },
-            "locationText": {
-              "type": "string"
-            }
+      "ShipmentTrackingEventSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "trackingEventNo",
+          "eventType",
+          "eventTime"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "trackingEventNo": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "eventStatus": {
+            "type": "string"
+          },
+          "eventTime": {
+            "type": "string"
+          },
+          "locationText": {
+            "type": "string"
           }
-        },
-        "ShipmentTrackingEventListResponse": {
-          "allOf": [
-            {
-              "$ref": "#/components/schemas/SdkWorkApiResponse"
-            },
-            {
-              "type": "object",
-              "required": [
-                "data"
-              ],
-              "properties": {
-                "data": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "items",
-                    "pageInfo"
-                  ],
-                  "properties": {
+        }
+      },
+      "ShipmentTrackingEventListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "items",
+                  "pageInfo"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
                     "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ShipmentTrackingEventSummary"
-                      }
-                    },
-                    "pageInfo": {
-                      "$ref": "#/components/schemas/PageInfo"
-                    }
-                  }
-                }
-              }
-            }
-          ]
-        },
-        "ShipmentTrackingEventItemResponse": {
-          "allOf": [
-            {
-              "$ref": "#/components/schemas/SdkWorkApiResponse"
-            },
-            {
-              "type": "object",
-              "required": [
-                "data"
-              ],
-              "properties": {
-                "data": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "item"
-                  ],
-                  "properties": {
-                    "item": {
                       "$ref": "#/components/schemas/ShipmentTrackingEventSummary"
                     }
+                  },
+                  "pageInfo": {
+                    "$ref": "#/components/schemas/PageInfo"
                   }
                 }
               }
             }
-          ]
-        },
-        "CreateShipmentTrackingEventRequest": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "eventType"
-          ],
-          "properties": {
-            "eventType": {
-              "type": "string"
-            },
-            "eventStatus": {
-              "type": "string"
-            },
-            "eventTime": {
-              "type": "string"
-            },
-            "locationText": {
-              "type": "string"
+          }
+        ]
+      },
+      "ShipmentTrackingEventItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/ShipmentTrackingEventSummary"
+                  }
+                }
+              }
             }
           }
-        },
-        "CarrierSummary": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "carrierId",
-            "carrierCode",
-            "carrierName",
-            "status",
-            "sortOrder"
-          ],
-          "properties": {
-            "carrierId": {
-              "type": "string"
-            },
-            "carrierCode": {
-              "type": "string"
-            },
-            "carrierName": {
-              "type": "string"
-            },
-            "trackingUrlTemplate": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string"
-            },
-            "sortOrder": {
-              "type": "integer",
-              "format": "int32"
-            }
+        ]
+      },
+      "CreateShipmentTrackingEventRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventType"
+        ],
+        "properties": {
+          "eventType": {
+            "type": "string"
+          },
+          "eventStatus": {
+            "type": "string"
+          },
+          "eventTime": {
+            "type": "string"
+          },
+          "locationText": {
+            "type": "string"
           }
-        },
-        "CarrierListResponse": {
-          "allOf": [
-            {
-              "$ref": "#/components/schemas/SdkWorkApiResponse"
-            },
-            {
-              "type": "object",
-              "required": [
-                "data"
-              ],
-              "properties": {
-                "data": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "items",
-                    "pageInfo"
-                  ],
-                  "properties": {
+        }
+      },
+      "CarrierSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "carrierId",
+          "carrierCode",
+          "carrierName",
+          "status",
+          "sortOrder"
+        ],
+        "properties": {
+          "carrierId": {
+            "type": "string"
+          },
+          "carrierCode": {
+            "type": "string"
+          },
+          "carrierName": {
+            "type": "string"
+          },
+          "trackingUrlTemplate": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CarrierListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "items",
+                  "pageInfo"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
                     "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/CarrierSummary"
-                      }
-                    },
-                    "pageInfo": {
-                      "$ref": "#/components/schemas/PageInfo"
-                    }
-                  }
-                }
-              }
-            }
-          ]
-        },
-        "CarrierItemResponse": {
-          "allOf": [
-            {
-              "$ref": "#/components/schemas/SdkWorkApiResponse"
-            },
-            {
-              "type": "object",
-              "required": [
-                "data"
-              ],
-              "properties": {
-                "data": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "item"
-                  ],
-                  "properties": {
-                    "item": {
                       "$ref": "#/components/schemas/CarrierSummary"
                     }
+                  },
+                  "pageInfo": {
+                    "$ref": "#/components/schemas/PageInfo"
                   }
                 }
               }
             }
-          ]
-        },
-        "CreateCarrierRequest": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "carrierCode",
-            "carrierName"
-          ],
-          "properties": {
-            "carrierCode": {
-              "type": "string"
-            },
-            "carrierName": {
-              "type": "string"
-            },
-            "trackingUrlTemplate": {
-              "type": "string"
-            },
-            "sortOrder": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "status": {
-              "type": "string"
+          }
+        ]
+      },
+      "CarrierItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CarrierSummary"
+                  }
+                }
+              }
             }
           }
-        },
-        "UpdateCarrierRequest": {
-          "type": "object",
-          "additionalProperties": false,
-          "minProperties": 1,
-          "properties": {
-            "carrierName": {
-              "type": "string"
-            },
-            "trackingUrlTemplate": {
-              "type": "string"
-            },
-            "sortOrder": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "status": {
-              "type": "string"
+        ]
+      },
+      "CreateCarrierRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "carrierCode",
+          "carrierName"
+        ],
+        "properties": {
+          "carrierCode": {
+            "type": "string"
+          },
+          "carrierName": {
+            "type": "string"
+          },
+          "trackingUrlTemplate": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateCarrierRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "carrierName": {
+            "type": "string"
+          },
+          "trackingUrlTemplate": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "FulfillmentSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fulfillmentId",
+          "fulfillmentNo",
+          "orderId",
+          "fulfillmentType",
+          "status"
+        ],
+        "properties": {
+          "fulfillmentId": {
+            "type": "string"
+          },
+          "fulfillmentNo": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "fulfillmentType": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "FulfillmentListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "items",
+                  "pageInfo"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/FulfillmentSummary"
+                    }
+                  },
+                  "pageInfo": {
+                    "$ref": "#/components/schemas/PageInfo"
+                  }
+                }
+              }
             }
           }
-        },
+        ]
+      },
+      "CreateShipmentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fulfillmentId",
+          "carrierCode"
+        ],
+        "properties": {
+          "fulfillmentId": {
+            "type": "string"
+          },
+          "carrierCode": {
+            "type": "string"
+          },
+          "trackingNo": {
+            "type": "string"
+          }
+        }
+      },
       "CreateShipmentPackageRequest": {
         "type": "object",
         "additionalProperties": false,

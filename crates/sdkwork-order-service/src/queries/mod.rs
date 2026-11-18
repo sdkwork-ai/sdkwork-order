@@ -28,7 +28,8 @@ pub use checkout::{
     CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand,
 };
 pub use fulfillment::{
-    FulfillmentDetailQuery, FulfillmentListPage, FulfillmentListQuery, FulfillmentView,
+    FulfillmentDetailQuery, FulfillmentListPage, FulfillmentListQuery,
+    FulfillmentManagementListQuery, FulfillmentView,
 };
 pub use management::{
     CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
@@ -44,8 +45,8 @@ pub use owner::{
     PayOwnerOrderOutcome,
 };
 pub use shipment::{
-    CarrierListQuery, CarrierPage, CarrierView, CreateCarrierCommand, CreateShipmentPackageCommand,
-    CreateShipmentTrackingEventCommand, ShipmentDetailQuery, ShipmentManagementDetailQuery,
+    CarrierListQuery, CarrierPage, CarrierView, CreateCarrierCommand, CreateShipmentCommand,
+    CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand, ShipmentDetailQuery, ShipmentManagementDetailQuery,
     ShipmentManagementListPage, ShipmentManagementListQuery, ShipmentPackageListQuery,
     ShipmentPackageManagementListQuery, ShipmentPackagePage, ShipmentPackageView,
     ShipmentTrackingEventListQuery, ShipmentTrackingEventManagementListQuery,
