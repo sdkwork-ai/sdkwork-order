@@ -213,6 +213,39 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "shipments.packages.update",
     )
     .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/shipments/{shipmentId}/tracking_events",
+        "commerce",
+        "shipments.trackingEvents.management.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/shipments/{shipmentId}/tracking_events",
+        "commerce",
+        "shipments.trackingEvents.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/carriers",
+        "commerce",
+        "carriers.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/carriers",
+        "commerce",
+        "carriers.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Patch,
+        "/backend/v3/api/carriers/{carrierId}",
+        "commerce",
+        "carriers.update",
+    )
+    .with_idempotent(true),
 ];
 
 pub fn backend_route_manifest() -> HttpRouteManifest {

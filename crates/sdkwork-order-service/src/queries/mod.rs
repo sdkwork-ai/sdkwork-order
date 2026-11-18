@@ -44,11 +44,13 @@ pub use owner::{
     PayOwnerOrderOutcome,
 };
 pub use shipment::{
-    CreateShipmentPackageCommand, ShipmentDetailQuery, ShipmentManagementDetailQuery,
+    CarrierListQuery, CarrierPage, CarrierView, CreateCarrierCommand, CreateShipmentPackageCommand,
+    CreateShipmentTrackingEventCommand, ShipmentDetailQuery, ShipmentManagementDetailQuery,
     ShipmentManagementListPage, ShipmentManagementListQuery, ShipmentPackageListQuery,
     ShipmentPackageManagementListQuery, ShipmentPackagePage, ShipmentPackageView,
-    ShipmentTrackingEventListQuery, ShipmentTrackingEventPage, ShipmentTrackingEventView,
-    ShipmentView, UpdateShipmentPackageCommand,
+    ShipmentTrackingEventListQuery, ShipmentTrackingEventManagementListQuery,
+    ShipmentTrackingEventPage, ShipmentTrackingEventView, ShipmentView, UpdateCarrierCommand,
+    UpdateShipmentPackageCommand,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -95,15 +95,13 @@ const result = await client.orderAdminAfterSales.afterSales.management.list(para
 ### order_admin_shipments
 
 ```typescript
-// List shipments for operator review
+// List carriers
 const params = {
   status: 'status',
-  order_id: 'order_id',
-  fulfillment_id: 'fulfillment_id',
   page: 'page',
   page_size: 'page_size',
 };
-const result = await client.orderAdminShipments.shipments.list(params);
+const result = await client.orderAdminShipments.carriers.list(params);
 ```
 
 ### order_admin_backend
