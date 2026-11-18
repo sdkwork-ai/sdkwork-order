@@ -97,6 +97,7 @@ pub fn order_service_contract() -> CommerceServiceContract {
             "carriers.create",
             "carriers.update",
             "shipments.create",
+            "shipments.markShipped",
             "demandClaims.create",
             "demandClaims.withdraw",
             "demandClaims.start",

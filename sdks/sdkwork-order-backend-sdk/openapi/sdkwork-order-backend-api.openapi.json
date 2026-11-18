@@ -3613,6 +3613,63 @@
         "x-sdkwork-api-surface": "backend-api",
         "x-sdkwork-permission": "commerce.orders.manage"
       }
+    },
+    "/backend/v3/api/shipments/{shipmentId}/mark_shipped": {
+      "parameters": [
+        {
+          "name": "shipmentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "shipments.markShipped",
+        "summary": "Mark a shipment as shipped and advance its fulfillment and order",
+        "tags": [
+          "orderAdminShipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shipment after the advance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentItemResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
+      }
     }
   },
   "components": {

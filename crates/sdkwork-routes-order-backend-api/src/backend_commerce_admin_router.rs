@@ -18,8 +18,9 @@ use sdkwork_order_service::{
     AccountValueRequestView, AfterSalesManagementDetailQuery, AfterSalesManagementListQuery,
     AfterSalesRequestView, CarrierListQuery, CarrierPage, CarrierView, CreateCarrierCommand,
     CreateShipmentCommand, CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand,
-    FulfillmentListPage, FulfillmentManagementListQuery, FulfillmentView, NoopAccountValueLedgerPort,
-    NoopPaymentPayoutExecutorPort, NoopPaymentRefundExecutorPort, OrderOwnerDetailQuery,
+    FulfillmentListPage, FulfillmentManagementListQuery, FulfillmentView,
+    MarkShipmentShippedCommand, NoopAccountValueLedgerPort, NoopPaymentPayoutExecutorPort,
+    NoopPaymentRefundExecutorPort, OrderOwnerDetailQuery,
     PaymentPayoutExecutorPort, PaymentRefundExecutorPort, PhysicalInventoryReservationPort,
     ReleasePhysicalOrderInventoryRequest, RetireAccountValuePackageCommand,
     RetireTokenBankPlanCommand, ReviewAccountValueRequestCommand, ReviewAfterSalesRequestCommand,
@@ -522,6 +523,15 @@ impl BackendCommerceAdminStore {
         }
     }
 
+    async fn mark_management_shipment_shipped(
+        &self,
+        command: MarkShipmentShippedCommand,
+    ) -> Result<ShipmentView, CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => orders.mark_management_shipment_shipped(command).await,
+        }
+    }
+
     async fn list_account_value_packages(
         &self,
         query: AccountValueCatalogListQuery,
@@ -723,6 +733,10 @@ fn build_backend_commerce_admin_router(
         .route(
             "/backend/v3/api/shipments",
             get(list_management_shipments).post(create_management_shipment),
+        )
+        .route(
+            "/backend/v3/api/shipments/{shipmentId}/mark_shipped",
+            post(mark_management_shipment_shipped),
         )
         .route(
             "/backend/v3/api/fulfillments",
@@ -2016,6 +2030,42 @@ async fn create_management_shipment(
 
     match state.store.create_management_shipment(command).await {
         Ok(shipment) => success_created_item(ctx, map_shipment(shipment)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn mark_management_shipment_shipped(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(shipment_id): Path<String>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    // The write contract requires an idempotency key even though the underlying
+    // advance is naturally idempotent; a retry must not be treated as a new command.
+    if let Err(response) = resolve_required_backend_write_command_headers(
+        ctx,
+        &headers,
+        |idempotency_key| format!("shipment-shipped-{idempotency_key}"),
+    ) {
+        return *response;
+    }
+    let command = match MarkShipmentShippedCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &shipment_id,
+    ) {
+        Ok(command) => command,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+
+    match state.store.mark_management_shipment_shipped(command).await {
+        Ok(shipment) => success_item(ctx, map_shipment(shipment)),
         Err(error) => map_service_error(ctx, error),
     }
 }

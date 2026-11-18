@@ -645,6 +645,30 @@ impl UpdateCarrierCommand {
     }
 }
 
+/// 运营端将发货单标记为已发货。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarkShipmentShippedCommand {
+    pub organization_id: Option<String>,
+    pub shipment_id: String,
+    pub tenant_id: String,
+}
+
+impl MarkShipmentShippedCommand {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        shipment_id: &str,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("shipment_id", shipment_id)?;
+        Ok(Self {
+            organization_id: optional_text(organization_id),
+            shipment_id: shipment_id.trim().to_string(),
+            tenant_id: tenant_id.trim().to_string(),
+        })
+    }
+}
+
 /// 运营端创建发货单命令。
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateShipmentCommand {
@@ -704,5 +728,25 @@ mod tests {
         assert!(CreateShipmentCommand::new("t-1", None, "f-1", "", "req-1", "key-1").is_err());
         assert!(CreateShipmentCommand::new("t-1", None, "f-1", "sf", "", "key-1").is_err());
         assert!(CreateShipmentCommand::new("t-1", None, "f-1", "sf", "req-1", "").is_err());
+    }
+}
+
+#[cfg(test)]
+mod mark_shipped_tests {
+    use super::MarkShipmentShippedCommand;
+
+    #[test]
+    fn mark_shipped_command_requires_tenant_and_shipment() {
+        assert!(MarkShipmentShippedCommand::new("", None, "sh-1").is_err());
+        assert!(MarkShipmentShippedCommand::new("t-1", None, "").is_err());
+    }
+
+    #[test]
+    fn mark_shipped_command_trims_ids() {
+        let command =
+            MarkShipmentShippedCommand::new(" t-1 ", Some(" org-1 "), " sh-1 ").expect("valid");
+        assert_eq!(command.tenant_id, "t-1");
+        assert_eq!(command.shipment_id, "sh-1");
+        assert_eq!(command.organization_id.as_deref(), Some("org-1"));
     }
 }

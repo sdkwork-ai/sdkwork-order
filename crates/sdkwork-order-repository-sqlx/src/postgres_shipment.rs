@@ -3,11 +3,12 @@
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{
     CreateShipmentCommand, CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand,
-    ShipmentDetailQuery, ShipmentManagementDetailQuery, ShipmentManagementListPage,
-    ShipmentManagementListQuery, ShipmentPackageListQuery, ShipmentPackageManagementListQuery,
-    ShipmentPackagePage, ShipmentPackageView, ShipmentTrackingEventListQuery,
-    ShipmentTrackingEventManagementListQuery, ShipmentTrackingEventPage, ShipmentTrackingEventView,
-    ShipmentView, UpdateShipmentPackageCommand,
+    MarkShipmentShippedCommand, ShipmentDetailQuery, ShipmentManagementDetailQuery,
+    ShipmentManagementListPage, ShipmentManagementListQuery, ShipmentPackageListQuery,
+    ShipmentPackageManagementListQuery, ShipmentPackagePage, ShipmentPackageView,
+    ShipmentTrackingEventListQuery, ShipmentTrackingEventManagementListQuery,
+    ShipmentTrackingEventPage, ShipmentTrackingEventView, ShipmentView,
+    UpdateShipmentPackageCommand,
 };
 use sqlx::Row;
 
@@ -907,6 +908,43 @@ impl PostgresCommerceOrderStore {
         .map_err(|error| store_error("failed to load shipment", error))?;
 
         row.map(map_shipment_row).transpose()
+    }
+
+    /// 运营端把发货单标记为已发货。
+    ///
+    /// 复用包裹/履约的推进逻辑：shipment → fulfillment → owner order 同步为
+    /// `shipped` 并写入生命周期事件；已 shipped/delivered 的记录幂等跳过。
+    pub async fn mark_management_shipment_shipped(
+        &self,
+        command: MarkShipmentShippedCommand,
+    ) -> Result<ShipmentView, CommerceServiceError> {
+        if self
+            .retrieve_management_shipment(ShipmentManagementDetailQuery {
+                tenant_id: command.tenant_id.clone(),
+                organization_id: command.organization_id.clone(),
+                shipment_id: command.shipment_id.clone(),
+            })
+            .await?
+            .is_none()
+        {
+            return Err(CommerceServiceError::not_found("shipment was not found"));
+        }
+
+        advance_owner_order_to_shipped(
+            self.pool(),
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+            &command.shipment_id,
+        )
+        .await?;
+
+        self.load_management_shipment_by_id(
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+            &command.shipment_id,
+        )
+        .await?
+        .ok_or_else(|| CommerceServiceError::storage("shipment was not found after advance"))
     }
 }
 

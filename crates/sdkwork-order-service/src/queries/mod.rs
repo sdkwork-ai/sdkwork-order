@@ -46,7 +46,7 @@ pub use owner::{
 };
 pub use shipment::{
     CarrierListQuery, CarrierPage, CarrierView, CreateCarrierCommand, CreateShipmentCommand,
-    CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand, ShipmentDetailQuery, ShipmentManagementDetailQuery,
+    CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand, MarkShipmentShippedCommand, ShipmentDetailQuery, ShipmentManagementDetailQuery,
     ShipmentManagementListPage, ShipmentManagementListQuery, ShipmentPackageListQuery,
     ShipmentPackageManagementListQuery, ShipmentPackagePage, ShipmentPackageView,
     ShipmentTrackingEventListQuery, ShipmentTrackingEventManagementListQuery,

@@ -220,6 +220,10 @@ export interface OrderAdminShipmentsShipmentsCreateParams {
   idempotencyKey: string;
 }
 
+export interface OrderAdminShipmentsShipmentsMarkShippedParams {
+  idempotencyKey: string;
+}
+
 export class OrderAdminShipmentsShipmentsApi {
   private client: HttpClient;
   public readonly packages: OrderAdminShipmentsShipmentsPackagesApi;
@@ -258,6 +262,17 @@ export class OrderAdminShipmentsShipmentsApi {
 /** Retrieve shipment for operator review */
   async retrieve(shipmentId: string, requestOptions?: ApiRequestOptions): Promise<ShipmentSummary> {
     return this.client.request<ShipmentSummary>(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
+  }
+
+/** Mark a shipment as shipped and advance its fulfillment and order */
+  async markShipped(shipmentId: string, params: OrderAdminShipmentsShipmentsMarkShippedParams, requestOptions?: ApiRequestOptions): Promise<ShipmentSummary> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<ShipmentSummary>(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}/mark_shipped`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
   }
 }
 
