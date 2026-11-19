@@ -23,6 +23,7 @@ use sdkwork_payment_service::{
     PaymentRecordItem, PaymentRecordOrderListPage, PaymentRecordOrderListQuery,
 };
 use sdkwork_web_core::WebRequestContext;
+use sdkwork_utils_rust::extract_client_ip_from_headers;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -839,11 +840,21 @@ async fn pay_order(
     let callback_payload = body
         .payment_password()
         .map(|password| serde_json::json!({ "paymentPassword": password }).to_string());
-    // wechat_jsapi 适配器要求 metadata.openid；其余方法不需要额外元数据。
-    let payment_metadata = match body.openid() {
+    // wechat_jsapi 适配器要求 metadata.openid；wechat_h5 要求付款人真实 IP
+    // （渠道下单与该 IP 绑定）；其余方法不需要额外元数据。
+    let mut payment_metadata = match body.openid() {
         Some(openid) => serde_json::json!({ "openid": openid }),
         None => serde_json::json!({}),
     };
+    if payment_method == "wechat_h5" && body.openid().is_none() {
+        let client_ip = extract_client_ip_from_headers(|name| {
+            headers
+                .get(name)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned)
+        });
+        payment_metadata = serde_json::json!({ "client_ip": client_ip.to_string() });
+    }
     let command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: subject.tenant_id.clone(),
         organization_id: subject.organization_id.clone(),
