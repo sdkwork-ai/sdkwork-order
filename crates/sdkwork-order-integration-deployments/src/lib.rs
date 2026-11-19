@@ -139,7 +139,9 @@ async fn fulfill_postgres(
     })?;
 
     if fulfillment_status.eq_ignore_ascii_case(FULFILLED) {
-        let install_count = read_install_count(&mut tx, &template_uuid).await?;
+        let scaffold_install_count = read_scaffold_install_count(&mut tx, &template_uuid).await?;
+        let legacy_install_count = read_legacy_install_count(&mut tx, &template_uuid).await?;
+        let install_count = scaffold_install_count.or(legacy_install_count);
         tx.commit()
             .await
             .map_err(store_error("commit app template fulfillment replay"))?;
@@ -192,7 +194,10 @@ async fn fulfill_postgres(
     .map_err(store_error("advance app template order items"))?;
 
     // Only the transition that actually moved the order counts the install.
-    let install_count = if transitioned {
+    // The catalog moved from `deploy_app_template` to
+    // `deploy_application_scaffold`; update both when present so the paid
+    // marketplace and the legacy admin listing show the same purchase.
+    let legacy_install_count = if transitioned {
         sqlx::query(
             "UPDATE deploy_app_template
                 SET install_count = install_count + 1, updated_at = CAST($1 AS TIMESTAMPTZ)
@@ -206,8 +211,25 @@ async fn fulfill_postgres(
         .map_err(store_error("count app template install"))?
         .and_then(|row| row.try_get::<i64, _>("install_count").ok())
     } else {
-        read_install_count(&mut tx, &template_uuid).await?
+        read_legacy_install_count(&mut tx, &template_uuid).await?
     };
+    let scaffold_install_count = if transitioned && scaffold_table_exists(&mut tx).await? {
+        sqlx::query(
+            "UPDATE deploy_application_scaffold
+                SET install_count = install_count + 1, updated_at = CAST($1 AS TIMESTAMPTZ)
+              WHERE uuid = $2 AND deleted_at IS NULL
+              RETURNING install_count",
+        )
+        .bind(&now)
+        .bind(&template_uuid)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(store_error("count application scaffold install"))?
+        .and_then(|row| row.try_get::<i64, _>("install_count").ok())
+    } else {
+        read_scaffold_install_count(&mut tx, &template_uuid).await?
+    };
+    let install_count = scaffold_install_count.or(legacy_install_count);
 
     tx.commit()
         .await
@@ -254,7 +276,7 @@ async fn load_order_template_uuid(
         .filter(|value| !value.trim().is_empty()))
 }
 
-async fn read_install_count(
+async fn read_legacy_install_count(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     template_uuid: &str,
 ) -> Result<Option<i64>, CommerceServiceError> {
@@ -265,6 +287,34 @@ async fn read_install_count(
     .fetch_optional(&mut **tx)
     .await
     .map_err(store_error("read app template install count"))?;
+    Ok(row.and_then(|row| row.try_get::<i64, _>("install_count").ok()))
+}
+
+async fn scaffold_table_exists(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> Result<bool, CommerceServiceError> {
+    let exists: Option<String> =
+        sqlx::query_scalar("SELECT to_regclass('deploy_application_scaffold')::text")
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(store_error("probe application scaffold catalog"))?;
+    Ok(exists.is_some())
+}
+
+async fn read_scaffold_install_count(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    template_uuid: &str,
+) -> Result<Option<i64>, CommerceServiceError> {
+    if !scaffold_table_exists(tx).await? {
+        return Ok(None);
+    }
+    let row = sqlx::query(
+        "SELECT install_count FROM deploy_application_scaffold WHERE uuid = $1 AND deleted_at IS NULL",
+    )
+    .bind(template_uuid)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(store_error("read application scaffold install count"))?;
     Ok(row.and_then(|row| row.try_get::<i64, _>("install_count").ok()))
 }
 
