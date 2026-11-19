@@ -20,7 +20,8 @@ use sdkwork_order_service::{
 use sqlx::PgPool;
 use sqlx::Row;
 
-const MIGRATION: &str = include_str!("../../../database/migrations/postgres/0023_commerce_cart.up.sql");
+const MIGRATION: &str =
+    include_str!("../../../database/migrations/postgres/0023_commerce_cart.up.sql");
 
 /// Minimal projection of the merchandise SKU table the cart reads. A cart test
 /// must not depend on the whole merchandise baseline.
@@ -121,7 +122,10 @@ async fn adding_the_same_sku_increments_and_snapshots_the_price() {
         .expect("second add");
     assert_eq!(5, second.line.quantity);
     assert_eq!("1999", second.line.unit_price.as_str());
-    assert_eq!(Some("2499"), second.line.current_unit_price.as_ref().map(|m| m.as_str()));
+    assert_eq!(
+        Some("2499"),
+        second.line.current_unit_price.as_ref().map(|m| m.as_str())
+    );
     assert!(second.line.price_changed);
 
     let cart = store
@@ -205,7 +209,11 @@ async fn concurrent_adds_are_serialized_and_respect_the_quantity_cap() {
     // The SKU caps the line at 50, and 5 units per accepted add: no add may push
     // the line past the cap, and every accepted add must be visible.
     assert!(quantity <= 50, "quantity {quantity} exceeded the sku cap");
-    assert_eq!(accepted * 5, quantity, "every accepted add must be persisted once");
+    assert_eq!(
+        accepted * 5,
+        quantity,
+        "every accepted add must be persisted once"
+    );
     assert!(accepted >= 1, "at least one concurrent add must win");
 }
 
@@ -258,8 +266,15 @@ async fn update_delete_and_consume_stay_scoped_to_the_owner() {
 
     let updated = store
         .update_cart_item(
-            UpdateCartItemCommand::new(TENANT, None, owner, &first.line.cart_item_id, Some(4), Some(false))
-                .expect("update command"),
+            UpdateCartItemCommand::new(
+                TENANT,
+                None,
+                owner,
+                &first.line.cart_item_id,
+                Some(4),
+                Some(false),
+            )
+            .expect("update command"),
         )
         .await
         .expect("update line");
@@ -269,8 +284,15 @@ async fn update_delete_and_consume_stay_scoped_to_the_owner() {
     // A different buyer cannot touch these lines.
     let foreign = store
         .update_cart_item(
-            UpdateCartItemCommand::new(TENANT, None, "cart-other-user", &first.line.cart_item_id, Some(9), None)
-                .expect("foreign update command"),
+            UpdateCartItemCommand::new(
+                TENANT,
+                None,
+                "cart-other-user",
+                &first.line.cart_item_id,
+                Some(9),
+                None,
+            )
+            .expect("foreign update command"),
         )
         .await
         .expect_err("a foreign buyer must not see the line");
@@ -314,7 +336,10 @@ async fn update_delete_and_consume_stay_scoped_to_the_owner() {
         )
         .await
         .expect("other tenant cart");
-    assert!(other_cart.items.is_empty(), "another tenant sees an empty cart");
+    assert!(
+        other_cart.items.is_empty(),
+        "another tenant sees an empty cart"
+    );
 }
 
 #[tokio::test]
@@ -351,4 +376,54 @@ async fn the_line_cap_is_enforced() {
         .await
         .expect_err("the 101st line must be rejected");
     assert_eq!("conflict", overflow.code());
+}
+
+#[tokio::test]
+async fn idle_carts_expire_and_free_the_active_slot() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let store = store(&pool);
+
+    store
+        .create_cart_item(add("cart-expiry-fresh", SKU_CNY_SECOND, 1, None))
+        .await
+        .expect("fresh cart");
+    store
+        .create_cart_item(add("cart-expiry-idle", SKU_CNY_SECOND, 1, None))
+        .await
+        .expect("idle cart");
+    sqlx::query(
+        "UPDATE commerce_cart SET updated_at = now() - interval '40 days' WHERE owner_user_id = 'cart-expiry-idle'",
+    )
+    .execute(&pool)
+    .await
+    .expect("backdate idle cart");
+
+    let expired = store.expire_idle_carts(30, 500).await.expect("sweep");
+    assert!(expired >= 1, "the idle cart must be expired");
+
+    let status = |owner: &'static str| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, String>(
+                "SELECT status FROM commerce_cart WHERE owner_user_id = $1 AND status = 'active'",
+            )
+            .bind(owner)
+            .fetch_optional(&pool)
+            .await
+            .expect("read cart status")
+        }
+    };
+    assert_eq!(Some("active".to_owned()), status("cart-expiry-fresh").await);
+    assert_eq!(None, status("cart-expiry-idle").await);
+
+    // The expired cart released the single active slot: the next read opens a new,
+    // empty cart instead of resurrecting the stale one.
+    let reopened = store
+        .retrieve_current_cart(current("cart-expiry-idle"))
+        .await
+        .expect("reopen cart");
+    assert!(reopened.items.is_empty());
+    assert_eq!(Some("active".to_owned()), status("cart-expiry-idle").await);
 }

@@ -2162,6 +2162,7 @@ dependencies = [
  "sdkwork-database-spi",
  "sdkwork-database-sqlx",
  "sdkwork-order-database-host",
+ "sdkwork-order-repository-sqlx",
  "sdkwork-order-service-host",
  "sdkwork-routes-order-app-api",
  "sdkwork-routes-order-backend-api",
@@ -2170,6 +2171,7 @@ dependencies = [
  "sdkwork-web-core",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

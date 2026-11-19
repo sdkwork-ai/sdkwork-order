@@ -14,6 +14,8 @@ name = "sdkwork_api_order_assembly"
 path = "src/lib.rs"
 
 [dependencies]
+sdkwork_order_repository_sqlx.workspace = true
+tracing = { workspace = true }
 axum.workspace = true
 tokio.workspace = true
 sdkwork-web-bootstrap.workspace = true

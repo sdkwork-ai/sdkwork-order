@@ -171,7 +171,66 @@ async fn start_runtime_workers(host: &Arc<OrderServiceHost>) -> OrderRuntimeWork
     {
         workers.handles.push(handle);
     }
+    if let Some(handle) = spawn_cart_abandonment_sweep(host) {
+        workers.handles.push(handle);
+    }
     workers
+}
+
+/// Expires the buyer carts nobody touched for `SDKWORK_ORDER_CART_IDLE_DAYS`
+/// days (default 30), one bounded batch per tick.
+///
+/// Without this the unique "one active cart per buyer" index would keep a
+/// months-old cart occupying the slot: the buyer's next add would land in a
+/// stale basket instead of a fresh one. Set
+/// `SDKWORK_ORDER_CART_SWEEP_ENABLED=false` to disable, and
+/// `SDKWORK_ORDER_CART_SWEEP_INTERVAL_SECONDS` to change the cadence.
+fn spawn_cart_abandonment_sweep(
+    host: &Arc<OrderServiceHost>,
+) -> Option<tokio::task::JoinHandle<()>> {
+    if std::env::var("SDKWORK_ORDER_CART_SWEEP_ENABLED")
+        .map(|value| value.trim().eq_ignore_ascii_case("false"))
+        .unwrap_or(false)
+    {
+        return None;
+    }
+    let pool = match host.database_pool() {
+        DatabasePool::Postgres(pool, _) => pool.clone(),
+        _ => return None,
+    };
+    let interval_seconds = std::env::var("SDKWORK_ORDER_CART_SWEEP_INTERVAL_SECONDS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(3600);
+    let idle_days = std::env::var("SDKWORK_ORDER_CART_IDLE_DAYS")
+        .ok()
+        .and_then(|value| value.trim().parse::<i32>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(30);
+
+    Some(tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(interval_seconds));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            let store = sdkwork_order_repository_sqlx::PostgresCartStore::new(pool.clone());
+            match store.expire_idle_carts(idle_days, 500).await {
+                Ok(0) => {}
+                Ok(expired) => {
+                    tracing::info!(
+                        target = "order.cart",
+                        expired,
+                        idle_days,
+                        "expired idle buyer carts"
+                    )
+                }
+                Err(error) => {
+                    tracing::warn!(target = "order.cart", error = ?error, "cart abandonment sweep failed")
+                }
+            }
+        }
+    }))
 }
 
 fn assemble_app_api_contribution_with_host(
@@ -192,7 +251,7 @@ fn assemble_app_api_contribution_with_host(
 }
 
 /// Same as [`web_module`] but composed on a process-shared database pool
-/// (platform gateways, API_ASSEMBLY_SPEC §4.1.1).
+/// (platform gateways, API_ASSEMBLY_SPEC 搂4.1.1).
 pub async fn web_module_with_pool(pool: DatabasePool) -> Result<WebModule, String> {
     Ok(WebModule::from_contribution(
         assemble_api_router_with_pool(pool).await?,

@@ -347,6 +347,45 @@ impl PostgresCartStore {
         Ok(removed.len() as u32)
     }
 
+    /// Moves idle live carts to `expired` so an abandoned cart cannot hold the
+    /// buyer's single active slot forever.
+    ///
+    /// Bounded by `limit` and ordered oldest-first, so one sweep is a small,
+    /// predictable statement and a backlog drains across ticks instead of
+    /// locking a large row set. Idempotent: an already expired cart is not a
+    /// candidate again.
+    pub async fn expire_idle_carts(
+        &self,
+        idle_days: i32,
+        limit: i64,
+    ) -> Result<u32, CommerceServiceError> {
+        let idle_days = idle_days.max(1);
+        let limit = limit.clamp(1, 5_000);
+
+        let rows = sqlx::query(
+            r#"
+            UPDATE commerce_cart
+            SET status = 'expired', updated_at = now()
+            WHERE id IN (
+                SELECT id
+                FROM commerce_cart
+                WHERE status = 'active'
+                  AND updated_at < now() - make_interval(days => $1)
+                ORDER BY updated_at ASC
+                LIMIT $2
+            )
+            RETURNING id
+            "#,
+        )
+        .bind(idle_days)
+        .bind(limit)
+        .fetch_all(self.pool())
+        .await
+        .map_err(|error| store_error("failed to expire idle carts", error))?;
+
+        Ok(rows.len() as u32)
+    }
+
     async fn begin(&self) -> Result<Transaction<'_, Postgres>, CommerceServiceError> {
         self.pool()
             .begin()
