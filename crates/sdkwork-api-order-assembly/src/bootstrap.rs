@@ -194,8 +194,13 @@ fn spawn_cart_abandonment_sweep(
     {
         return None;
     }
+    // Cart persistence is authoritative PostgreSQL only (DATABASE_SPEC:
+    // authoritative-server); a non-Postgres pool is a dev/test configuration,
+    // so the abandonment sweep simply stays off instead of failing assembly.
+    #[allow(unreachable_patterns)]
     let pool = match host.database_pool() {
         DatabasePool::Postgres(pool, _) => pool.clone(),
+        _ => return None,
     };
     let interval_seconds = std::env::var("SDKWORK_ORDER_CART_SWEEP_INTERVAL_SECONDS")
         .ok()
