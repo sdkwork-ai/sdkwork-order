@@ -343,13 +343,14 @@ export function CashierPage({
         setPhase("pending");
         setQrLaunchUrl(null);
         setQrDataUrl(null);
-        if (h5Url) {
+        if (h5Url && h5Url !== window.location.href) {
           setH5CashierUrl(h5Url);
           startPolling(targetOrderId);
           window.location.assign(h5Url);
         } else {
-          // No H5 channel configured for this deployment: guide the payer
-          // into the WeChat/Alipay client instead of showing a scan QR.
+          // No H5 channel configured for this deployment (or the provider only
+          // returned this cashier's own URL): guide the payer into the
+          // WeChat/Alipay client instead of showing a scan QR or reloading.
           setH5CashierUrl(null);
           startPolling(targetOrderId);
         }
