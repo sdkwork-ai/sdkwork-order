@@ -3,8 +3,10 @@ export interface CommerceCartLine {
   id: string;
   skuId: string;
   spuId?: string;
-  shopId?: string;
   quantity: number;
+  selected: boolean;
+  /** False when the SKU was unpublished, archived, or deleted after the add. */
+  available: boolean;
   title: string;
   skuName?: string;
   imageUrl?: string;
@@ -14,4 +16,8 @@ export interface CommerceCartLine {
   currencyCode: string;
   /** Line total in minor units (decimal string). */
   lineTotal: string;
+  /** Live catalog unit price in minor units, when the SKU still resolves. */
+  currentUnitPrice?: string;
+  /** True when the live catalog price differs from the captured snapshot. */
+  priceChanged: boolean;
 }

@@ -7397,7 +7397,8 @@
         "x-sdkwork-resource": "cart.items",
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
-        "x-sdkwork-idempotent": true
+        "x-sdkwork-idempotent": true,
+        "description": "Idempotency-Key is required by the order app-api contract so generated clients always retry safely. The runtime accepts a missing key for backward compatibility with the already-shipped storefront transport, which re-adds without one; when a key is present a retried add replays the recorded line instead of incrementing the quantity twice."
       }
     },
     "/app/v3/api/cart/items/{cartItemId}": {
@@ -10611,11 +10612,14 @@
           "id",
           "skuId",
           "quantity",
+          "selected",
+          "available",
           "title",
           "unitPrice",
           "priceScale",
           "currencyCode",
-          "lineTotal"
+          "lineTotal",
+          "priceChanged"
         ],
         "properties": {
           "id": {
@@ -10628,13 +10632,18 @@
           "spuId": {
             "type": "string"
           },
-          "shopId": {
-            "type": "string"
-          },
           "quantity": {
             "type": "integer",
             "format": "int32",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 999
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False when the SKU was unpublished, archived, or deleted after the add."
           },
           "title": {
             "type": "string"
@@ -10651,14 +10660,26 @@
           },
           "priceScale": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 6
           },
           "currencyCode": {
-            "type": "string"
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
           },
           "lineTotal": {
             "type": "string",
             "description": "Line total in minor units (decimal string)."
+          },
+          "currentUnitPrice": {
+            "type": "string",
+            "description": "Live catalog unit price in minor units, when the SKU still resolves."
+          },
+          "priceChanged": {
+            "type": "boolean",
+            "description": "True when the live catalog price differs from the captured snapshot."
           }
         }
       },
@@ -10669,18 +10690,29 @@
           "status",
           "currencyCode",
           "items",
+          "itemCount",
           "totalQuantity",
-          "totalAmount"
+          "selectedQuantity",
+          "totalAmount",
+          "hasUnavailableSelection"
         ],
         "properties": {
           "id": {
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "active",
+              "converted",
+              "abandoned",
+              "expired"
+            ]
           },
           "currencyCode": {
-            "type": "string"
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
           },
           "items": {
             "type": "array",
@@ -10688,14 +10720,29 @@
               "$ref": "#/components/schemas/CommerceCartLine"
             }
           },
+          "itemCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 100
+          },
           "totalQuantity": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "selectedQuantity": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
           "totalAmount": {
             "type": "string",
-            "description": "Cart subtotal in minor units (decimal string)."
+            "description": "Subtotal of the selected lines in minor units (decimal string)."
+          },
+          "hasUnavailableSelection": {
+            "type": "boolean",
+            "description": "True when a selected line can no longer be sold."
           }
         }
       },
@@ -10704,6 +10751,7 @@
         "required": [
           "skuId"
         ],
+        "additionalProperties": false,
         "properties": {
           "skuId": {
             "type": "string"
@@ -10714,28 +10762,27 @@
             "minimum": 1,
             "maximum": 999,
             "default": 1
-          },
-          "spuId": {
-            "type": "string"
-          },
-          "shopId": {
-            "type": "string"
           }
-        }
+        },
+        "description": "Product id and shop id are not accepted: both are attribution and the server derives the product id from the SKU row."
       },
       "UpdateCartItemRequest": {
         "type": "object",
-        "required": [
-          "quantity"
-        ],
+        "additionalProperties": false,
+        "minProperties": 1,
         "properties": {
           "quantity": {
             "type": "integer",
             "format": "int32",
             "minimum": 1,
             "maximum": 999
+          },
+          "selected": {
+            "type": "boolean",
+            "description": "Whether the line participates in checkout."
           }
-        }
+        },
+        "description": "At least one of quantity or selected is required."
       },
       "CartCurrentResponse": {
         "allOf": [

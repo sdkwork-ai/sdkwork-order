@@ -10,7 +10,7 @@ use std::pin::Pin;
 use sdkwork_contract_service::CommerceServiceError;
 
 use crate::domain::{
-    CartLineView, CartView, CreateCartItemCommand, CurrentCartQuery, DeleteCartItemCommand,
+    CartItemMutation, CartView, CreateCartItemCommand, CurrentCartQuery, DeleteCartItemCommand,
     UpdateCartItemCommand,
 };
 
@@ -25,17 +25,19 @@ pub trait CommerceCartStore: Send + Sync {
         query: CurrentCartQuery,
     ) -> CartStoreFuture<'a, CartView>;
 
-    /// Adds a SKU to the cart. A repeated SKU increments the existing line.
+    /// Adds a SKU to the cart. A repeated SKU increments the existing line; a
+    /// repeated request carrying the same `Idempotency-Key` replays the recorded
+    /// line instead of incrementing twice.
     fn create_cart_item<'a>(
         &'a self,
         command: CreateCartItemCommand,
-    ) -> CartStoreFuture<'a, CartLineView>;
+    ) -> CartStoreFuture<'a, CartItemMutation>;
 
-    /// Replaces one line quantity.
+    /// Replaces a line's quantity and/or selection.
     fn update_cart_item<'a>(
         &'a self,
         command: UpdateCartItemCommand,
-    ) -> CartStoreFuture<'a, CartLineView>;
+    ) -> CartStoreFuture<'a, CartItemMutation>;
 
     /// Removes one line.
     fn delete_cart_item<'a>(&'a self, command: DeleteCartItemCommand) -> CartStoreFuture<'a, ()>;
