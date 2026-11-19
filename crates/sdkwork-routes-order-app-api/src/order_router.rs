@@ -37,8 +37,8 @@ use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 /// 允许的支付方式白名单，避免硬编码单一渠道。
 ///
 /// `wechat_pay`/`alipay` 是收银台展示层方法（落到 native 扫码），
-/// `wechat_jsapi`（微信 App 内拉起，需 openid）与 `alipay_wap`（H5/WAP 跳转）
-/// 是环境差异化的渠道方法。
+/// `wechat_jsapi`（微信 App 内拉起，需 openid）、`wechat_h5`（手机浏览器 H5 跳转）
+/// 与 `alipay_wap`（H5/WAP 跳转）是环境差异化的渠道方法。
 const ALLOWED_PAYMENT_METHODS: &[&str] = &[
     "wechat_pay",
     "wechat_h5",
