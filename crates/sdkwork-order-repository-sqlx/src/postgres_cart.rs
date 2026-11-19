@@ -27,7 +27,7 @@ use sdkwork_order_service::{
     stable_command_request_hash, CartItemMutation, CartLineView, CartStoreFuture, CartView,
     CommerceCartStore, CreateCartItemCommand, CurrentCartQuery, DeleteCartItemCommand,
     UpdateCartItemCommand, CART_DEFAULT_CURRENCY_CODE, CART_ITEM_CREATE_IDEMPOTENCY_SCOPE,
-    CART_ITEM_MAX_QUANTITY, CART_MAX_LINES, CART_STATUS_ACTIVE,
+    CART_ITEM_MAX_QUANTITY, CART_MAX_LINES,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -39,6 +39,7 @@ use crate::store_clock::now_canonical;
 /// The live cart a buyer currently owns, resolved under a row lock.
 struct LockedCart {
     cart_id: String,
+    status: String,
     currency_code: String,
 }
 
@@ -155,7 +156,7 @@ impl PostgresCartStore {
 
         Ok(CartView {
             cart_id: cart.cart_id,
-            status: CART_STATUS_ACTIVE.to_owned(),
+            status: cart.status,
             currency_code: cart.currency_code,
             items,
         })
@@ -372,7 +373,7 @@ async fn lock_active_cart(
 
     let row = sqlx::query(
         r#"
-        SELECT id, currency_code
+        SELECT id, status, currency_code
         FROM commerce_cart
         WHERE tenant_id = $1
           AND owner_user_id = $2
@@ -389,6 +390,7 @@ async fn lock_active_cart(
 
     Ok(LockedCart {
         cart_id: string_cell(&row, "id")?,
+        status: string_cell(&row, "status")?,
         currency_code: string_cell(&row, "currency_code")?,
     })
 }
