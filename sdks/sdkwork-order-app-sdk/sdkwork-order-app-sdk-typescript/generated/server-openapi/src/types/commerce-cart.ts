@@ -12,4 +12,6 @@ export interface CommerceCart {
   totalAmount: string;
   /** True when a selected line can no longer be sold. */
   hasUnavailableSelection: boolean;
+  /** True when a selected line asks for more units than the sellable stock. */
+  hasStockShortage: boolean;
 }

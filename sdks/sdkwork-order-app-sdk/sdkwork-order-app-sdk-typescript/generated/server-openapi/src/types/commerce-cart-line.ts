@@ -20,4 +20,8 @@ export interface CommerceCartLine {
   currentUnitPrice?: string;
   /** True when the live catalog price differs from the captured snapshot. */
   priceChanged: boolean;
+  /** Sellable units across active stock rows. Absent when the SKU tracks no inventory. */
+  availableStock?: number;
+  /** True when the line quantity exceeds the sellable stock; checkout enforces it. */
+  stockShortage: boolean;
 }

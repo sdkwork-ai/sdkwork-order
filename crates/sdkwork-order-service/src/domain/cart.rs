@@ -49,6 +49,14 @@ pub struct CartLineView {
     pub current_unit_price: Option<CommerceMoney>,
     /// True when the live catalog price differs from the captured snapshot.
     pub price_changed: bool,
+    /// Sellable units across active stock rows, when the SKU tracks inventory.
+    /// `None` means the SKU has no active stock record (untracked or unlimited),
+    /// so the storefront must not render a shortage.
+    pub available_stock: Option<i64>,
+    /// True when the line quantity exceeds the sellable stock. Adding past stock
+    /// is allowed (stock moves fast); checkout is where it is enforced, and this
+    /// flag lets the cart say so before the buyer gets there.
+    pub stock_shortage: bool,
 }
 
 impl CartLineView {
@@ -136,6 +144,13 @@ impl CartView {
         self.items
             .iter()
             .any(|item| item.selected && !item.available)
+    }
+
+    /// True when a selected line asks for more units than the sellable stock.
+    pub fn has_stock_shortage(&self) -> bool {
+        self.items
+            .iter()
+            .any(|item| item.selected && item.stock_shortage)
     }
 }
 
@@ -383,6 +398,8 @@ mod tests {
             available: true,
             current_unit_price: None,
             price_changed: false,
+            available_stock: None,
+            stock_shortage: false,
         }
     }
 

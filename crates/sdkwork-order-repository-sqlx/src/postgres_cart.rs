@@ -2,8 +2,7 @@
 //!
 //! # Transaction and concurrency model
 //!
-//! Every mutation runs inside one transaction that first resolves — and locks —
-//! the buyer's live cart row (`SELECT ... FOR UPDATE`). That single lock is the
+//! Every mutation runs inside one transaction that first resolves 鈥?and locks 鈥?//! the buyer's live cart row (`SELECT ... FOR UPDATE`). That single lock is the
 //! serialization point for the cart: the line cap, the per-SKU quantity cap, the
 //! currency agreement, and the read-after-write all execute while no other writer
 //! can touch the same cart, so validation cannot be invalidated between the check
@@ -72,6 +71,8 @@ struct StoredCartLine {
     currency_code: String,
     available: bool,
     current_unit_price_minor: Option<String>,
+    available_stock: Option<i64>,
+    stock_shortage: bool,
     price_changed: bool,
 }
 
@@ -95,6 +96,8 @@ impl StoredCartLine {
                 .as_ref()
                 .map(|money| money.as_str().to_owned()),
             price_changed: line.price_changed,
+            available_stock: line.available_stock,
+            stock_shortage: line.stock_shortage,
         }
     }
 
@@ -118,6 +121,8 @@ impl StoredCartLine {
                 .map(parse_minor_units)
                 .transpose()?,
             price_changed: self.price_changed,
+            available_stock: self.available_stock,
+            stock_shortage: self.stock_shortage,
         })
     }
 }
@@ -655,7 +660,7 @@ async fn load_sku_snapshot(
         r#"
         SELECT
             spu_id::text AS spu_id,
-            COALESCE(NULLIF(title, ''), NULLIF(name, ''), '商品') AS title,
+            COALESCE(NULLIF(title, ''), NULLIF(name, ''), '鍟嗗搧') AS title,
             COALESCE(NULLIF(name, ''), NULLIF(title, ''), '') AS sku_name,
             sale_price_minor,
             price_scale,
@@ -739,12 +744,20 @@ const CART_LINE_LIST_SQL: &str = r#"
             i.currency_code,
             (s.id IS NOT NULL) AS sku_found,
             COALESCE(s.status = 'active' AND s.sales_status = 'active', FALSE) AS sellable,
-            s.sale_price_minor AS current_unit_price_minor
+            s.sale_price_minor AS current_unit_price_minor,
+            stock.available AS available_stock
         FROM commerce_cart_item i
         LEFT JOIN commerce_product_sku s
             ON s.id::text = i.sku_id
            AND s.tenant_id::text = i.tenant_id
            AND s.deleted_at IS NULL
+        LEFT JOIN LATERAL (
+            SELECT SUM(st.available_quantity) AS available
+            FROM commerce_inventory_stock st
+            WHERE st.tenant_id = i.tenant_id
+              AND st.sku_id = i.sku_id
+              AND st.status = 'active'
+        ) stock ON TRUE
         WHERE i.cart_id = $1
         ORDER BY i.created_at ASC, i.id ASC
 "#;
@@ -764,12 +777,20 @@ const CART_LINE_SINGLE_SQL: &str = r#"
             i.currency_code,
             (s.id IS NOT NULL) AS sku_found,
             COALESCE(s.status = 'active' AND s.sales_status = 'active', FALSE) AS sellable,
-            s.sale_price_minor AS current_unit_price_minor
+            s.sale_price_minor AS current_unit_price_minor,
+            stock.available AS available_stock
         FROM commerce_cart_item i
         LEFT JOIN commerce_product_sku s
             ON s.id::text = i.sku_id
            AND s.tenant_id::text = i.tenant_id
            AND s.deleted_at IS NULL
+        LEFT JOIN LATERAL (
+            SELECT SUM(st.available_quantity) AS available
+            FROM commerce_inventory_stock st
+            WHERE st.tenant_id = i.tenant_id
+              AND st.sku_id = i.sku_id
+              AND st.status = 'active'
+        ) stock ON TRUE
         WHERE i.id = $1
 "#;
 
@@ -926,6 +947,7 @@ fn map_cart_line_row(row: &sqlx::postgres::PgRow) -> Result<CartLineView, Commer
     let price_scale: i16 = row
         .try_get("price_scale")
         .map_err(|error| store_error("failed to read the cart line price scale", error))?;
+    let available_stock: Option<i64> = row.try_get("available_stock").ok().flatten();
     let current_unit_price_minor: Option<i64> =
         row.try_get("current_unit_price_minor").ok().flatten();
 
@@ -939,7 +961,7 @@ fn map_cart_line_row(row: &sqlx::postgres::PgRow) -> Result<CartLineView, Commer
         selected: row.try_get("selected").unwrap_or(true),
         title: product_title
             .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| "商品".to_owned()),
+            .unwrap_or_else(|| "鍟嗗搧".to_owned()),
         sku_name,
         image_url: row.try_get("image_url").ok().flatten(),
         unit_price: parse_minor_units(&unit_price_minor.to_string())?,
@@ -949,6 +971,10 @@ fn map_cart_line_row(row: &sqlx::postgres::PgRow) -> Result<CartLineView, Commer
         current_unit_price: current_unit_price_minor
             .map(|minor| parse_minor_units(&minor.to_string()))
             .transpose()?,
+        available_stock,
+        stock_shortage: available_stock
+            .map(|stock| stock < row.try_get::<i64, _>("quantity").unwrap_or(0))
+            .unwrap_or(false),
         price_changed: current_unit_price_minor
             .map(|minor| minor != unit_price_minor)
             .unwrap_or(false),

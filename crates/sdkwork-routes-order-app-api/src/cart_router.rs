@@ -78,6 +78,9 @@ struct CartLineResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     current_unit_price: Option<String>,
     price_changed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    available_stock: Option<i32>,
+    stock_shortage: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -92,6 +95,7 @@ struct CartResponse {
     selected_quantity: i32,
     total_amount: String,
     has_unavailable_selection: bool,
+    has_stock_shortage: bool,
 }
 
 pub fn app_cart_router_with_postgres_pool(pool: PgPool) -> Router {
@@ -258,6 +262,7 @@ fn map_cart(cart: CartView) -> Result<CartResponse, CommerceServiceError> {
     let selected_quantity = cart.selected_quantity();
     let total_amount = cart.selected_subtotal()?;
     let has_unavailable_selection = cart.has_unavailable_selection();
+    let has_stock_shortage = cart.has_stock_shortage();
     let items = cart
         .items
         .into_iter()
@@ -274,6 +279,7 @@ fn map_cart(cart: CartView) -> Result<CartResponse, CommerceServiceError> {
         selected_quantity: quantity_to_wire(selected_quantity)?,
         total_amount: total_amount.as_str().to_owned(),
         has_unavailable_selection,
+        has_stock_shortage,
     })
 }
 
@@ -297,6 +303,11 @@ fn map_cart_line(line: CartLineView) -> Result<CartLineResponse, CommerceService
             .current_unit_price
             .map(|money| money.as_str().to_owned()),
         price_changed: line.price_changed,
+        available_stock: line
+            .available_stock
+            .map(|stock| quantity_to_wire(stock))
+            .transpose()?,
+        stock_shortage: line.stock_shortage,
     })
 }
 

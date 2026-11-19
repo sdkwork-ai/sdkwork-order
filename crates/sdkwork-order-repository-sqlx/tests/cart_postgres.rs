@@ -43,6 +43,29 @@ CREATE TABLE IF NOT EXISTS commerce_product_sku (
 );
 "#;
 
+const STOCK_FIXTURE: &str = r#"
+CREATE TABLE IF NOT EXISTS commerce_inventory_stock (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    shop_id TEXT,
+    sku_id TEXT NOT NULL,
+    warehouse_id TEXT,
+    fulfillment_node_id TEXT,
+    on_hand_quantity BIGINT NOT NULL DEFAULT 0,
+    available_quantity BIGINT NOT NULL DEFAULT 0,
+    locked_quantity BIGINT NOT NULL DEFAULT 0,
+    reserved_quantity BIGINT NOT NULL DEFAULT 0,
+    sold_quantity BIGINT NOT NULL DEFAULT 0,
+    safety_stock_quantity BIGINT NOT NULL DEFAULT 0,
+    version BIGINT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT,
+    updated_at TEXT,
+    inbound_quantity BIGINT NOT NULL DEFAULT 0,
+    damaged_quantity BIGINT NOT NULL DEFAULT 0
+);
+"#;
 const TENANT: &str = "900001";
 const OTHER_TENANT: &str = "900002";
 const SKU_CNY: &str = "9001";
@@ -50,7 +73,16 @@ const SKU_CNY_SECOND: &str = "9002";
 const SKU_USD: &str = "9003";
 const SKU_ARCHIVED: &str = "9004";
 
+static POOL: tokio::sync::OnceCell<Option<PgPool>> = tokio::sync::OnceCell::const_new();
+
+/// One setup per test process: connect, apply the real migration, create the
+/// catalog/stock projections, then clear cart state so the suite is repeatable
+/// against a persistent throwaway database.
 async fn test_pool() -> Option<PgPool> {
+    POOL.get_or_init(init_pool).await.clone()
+}
+
+async fn init_pool() -> Option<PgPool> {
     let url = std::env::var("SDKWORK_DATABASE_TEST_POSTGRES_URL")
         .ok()
         .map(|value| value.trim().to_owned())
@@ -58,6 +90,15 @@ async fn test_pool() -> Option<PgPool> {
     let pool = PgPool::connect(&url).await.ok()?;
     sqlx::raw_sql(MIGRATION).execute(&pool).await.ok()?;
     sqlx::raw_sql(SKU_FIXTURE).execute(&pool).await.ok()?;
+    sqlx::raw_sql(STOCK_FIXTURE).execute(&pool).await.ok()?;
+    sqlx::raw_sql("TRUNCATE commerce_cart CASCADE;")
+        .execute(&pool)
+        .await
+        .ok()?;
+    sqlx::query("DELETE FROM commerce_idempotency_key WHERE scope = 'order.cart.items.create'")
+        .execute(&pool)
+        .await
+        .ok();
     sqlx::query(
         r#"
         INSERT INTO commerce_product_sku
@@ -426,4 +467,58 @@ async fn idle_carts_expire_and_free_the_active_slot() {
         .expect("reopen cart");
     assert!(reopened.items.is_empty());
     assert_eq!(Some("active".to_owned()), status("cart-expiry-idle").await);
+}
+
+#[tokio::test]
+async fn stock_shortage_is_reported_only_when_stock_is_known() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let store = store(&pool);
+    sqlx::query(
+        "INSERT INTO commerce_inventory_stock (id, tenant_id, sku_id, available_quantity, status)
+         VALUES ('stock-9002', '900001', '9002', 10, 'active')
+         ON CONFLICT (id) DO UPDATE SET available_quantity = EXCLUDED.available_quantity, status = 'active'",
+    )
+    .execute(&pool)
+    .await
+    .expect("seed stock");
+
+    let line = store
+        .create_cart_item(add("cart-stock-user", SKU_CNY_SECOND, 4, None))
+        .await
+        .expect("line within stock");
+    assert_eq!(Some(10), line.line.available_stock);
+    assert!(!line.line.stock_shortage);
+
+    let raised = store
+        .update_cart_item(
+            UpdateCartItemCommand::new(
+                TENANT,
+                None,
+                "cart-stock-user",
+                &line.line.cart_item_id,
+                Some(12),
+                None,
+            )
+            .expect("update command"),
+        )
+        .await
+        .expect("raise quantity");
+    assert_eq!(12, raised.line.quantity);
+    assert!(raised.line.stock_shortage);
+
+    let cart = store
+        .retrieve_current_cart(current("cart-stock-user"))
+        .await
+        .expect("cart read");
+    assert!(cart.has_stock_shortage());
+
+    // A sku with no active stock row is untracked, not short.
+    let untracked = store
+        .create_cart_item(add("cart-stock-user", SKU_CNY, 2, None))
+        .await
+        .expect("untracked line");
+    assert_eq!(None, untracked.line.available_stock);
+    assert!(!untracked.line.stock_shortage);
 }

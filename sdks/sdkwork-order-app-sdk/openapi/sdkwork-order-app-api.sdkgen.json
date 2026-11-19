@@ -10626,7 +10626,8 @@
           "priceScale",
           "currencyCode",
           "lineTotal",
-          "priceChanged"
+          "priceChanged",
+          "stockShortage"
         ],
         "properties": {
           "id": {
@@ -10687,6 +10688,16 @@
           "priceChanged": {
             "type": "boolean",
             "description": "True when the live catalog price differs from the captured snapshot."
+          },
+          "availableStock": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Sellable units across active stock rows. Absent when the SKU tracks no inventory."
+          },
+          "stockShortage": {
+            "type": "boolean",
+            "description": "True when the line quantity exceeds the sellable stock; checkout enforces it."
           }
         }
       },
@@ -10701,7 +10712,8 @@
           "totalQuantity",
           "selectedQuantity",
           "totalAmount",
-          "hasUnavailableSelection"
+          "hasUnavailableSelection",
+          "hasStockShortage"
         ],
         "properties": {
           "id": {
@@ -10750,6 +10762,10 @@
           "hasUnavailableSelection": {
             "type": "boolean",
             "description": "True when a selected line can no longer be sold."
+          },
+          "hasStockShortage": {
+            "type": "boolean",
+            "description": "True when a selected line asks for more units than the sellable stock."
           }
         }
       },
