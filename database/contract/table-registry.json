@@ -33,6 +33,18 @@
       "lifecycle_status": "active"
     },
     {
+      "table_name": "commerce_cart",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
+      "table_name": "commerce_cart_item",
+      "owner": "sdkwork-order",
+      "compliance_level": "L2",
+      "lifecycle_status": "active"
+    },
+    {
       "table_name": "commerce_checkout_line",
       "owner": "sdkwork-order",
       "compliance_level": "L2",

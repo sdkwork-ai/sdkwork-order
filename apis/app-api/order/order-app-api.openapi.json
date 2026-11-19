@@ -3901,8 +3901,8 @@
               }
             }
           },
-          "503": {
-            "description": "Coupon consumed but benefit delivery failed. The coupon was consumed and the order was created, yet the benefit was not delivered. Retrying the same request with the same Idempotency-Key is safe: it returns the same order, re-attempts benefit delivery, and never consumes another coupon. `ProblemDetail.code` is `50302` (domain code, distinct from `50301` and `50001`) with `i18nKey` `orders.coupon_redemptions.benefit_delivery_failed`.",
+          "500": {
+            "description": "Internal server error",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3911,8 +3911,8 @@
               }
             }
           },
-          "500": {
-            "description": "Internal server error",
+          "503": {
+            "description": "Coupon consumed but benefit delivery failed. The coupon was consumed and the order was created, yet the benefit was not delivered. Retrying the same request with the same Idempotency-Key is safe: it returns the same order, re-attempts benefit delivery, and never consumes another coupon. `ProblemDetail.code` is `50302` (domain code, distinct from `50301` and `50001`) with `i18nKey` `orders.coupon_redemptions.benefit_delivery_failed`.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7206,6 +7206,396 @@
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api"
       }
+    },
+    "/app/v3/api/cart/current": {
+      "get": {
+        "tags": [
+          "orderCart"
+        ],
+        "summary": "Current cart retrieve.",
+        "operationId": "cart.current.retrieve",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartCurrentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "cart.current",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
+    "/app/v3/api/cart/items": {
+      "post": {
+        "tags": [
+          "orderCart"
+        ],
+        "summary": "Cart items create.",
+        "operationId": "cart.items.create",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCartItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCartItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "cart.items",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api",
+        "x-sdkwork-idempotent": true
+      }
+    },
+    "/app/v3/api/cart/items/{cartItemId}": {
+      "patch": {
+        "tags": [
+          "orderCart"
+        ],
+        "summary": "Cart items update.",
+        "operationId": "cart.items.update",
+        "parameters": [
+          {
+            "name": "cartItemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCartItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateCartItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "cart.items",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      },
+      "delete": {
+        "tags": [
+          "orderCart"
+        ],
+        "summary": "Cart items delete.",
+        "operationId": "cart.items.delete",
+        "parameters": [
+          {
+            "name": "cartItemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "cart.items",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
     }
   },
   "components": {
@@ -10208,6 +10598,216 @@
                 "properties": {
                   "item": {
                     "$ref": "#/components/schemas/CashierLink"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CommerceCartLine": {
+        "type": "object",
+        "required": [
+          "id",
+          "skuId",
+          "quantity",
+          "title",
+          "unitPrice",
+          "priceScale",
+          "currencyCode",
+          "lineTotal"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Cart line id (the `cartItemId` checkout accepts)."
+          },
+          "skuId": {
+            "type": "string"
+          },
+          "spuId": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1
+          },
+          "title": {
+            "type": "string"
+          },
+          "skuName": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "unitPrice": {
+            "type": "string",
+            "description": "Snapshot unit price in minor units (decimal string)."
+          },
+          "priceScale": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "lineTotal": {
+            "type": "string",
+            "description": "Line total in minor units (decimal string)."
+          }
+        }
+      },
+      "CommerceCart": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "currencyCode",
+          "items",
+          "totalQuantity",
+          "totalAmount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommerceCartLine"
+            }
+          },
+          "totalQuantity": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "totalAmount": {
+            "type": "string",
+            "description": "Cart subtotal in minor units (decimal string)."
+          }
+        }
+      },
+      "CreateCartItemRequest": {
+        "type": "object",
+        "required": [
+          "skuId"
+        ],
+        "properties": {
+          "skuId": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "maximum": 999,
+            "default": 1
+          },
+          "spuId": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateCartItemRequest": {
+        "type": "object",
+        "required": [
+          "quantity"
+        ],
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "maximum": 999
+          }
+        }
+      },
+      "CartCurrentResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CommerceCart"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CreateCartItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CommerceCartLine"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "UpdateCartItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CommerceCartLine"
                   }
                 }
               }

@@ -1,6 +1,7 @@
 mod account_ledger;
 mod account_value;
 mod app_template_fulfillment;
+mod cart;
 mod membership_fulfillment;
 mod owner_order_payment;
 mod partner_relation;
@@ -16,6 +17,8 @@ pub use partner_relation::{
     NoopOrderPartnerRelationPort, OrderPartnerRelationFuture, OrderPartnerRelationPort,
     OrderPartnerSnapshot, ORDER_PARTNER_RELATION_PORT,
 };
+
+pub use cart::{CartStoreFuture, CommerceCartStore};
 
 pub use account_ledger::{
     points_recharge_compensation_idempotency_key, points_recharge_compensation_transaction_no,

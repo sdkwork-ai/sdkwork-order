@@ -10,6 +10,7 @@ mod payment_domain_bridge;
 pub mod postgres_account_value;
 pub mod postgres_after_sales;
 pub mod postgres_app_template_order;
+pub mod postgres_cart;
 pub mod postgres_checkout;
 pub mod postgres_carrier;
 pub mod postgres_demand_claim;
@@ -37,6 +38,7 @@ mod test_postgres_pool;
 
 pub use order_settlement_context::OrderPaymentSettlementContext;
 pub use postgres_app_template_order::PostgresCommerceAppTemplateOrderStore;
+pub use postgres_cart::PostgresCartStore;
 pub use postgres_demand_claim::PostgresDemandClaimRepository;
 pub use postgres_membership_order::PostgresCommerceMembershipOrderStore;
 pub use postgres_order::PostgresCommerceOrderStore;

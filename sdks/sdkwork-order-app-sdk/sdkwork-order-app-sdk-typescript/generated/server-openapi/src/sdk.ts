@@ -14,6 +14,7 @@ import { OrderWithdrawalsApi, createOrderWithdrawalsApi } from './api/order-with
 import { OrderAppTemplatesApi, createOrderAppTemplatesApi } from './api/order-app-templates';
 import { OrderDemandClaimsApi, createOrderDemandClaimsApi } from './api/order-demand-claims';
 import { OrderCashierApi, createOrderCashierApi } from './api/order-cashier';
+import { OrderCartApi, createOrderCartApi } from './api/order-cart';
 
 export class SdkworkAppClient {
   private httpClient: HttpClient;
@@ -30,6 +31,7 @@ export class SdkworkAppClient {
   public readonly orderAppTemplates: OrderAppTemplatesApi;
   public readonly orderDemandClaims: OrderDemandClaimsApi;
   public readonly orderCashier: OrderCashierApi;
+  public readonly orderCart: OrderCartApi;
 
   constructor(config: SdkworkAppConfig) {
     this.httpClient = createHttpClient(config);
@@ -56,6 +58,8 @@ export class SdkworkAppClient {
     this.orderDemandClaims = createOrderDemandClaimsApi(this.httpClient);
 
     this.orderCashier = createOrderCashierApi(this.httpClient);
+
+    this.orderCart = createOrderCartApi(this.httpClient);
   }
   setAuthToken(token: string): this {
     this.httpClient.setAuthToken(token);

@@ -1,6 +1,7 @@
 pub mod after_sales_router;
 pub mod api_response;
 pub mod app_template_router;
+pub mod cart_router;
 pub mod cashier_router;
 pub mod checkout_router;
 pub mod command_headers;
@@ -41,6 +42,9 @@ pub use app_template_router::{
 pub use checkout_router::{
     app_checkout_router_with_postgres_pool, build_app_checkout_router,
     build_app_checkout_router_with_integrations, CommerceCheckoutFuture, CommerceCheckoutStore,
+};
+pub use cart_router::{
+    app_cart_router_with_postgres_pool, build_app_cart_router,
 };
 pub use cashier_router::{
     build_app_cashier_router, AppCashierState, CashierOrderResponse, CashierPaymentResponse,

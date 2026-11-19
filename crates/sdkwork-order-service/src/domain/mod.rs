@@ -1,9 +1,15 @@
 mod account_value;
 mod app_template;
+mod cart;
 mod demand_claim;
 mod fulfillment;
 mod membership;
 mod recharge;
+
+pub use cart::{
+    CartLineView, CartView, CreateCartItemCommand, CurrentCartQuery, DeleteCartItemCommand,
+    UpdateCartItemCommand, CART_DEFAULT_CURRENCY_CODE, CART_ITEM_MAX_QUANTITY, CART_STATUS_ACTIVE,
+};
 
 pub use account_value::{
     AccountValueAssetCode, AccountValueFulfillmentContext, AccountValueOrderSubject,

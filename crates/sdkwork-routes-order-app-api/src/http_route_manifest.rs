@@ -9,6 +9,36 @@ pub fn order_app_api_public_path_prefixes() -> Vec<String> {
 }
 
 const HTTP_ROUTES: &[HttpRoute] = &[
+    // === Cart ===
+    //
+    // The buyer cart is the staging surface in front of checkout. The operation
+    // ids match the published commerce app contract so existing storefront SDK
+    // transports resolve unchanged.
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/app/v3/api/cart/current",
+        "orderCart",
+        "cart.current.retrieve",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/app/v3/api/cart/items",
+        "orderCart",
+        "cart.items.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Patch,
+        "/app/v3/api/cart/items/{cartItemId}",
+        "orderCart",
+        "cart.items.update",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Delete,
+        "/app/v3/api/cart/items/{cartItemId}",
+        "orderCart",
+        "cart.items.delete",
+    ),
     // === Checkout ===
     HttpRoute::dual_token(
         HttpMethod::Post,

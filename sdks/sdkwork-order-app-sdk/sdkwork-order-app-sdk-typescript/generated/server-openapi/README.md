@@ -70,6 +70,7 @@ const client = new SdkworkAppClient({
 - `client.orderAppTemplates` - order_app_templates API
 - `client.orderDemandClaims` - order_demand_claims API
 - `client.orderCashier` - order_cashier API
+- `client.orderCart` - order_cart API
 
 ## Usage Examples
 
@@ -198,6 +199,13 @@ const body = {
   outTradeNo: 'outTradeNo',
 };
 const result = await client.orderCashier.cashier.links.create(body);
+```
+
+### order_cart
+
+```typescript
+// Current cart retrieve.
+const result = await client.orderCart.cart.current.retrieve();
 ```
 
 ## Error Handling
