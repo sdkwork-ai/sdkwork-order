@@ -41,6 +41,7 @@ use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 /// 是环境差异化的渠道方法。
 const ALLOWED_PAYMENT_METHODS: &[&str] = &[
     "wechat_pay",
+    "wechat_h5",
     "wechat_jsapi",
     "alipay",
     "alipay_wap",

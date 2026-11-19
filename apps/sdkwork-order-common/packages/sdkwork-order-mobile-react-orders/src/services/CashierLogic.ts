@@ -82,18 +82,30 @@ export function isCashierRetryablePhase(phase: CashierPhase): boolean {
  * environment:
  * - WeChat app with a payer openid → `wechat_jsapi` (bridge invoke).
  * - Alipay app → `alipay_wap` (in-app redirect to the Alipay cashier).
- * - Everything else keeps the selected method (`wechat_pay`/`alipay`/`balance`).
+ * - Plain mobile browser → `wechat_h5` / `alipay_wap`: the phone cannot scan a
+ *   QR shown on its own screen, so a native trade would be a dead end.
+ * - Desktop browser keeps the selected native method (`wechat_pay`/`alipay`)
+ *   because the cashier renders a QR there.
  */
 export function resolveCashierWireMethod(
   environment: PaymentEnvironment,
   method: OrderPaymentMethod,
   hasOpenid: boolean,
+  isMobile = false,
 ): OrderPaymentMethod {
   if (environment === "wechat" && method === "wechat_pay" && hasOpenid) {
     return "wechat_jsapi";
   }
   if (environment === "alipay" && method === "alipay") {
     return "alipay_wap";
+  }
+  if (environment === "browser" && isMobile) {
+    if (method === "wechat_pay") {
+      return "wechat_h5";
+    }
+    if (method === "alipay") {
+      return "alipay_wap";
+    }
   }
   return method;
 }

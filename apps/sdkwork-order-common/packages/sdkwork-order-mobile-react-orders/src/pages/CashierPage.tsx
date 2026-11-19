@@ -72,6 +72,12 @@ const PAYMENT_METHOD_META: Readonly<
     descKey: "orders.payment_method_desc_wechat_pay",
     descDefault: "微信扫码支付",
   },
+  wechat_h5: {
+    badge: "微",
+    badgeClass: "bg-[#07C160]",
+    descKey: "orders.payment_method_desc_wechat_pay",
+    descDefault: "微信支付",
+  },
   wechat_jsapi: {
     badge: "微",
     badgeClass: "bg-[#07C160]",
@@ -394,6 +400,7 @@ export function CashierPage({
         environment,
         method,
         Boolean(openidRef.current),
+        isMobile,
       );
       const session = await OrderService.payOrder(targetOrderId, wireMethod, {
         openid: openidRef.current ?? undefined,

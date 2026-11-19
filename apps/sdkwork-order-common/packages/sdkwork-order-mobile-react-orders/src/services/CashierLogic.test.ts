@@ -77,6 +77,14 @@ describe("resolveCashierWireMethod", () => {
     expect(resolveCashierWireMethod("browser", "balance", false)).toBe("balance");
   });
 
+  it("uses provider H5 trades on a plain mobile browser", () => {
+    expect(resolveCashierWireMethod("browser", "wechat_pay", false, true)).toBe("wechat_h5");
+    expect(resolveCashierWireMethod("browser", "alipay", false, true)).toBe("alipay_wap");
+    expect(resolveCashierWireMethod("browser", "balance", false, true)).toBe("balance");
+    // Desktop keeps the native QR trade: scanning is the completion path there.
+    expect(resolveCashierWireMethod("browser", "wechat_pay", false, false)).toBe("wechat_pay");
+  });
+
   it("uses wechat_jsapi inside WeChat once the payer openid is known", () => {
     expect(resolveCashierWireMethod("wechat", "wechat_pay", true)).toBe("wechat_jsapi");
     expect(resolveCashierWireMethod("wechat", "wechat_pay", false)).toBe("wechat_pay");

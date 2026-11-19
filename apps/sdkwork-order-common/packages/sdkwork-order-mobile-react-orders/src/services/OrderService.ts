@@ -34,6 +34,7 @@ export type OrderStatus =
 
 export type OrderPaymentMethod =
   | "wechat_pay"
+  | "wechat_h5"
   | "wechat_jsapi"
   | "alipay"
   | "alipay_wap"
@@ -58,6 +59,7 @@ export const ORDER_PAYMENT_METHODS: readonly OrderPaymentMethod[] = [
  */
 export const ORDER_PAYMENT_METHOD_LABELS: Readonly<Record<OrderPaymentMethod, string>> = {
   wechat_pay: "微信支付",
+  wechat_h5: "微信支付",
   wechat_jsapi: "微信支付",
   alipay: "支付宝",
   alipay_wap: "支付宝",
@@ -87,6 +89,7 @@ export const ORDER_PAYMENT_METHODS_OVERSEAS: readonly OrderPaymentMethod[] = [
  */
 export const ORDER_PAYMENT_WIRE_METHODS: readonly OrderPaymentMethod[] = [
   ...ORDER_PAYMENT_METHODS,
+  "wechat_h5",
   "wechat_jsapi",
   "alipay_wap",
 ];
