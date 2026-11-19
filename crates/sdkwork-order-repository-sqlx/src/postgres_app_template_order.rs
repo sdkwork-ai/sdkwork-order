@@ -71,6 +71,37 @@ ORDER BY t.id ASC
 LIMIT 1
 "#;
 
+/// The scaffold catalog is the current marketplace; the legacy table above is
+/// kept as the fallback for databases that predate it.
+const LOAD_SCAFFOLD_TEMPLATE: &str = r#"
+SELECT
+    CAST(t.id AS TEXT) AS template_id,
+    t.uuid AS template_uuid,
+    t.display_name,
+    CAST(t.price_minor AS TEXT) AS price_minor,
+    COALESCE(NULLIF(t.currency, ''), 'CNY') AS currency_code,
+    t.pricing_model,
+    t.status,
+    t.visibility,
+    CAST(t.author_user_id AS TEXT) AS author_user_id,
+    (
+        SELECT v.uuid
+        FROM deploy_application_scaffold_version v
+        WHERE v.template_id = t.id
+          AND v.status = 'PUBLISHED'
+          AND v.deleted_at IS NULL
+        ORDER BY v.created_at DESC, v.id DESC
+        LIMIT 1
+    ) AS version_uuid
+FROM deploy_application_scaffold t
+WHERE t.tenant_id = $1
+  AND t.uuid = $2
+  AND t.organization_id = COALESCE($3, 0)
+  AND t.deleted_at IS NULL
+ORDER BY t.id ASC
+LIMIT 1
+"#;
+
 /// Loads one order for the caller, either by idempotency key (any lifecycle) or
 /// by purchase intent (only while it is still awaiting payment and not expired).
 ///
@@ -404,7 +435,17 @@ async fn load_published_template(
         .map(|value| parse_catalog_id("organization_id", value))
         .transpose()?;
 
-    let row = sqlx::query(LOAD_TEMPLATE)
+    let scaffold_present: Option<String> =
+        sqlx::query_scalar("SELECT to_regclass('deploy_application_scaffold')::text")
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(|error| store_error("probe application scaffold catalog", error))?;
+    let template_sql = if scaffold_present.is_some() {
+        LOAD_SCAFFOLD_TEMPLATE
+    } else {
+        LOAD_TEMPLATE
+    };
+    let row = sqlx::query(template_sql)
         .bind(tenant_id)
         .bind(&command.template_uuid)
         .bind(organization_id)
