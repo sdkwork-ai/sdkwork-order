@@ -13,7 +13,7 @@ fn postgres_url() -> Option<String> {
 #[tokio::test]
 async fn sandbox_refund_executor_creates_payment_refund_and_returns_payment_reference() {
     // 服务端测试必须使用 PostgreSQL（DATABASE_SPEC：authoritative-server）
-    let Some(pool) = payment_refund_pool().await else {
+    let Some((pool, schema)) = payment_refund_pool().await else {
         eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
         return;
     };
@@ -65,12 +65,13 @@ async fn sandbox_refund_executor_creates_payment_refund_and_returns_payment_refe
         row.get::<String, _>("idempotency_key"),
         "refund-exec-idem-1"
     );
+    drop_payment_refund_schema(&pool, &schema).await;
 }
 
 #[tokio::test]
 async fn sandbox_refund_executor_reuses_payment_refund_for_same_idempotency_key() {
     // 服务端测试必须使用 PostgreSQL（DATABASE_SPEC：authoritative-server）
-    let Some(pool) = payment_refund_pool().await else {
+    let Some((pool, schema)) = payment_refund_pool().await else {
         eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
         return;
     };
@@ -105,16 +106,50 @@ async fn sandbox_refund_executor_reuses_payment_refund_for_same_idempotency_key(
         .await
         .expect("refund count");
     assert_eq!(count, 1);
+    drop_payment_refund_schema(&pool, &schema).await;
 }
 
-/// 两个测试并行执行时会竞争同一组共享表的 DROP/CREATE,串行化 schema 初始化。
-static SCHEMA_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+/// Each call creates its own schema so the two tests (and every other binary
+/// sharing the test database) never share reduced `commerce_*` tables in
+/// `public`; `CREATE TABLE IF NOT EXISTS` migrations elsewhere then keep the
+/// production shape instead of inheriting this fixture's subset.
+static SCHEMA_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-async fn payment_refund_pool() -> Option<sqlx::PgPool> {
-    let _guard = SCHEMA_LOCK.lock().await;
+async fn payment_refund_pool() -> Option<(sqlx::PgPool, String)> {
     let url = postgres_url()?;
+    let seq = SCHEMA_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let schema = format!("order_refund_{}_{seq}", std::process::id());
+    let admin = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&url)
+        .await
+        .ok()?;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP SCHEMA IF EXISTS {schema} CASCADE"
+    )))
+    .execute(&admin)
+    .await
+    .ok()?;
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE SCHEMA {schema}")))
+        .execute(&admin)
+        .await
+        .ok()?;
     let pool = PgPoolOptions::new()
         .max_connections(1)
+        .after_connect({
+            let schema = schema.clone();
+            move |connection, _| {
+                let schema = schema.clone();
+                Box::pin(async move {
+                    sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+                        "SET search_path TO {schema}, public"
+                    )))
+                    .execute(connection)
+                    .await?;
+                    Ok(())
+                })
+            }
+        })
         .connect(&url)
         .await
         .ok()?;
@@ -124,7 +159,15 @@ async fn payment_refund_pool() -> Option<sqlx::PgPool> {
             .await
             .unwrap_or_else(|error| panic!("schema failed on `{statement}`: {error}"));
     }
-    Some(pool)
+    Some((pool, schema))
+}
+
+async fn drop_payment_refund_schema(pool: &sqlx::PgPool, schema: &str) {
+    let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP SCHEMA IF EXISTS {schema} CASCADE"
+    )))
+    .execute(pool)
+    .await;
 }
 
 async fn seed_paid_sandbox_order(pool: &sqlx::PgPool) {
@@ -196,6 +239,7 @@ DROP TABLE IF EXISTS commerce_refund_event;
 DROP TABLE IF EXISTS commerce_refund;
 DROP TABLE IF EXISTS commerce_payment_attempt;
 DROP TABLE IF EXISTS commerce_payment_channel;
+DROP TABLE IF EXISTS commerce_payment_notify_domain;
 DROP TABLE IF EXISTS commerce_order_amount_breakdown;
 DROP TABLE IF EXISTS commerce_order;
 CREATE TABLE commerce_order (
@@ -265,6 +309,25 @@ CREATE TABLE commerce_payment_attempt (
 CREATE TABLE commerce_payment_channel (
     id TEXT NOT NULL PRIMARY KEY,
     provider_account_id TEXT
+);
+
+-- Refund submission resolves the tenant's refund notify domain before calling
+-- the PSP (shared resolve_refund_notify_url_postgres). The fixture models that
+-- read so the submission path reaches the provider instead of failing with a
+-- missing-relation storage error that the adapter classifies as retryable.
+CREATE TABLE commerce_payment_notify_domain (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    protocol TEXT NOT NULL DEFAULT 'https',
+    hostname TEXT NOT NULL,
+    port INTEGER,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    status TEXT NOT NULL DEFAULT 'active',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
 );
 
 CREATE TABLE commerce_refund (

@@ -802,7 +802,7 @@ impl PaymentNotifyHandler for UnknownSubjectNotifyHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{VirtualGoodsFulfillmentOutcome, VirtualGoodsFuture};
+    use crate::VirtualGoodsFulfillmentOutcome;
 
     #[test]
     fn registry_resolves_built_in_business_types() {

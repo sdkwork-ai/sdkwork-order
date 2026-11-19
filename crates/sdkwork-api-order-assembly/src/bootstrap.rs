@@ -196,7 +196,6 @@ fn spawn_cart_abandonment_sweep(
     }
     let pool = match host.database_pool() {
         DatabasePool::Postgres(pool, _) => pool.clone(),
-        _ => return None,
     };
     let interval_seconds = std::env::var("SDKWORK_ORDER_CART_SWEEP_INTERVAL_SECONDS")
         .ok()

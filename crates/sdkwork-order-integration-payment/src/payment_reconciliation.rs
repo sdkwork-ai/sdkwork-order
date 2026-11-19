@@ -572,8 +572,43 @@ mod tests {
             eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
             return;
         };
+        // Isolate the reduced fixture in its own schema. This unit test runs
+        // in the shared test database; creating reduced `commerce_payment_*`
+        // tables in `public` would make every later `CREATE TABLE IF NOT
+        // EXISTS` migration keep the reduced shape (a missing `pi.amount`
+        // then breaks unrelated recharge and checkout regression suites).
+        let schema = format!("order_reconcile_{}", std::process::id());
+        let admin = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .expect("postgres admin pool");
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "DROP SCHEMA IF EXISTS {schema} CASCADE"
+        )))
+        .execute(&admin)
+        .await
+        .expect("drop stale reconciliation schema");
+        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE SCHEMA {schema}")))
+            .execute(&admin)
+            .await
+            .expect("create reconciliation schema");
         let pool = PgPoolOptions::new()
             .max_connections(1)
+            .after_connect({
+                let schema = schema.clone();
+                move |connection, _| {
+                    let schema = schema.clone();
+                    Box::pin(async move {
+                        sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+                            "SET search_path TO {schema}, public"
+                        )))
+                        .execute(connection)
+                        .await?;
+                        Ok(())
+                    })
+                }
+            })
             .connect(&url)
             .await
             .expect("postgres pool");
@@ -661,5 +696,12 @@ mod tests {
         assert!(Row::try_get::<Option<String>, _>(&row, "paid_at")
             .unwrap()
             .is_some());
+
+        drop(pool);
+        let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "DROP SCHEMA IF EXISTS {schema} CASCADE"
+        )))
+        .execute(&admin)
+        .await;
     }
 }

@@ -33,10 +33,7 @@ use sdkwork_order_integration_payment::{
     run_payment_compensation_pass_with_registries, PaymentCompensationPassConfig,
 };
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
-use sdkwork_order_service::{
-    default_payment_notify_handler_registry, AccountValueRequestExecutionStore,
-    OwnerOrderSettlementPorts,
-};
+use sdkwork_order_service::{default_payment_notify_handler_registry, OwnerOrderSettlementPorts};
 use sdkwork_payment_providers::ProviderCredentialBundle;
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
 use tokio::time::{interval, MissedTickBehavior};
@@ -169,10 +166,9 @@ async fn run_compensation_pass(
         ),
         account_value_ledger_port.clone(),
         None,
-        Some(
-            std::sync::Arc::new(PostgresCommerceRechargeStore::new(pool.clone()))
-                as std::sync::Arc<dyn AccountValueRequestExecutionStore>,
-        ),
+        Some(std::sync::Arc::new(PostgresCommerceRechargeStore::new(
+            pool.clone(),
+        ))),
     );
     let summary = run_payment_compensation_pass_with_registries(
         pool,

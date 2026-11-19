@@ -80,10 +80,7 @@ pub fn app_refund_webhook_router_with_postgres_pool_and_handlers(
             physical_inventory_port,
             Some(Arc::new(
                 sdkwork_order_repository_sqlx::PostgresCommerceRechargeStore::new(pool.clone()),
-            )
-                as Arc<
-                    dyn sdkwork_order_service::AccountValueRequestExecutionStore,
-                >),
+            )),
         ),
         None => default_refund_notify_handler_registry(),
     };

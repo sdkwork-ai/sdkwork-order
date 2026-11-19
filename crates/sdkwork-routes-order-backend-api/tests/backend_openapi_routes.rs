@@ -210,13 +210,19 @@ async fn backend_router_mounts_every_openapi_operation_path() {
     let app = build_test_backend_router(pool);
     let paths = spec["paths"].as_object().unwrap();
 
-    for (template_path, methods) in paths {
-        for method_name in methods.as_object().unwrap().keys() {
+    for (template_path, item) in paths {
+        for method_name in item.as_object().unwrap().keys() {
+            let Some(method) = openapi_http_method(method_name) else {
+                // Path-item objects may carry `parameters`, `summary`,
+                // `description`, `servers`, or `$ref`; those are metadata, not
+                // operations, and mounting them as HTTP verbs is meaningless.
+                continue;
+            };
             let response = app
                 .clone()
                 .oneshot(
                     Request::builder()
-                        .method(method_from_openapi(method_name))
+                        .method(method)
                         .uri(concrete_uri(template_path))
                         .header("content-type", "application/json")
                         .body(Body::from("{}"))
@@ -224,13 +230,30 @@ async fn backend_router_mounts_every_openapi_operation_path() {
                 )
                 .await
                 .unwrap();
-            assert_ne!(
-                response.status(),
-                StatusCode::NOT_FOUND,
+            assert!(
+                route_is_mounted(&response),
                 "{method_name} {template_path} is not mounted"
             );
         }
     }
+}
+
+/// Whether a response came from a mounted route.
+///
+/// A matched SDKWork handler reports a missing resource (or a rejected command)
+/// as `application/problem+json`, while the router fallback answers an unmounted
+/// path with an empty default 404. A bare status check would misreport every
+/// handler-level 404 (for example `GET /orders/{orderId}` for an unknown order)
+/// as a missing route.
+fn route_is_mounted(response: &axum::response::Response) -> bool {
+    if response.status() != StatusCode::NOT_FOUND {
+        return true;
+    }
+    response
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with("application/problem+json"))
 }
 
 #[tokio::test]
@@ -329,14 +352,14 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
     );
 }
 
-fn method_from_openapi(method_name: &str) -> Method {
+fn openapi_http_method(method_name: &str) -> Option<Method> {
     match method_name.to_ascii_lowercase().as_str() {
-        "get" => Method::GET,
-        "post" => Method::POST,
-        "put" => Method::PUT,
-        "patch" => Method::PATCH,
-        "delete" => Method::DELETE,
-        other => panic!("unsupported openapi method: {other}"),
+        "get" => Some(Method::GET),
+        "post" => Some(Method::POST),
+        "put" => Some(Method::PUT),
+        "patch" => Some(Method::PATCH),
+        "delete" => Some(Method::DELETE),
+        _ => None,
     }
 }
 

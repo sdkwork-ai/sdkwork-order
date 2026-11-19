@@ -15,11 +15,12 @@ use sdkwork_order_repository_sqlx::{
     PostgresCommerceRechargeStore,
 };
 use sdkwork_order_service::{
-    AccountPointsCreditFuture, AccountPointsCreditPort, NoopAccountValueLedgerPort,
-    NoopAppTemplatePurchaseFulfillmentPort, NoopCouponRedemptionPort,
+    AccountPointsCreditFuture, AccountPointsCreditPort, FulfillPaidPhysicalOrderRequest,
+    NoopAccountValueLedgerPort, NoopAppTemplatePurchaseFulfillmentPort, NoopCouponRedemptionPort,
     NoopMembershipPurchaseFulfillmentPort, NoopPromotionDiscountPort, OwnerOrderSettlementPorts,
+    PhysicalGoodsFulfillmentOutcome, PhysicalGoodsFulfillmentPort, PhysicalGoodsFuture,
     PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
-    UnavailablePhysicalGoodsFulfillmentPort, UnavailableVirtualGoodsFulfillmentPort,
+    UnavailableVirtualGoodsFulfillmentPort,
 };
 use sdkwork_payment_providers::ProviderCredentialBundle;
 use sdkwork_payment_repository_sqlx::PostgresCommerceOwnerOrderPaymentStore;
@@ -53,8 +54,37 @@ impl AccountPointsCreditPort for NoopAccountPointsCreditPort {
     }
 }
 
+/// These DB tests seed fixed fixture ids under one tenant, and a compensation
+/// pass scans every due row of that tenant, so they must not run concurrently
+/// with each other.
+static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn fixture() -> Option<PgPool> {
     order_points_recharge_e2e_postgres_pool_from_env().await
+}
+
+/// The three tests share one dedicated tenant. Holding `TEST_LOCK` and
+/// clearing the tenant before each test keeps a compensation pass (which scans
+/// every due row of the tenant) from claiming another test's rows or a
+/// previous run's leftovers.
+async fn reset_fixture_tenant(pool: &PgPool) {
+    for sql in [
+        "DELETE FROM commerce_refund_event WHERE tenant_id = 'tenant-1'",
+        "DELETE FROM commerce_payment_webhook_event WHERE tenant_id = 'tenant-1'",
+        "DELETE FROM commerce_refund WHERE tenant_id = 'tenant-1'",
+        "DELETE FROM commerce_payment_attempt WHERE tenant_id = 'tenant-1'",
+        "DELETE FROM commerce_payment_intent WHERE tenant_id = 'tenant-1'",
+        "DELETE FROM commerce_order WHERE tenant_id = 'tenant-1'",
+    ] {
+        let _ = sqlx::query(sql).execute(pool).await;
+    }
+}
+
+fn succeeded_status(status: &str) -> bool {
+    matches!(
+        status.trim().to_ascii_lowercase().as_str(),
+        "succeeded" | "success" | "paid"
+    )
 }
 
 fn now_iso() -> String {
@@ -81,6 +111,12 @@ fn default_config() -> PaymentCompensationPassConfig {
 /// Seeded order in the payable state; `created_at` can be shifted with a SQL
 /// interval expression to control the claim window.
 async fn insert_order(pool: &PgPool, order_id: &str, created_at: &str) -> Result<(), sqlx::Error> {
+    // Re-runs against a persistent test database must not collide with the
+    // previous run's fixed fixture ids.
+    sqlx::query("DELETE FROM commerce_order WHERE id = $1")
+        .bind(order_id)
+        .execute(pool)
+        .await?;
     sqlx::query(
         r#"
         INSERT INTO commerce_order
@@ -108,6 +144,15 @@ async fn insert_payment_attempt(
     status: &str,
     created_at: &str,
 ) -> Result<(), sqlx::Error> {
+    let payment_intent_id = format!("pi-{attempt_id}");
+    sqlx::query("DELETE FROM commerce_payment_attempt WHERE id = $1")
+        .bind(attempt_id)
+        .execute(pool)
+        .await?;
+    sqlx::query("DELETE FROM commerce_payment_intent WHERE id = $1")
+        .bind(&payment_intent_id)
+        .execute(pool)
+        .await?;
     sqlx::query(
         r#"
         INSERT INTO commerce_payment_intent
@@ -133,7 +178,8 @@ async fn insert_payment_attempt(
              paid_at, updated_at)
         VALUES
             ($1, 'tenant-1', '0', 'user-1', $2, $3, 'wechat', 'sandbox', NULL, $4,
-             100, 'CNY', $5, '{}'::jsonb, $1, $1, NULL, $6::timestamptz, NULL, $6::timestamptz)
+             100, 'CNY', $5, '{}'::jsonb, $1, $1, NULL, $6::timestamptz, $7::timestamptz,
+             $6::timestamptz)
         "#,
     )
     .bind(attempt_id)
@@ -142,6 +188,10 @@ async fn insert_payment_attempt(
     .bind(out_trade_no)
     .bind(status)
     .bind(created_at)
+    // A terminal-success attempt always persists paid_at in production; the
+    // convergence sweep fails closed on a succeeded row without it, so the
+    // fixture must not seed an invariant-violating row.
+    .bind(succeeded_status(status).then(|| created_at.to_owned()))
     .execute(pool)
     .await?;
     Ok(())
@@ -155,6 +205,11 @@ async fn insert_refund(
     status: &str,
     created_at: &str,
 ) -> Result<(), sqlx::Error> {
+    let refund_id = format!("refund-{refund_no}");
+    sqlx::query("DELETE FROM commerce_refund WHERE id = $1")
+        .bind(&refund_id)
+        .execute(pool)
+        .await?;
     sqlx::query(
         r#"
         INSERT INTO commerce_refund
@@ -166,7 +221,7 @@ async fn insert_refund(
              'user-1', $1, $1, $6::timestamptz, $6::timestamptz)
         "#,
     )
-    .bind(format!("refund-{refund_no}"))
+    .bind(&refund_id)
     .bind(order_id)
     .bind(payment_attempt_id)
     .bind(refund_no)
@@ -213,7 +268,11 @@ async fn webhook_event_count(pool: &PgPool, provider_code: &str, out_trade_no: &
     sqlx::query_scalar(
         r#"
         SELECT COUNT(*) FROM commerce_payment_webhook_event
-        WHERE provider_code = $1 AND payload->>'out_trade_no' = $2
+        WHERE provider_code = $1
+          AND (
+                payload->'normalized'->>'outTradeNo' = $2
+             OR payload->'providerPayload'->>'out_trade_no' = $2
+          )
         "#,
     )
     .bind(provider_code)
@@ -249,19 +308,42 @@ impl TestSettlement {
             coupon_redemption_port: &NoopCouponRedemptionPort,
             membership_port: &NoopMembershipPurchaseFulfillmentPort,
             app_template_port: &NoopAppTemplatePurchaseFulfillmentPort,
-            physical_goods_port: &UnavailablePhysicalGoodsFulfillmentPort,
+            physical_goods_port: &AcceptingPhysicalGoodsFulfillmentPort,
         virtual_goods_port: &UnavailableVirtualGoodsFulfillmentPort,
             promotion_discount_port: &NoopPromotionDiscountPort,
         }
     }
 }
 
+/// Accepting physical-goods port: these fixtures model a compensated payment
+/// settlement, not a fulfillment outage. The unavailable port would fail the
+/// settlement saga (and the test would assert compensation errors instead of
+/// the settlement the test is about).
+struct AcceptingPhysicalGoodsFulfillmentPort;
+
+impl PhysicalGoodsFulfillmentPort for AcceptingPhysicalGoodsFulfillmentPort {
+    fn fulfill_paid_physical_order<'a>(
+        &'a self,
+        _request: FulfillPaidPhysicalOrderRequest,
+    ) -> PhysicalGoodsFuture<'a, PhysicalGoodsFulfillmentOutcome> {
+        Box::pin(async move {
+            Ok(PhysicalGoodsFulfillmentOutcome {
+                accepted: true,
+                replayed: false,
+                fulfillment_status: "awaiting_shipment".to_owned(),
+            })
+        })
+    }
+}
+
 #[tokio::test]
 async fn sandbox_compensation_pass_settles_due_payment_attempt() {
+    let _guard = TEST_LOCK.lock().await;
     let Some(pool) = fixture().await else {
         eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
         return;
     };
+    reset_fixture_tenant(&pool).await;
     insert_order(&pool, "order-comp-1", &minutes_ago_iso(5))
         .await
         .expect("seed order");
@@ -313,10 +395,12 @@ async fn sandbox_compensation_pass_settles_due_payment_attempt() {
 
 #[tokio::test]
 async fn sandbox_compensation_pass_marks_due_refund_succeeded_and_order_refunded() {
+    let _guard = TEST_LOCK.lock().await;
     let Some(pool) = fixture().await else {
         eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
         return;
     };
+    reset_fixture_tenant(&pool).await;
     insert_order(&pool, "order-comp-refund", &minutes_ago_iso(10))
         .await
         .expect("seed order");
@@ -363,10 +447,12 @@ async fn sandbox_compensation_pass_marks_due_refund_succeeded_and_order_refunded
 
 #[tokio::test]
 async fn compensation_pass_respects_scan_window_and_terminal_states() {
+    let _guard = TEST_LOCK.lock().await;
     let Some(pool) = fixture().await else {
         eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
         return;
     };
+    reset_fixture_tenant(&pool).await;
     // Fresh attempt (younger than min_age) must not be claimed yet.
     insert_order(&pool, "order-comp-fresh", &now_iso())
         .await

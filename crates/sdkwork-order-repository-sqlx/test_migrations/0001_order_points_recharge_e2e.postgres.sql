@@ -119,6 +119,116 @@ CREATE TABLE IF NOT EXISTS commerce_payment_attempt (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
+-- Refunds are owned by the payment module, but the order compensation pass
+-- claims due refunds through the payment repository port, so the e2e schema
+-- must carry the authoritative refund columns.
+CREATE TABLE IF NOT EXISTS commerce_refund (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    order_id TEXT NOT NULL,
+    payment_attempt_id TEXT NOT NULL,
+    refund_no TEXT NOT NULL,
+    amount NUMERIC(20,0) NOT NULL DEFAULT 0,
+    currency_code TEXT NOT NULL DEFAULT 'CNY',
+    status TEXT NOT NULL,
+    refund_reason_code TEXT,
+    requested_by_type TEXT NOT NULL DEFAULT 'buyer',
+    requested_by TEXT,
+    request_no TEXT,
+    idempotency_key TEXT NOT NULL DEFAULT '',
+    version BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+-- Refund submission resolves the tenant notify domain before calling the PSP;
+-- the e2e schema must carry it so compensation refunds reach the provider
+-- instead of failing with a missing relation.
+CREATE TABLE IF NOT EXISTS commerce_payment_notify_domain (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    protocol TEXT NOT NULL DEFAULT 'https',
+    hostname TEXT NOT NULL,
+    port INTEGER,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    status TEXT NOT NULL DEFAULT 'active',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+-- Provider routing/credential tables the compensation pass and refund executor
+-- read to resolve the historical account behind an attempt.
+CREATE TABLE IF NOT EXISTS commerce_payment_channel (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT '',
+    organization_id TEXT NOT NULL DEFAULT '0',
+    channel_no TEXT,
+    provider_code TEXT NOT NULL DEFAULT '',
+    provider_account_id TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS commerce_payment_provider_account (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    provider_code TEXT NOT NULL DEFAULT '',
+    merchant_id TEXT,
+    environment TEXT NOT NULL DEFAULT 'production',
+    secret_ref TEXT NOT NULL DEFAULT '',
+    webhook_secret_ref TEXT,
+    certificate_ref TEXT,
+    status TEXT NOT NULL DEFAULT 'inactive',
+    capabilities JSONB NOT NULL DEFAULT '{}'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+-- The compensation pass re-enters the audited webhook ingestion path, which
+-- persists provider events and refund status transitions.
+CREATE TABLE IF NOT EXISTS commerce_payment_webhook_event (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    event_id TEXT NOT NULL,
+    event_type TEXT,
+    provider_code TEXT NOT NULL DEFAULT '',
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status TEXT NOT NULL DEFAULT 'queued',
+    last_error TEXT,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (tenant_id, event_id)
+);
+
+CREATE TABLE IF NOT EXISTS commerce_refund_event (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '0',
+    event_no TEXT NOT NULL,
+    refund_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    actor_type TEXT NOT NULL,
+    actor_id TEXT,
+    request_id TEXT,
+    idempotency_key TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Payment tables are owned by the payment module in production. The recharge
 -- store reads provider/attempt columns the order baseline does not define.
 -- Keep the test schema aligned so repository queries are exercised with the
