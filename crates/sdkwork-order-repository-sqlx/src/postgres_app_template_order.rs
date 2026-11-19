@@ -943,6 +943,15 @@ mod tests {
     }
 
     #[test]
+    fn the_scaffold_catalog_is_the_primary_listing_source() {
+        assert!(LOAD_SCAFFOLD_TEMPLATE.contains("FROM deploy_application_scaffold t"));
+        assert!(LOAD_SCAFFOLD_TEMPLATE
+            .contains("deploy_application_scaffold_version v"));
+        assert!(LOAD_SCAFFOLD_TEMPLATE.contains("v.status = 'PUBLISHED'"));
+        assert!(LOAD_SCAFFOLD_TEMPLATE.contains("t.deleted_at IS NULL"));
+    }
+
+    #[test]
     fn order_queries_read_the_snapshot_portably() {
         // TEXT in the published baseline, JSONB in test fixtures: both have to
         // render through the row's JSON form.
