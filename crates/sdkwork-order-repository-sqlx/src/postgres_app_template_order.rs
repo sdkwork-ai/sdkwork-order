@@ -440,19 +440,28 @@ async fn load_published_template(
             .fetch_one(&mut **tx)
             .await
             .map_err(|error| store_error("probe application scaffold catalog", error))?;
-    let template_sql = if scaffold_present.is_some() {
-        LOAD_SCAFFOLD_TEMPLATE
+    let scaffold_row = if scaffold_present.is_some() {
+        sqlx::query(LOAD_SCAFFOLD_TEMPLATE)
+            .bind(tenant_id)
+            .bind(&command.template_uuid)
+            .bind(organization_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|error| store_error("failed to load scaffold template listing", error))?
     } else {
-        LOAD_TEMPLATE
+        None
     };
-    let row = sqlx::query(template_sql)
-        .bind(tenant_id)
-        .bind(&command.template_uuid)
-        .bind(organization_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(|error| store_error("failed to load app template listing", error))?
-        .ok_or_else(|| CommerceServiceError::not_found("app template listing was not found"))?;
+    let row = match scaffold_row {
+        Some(row) => row,
+        None => sqlx::query(LOAD_TEMPLATE)
+            .bind(tenant_id)
+            .bind(&command.template_uuid)
+            .bind(organization_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|error| store_error("failed to load app template listing", error))?
+            .ok_or_else(|| CommerceServiceError::not_found("app template listing was not found"))?,
+    };
 
     let status = string_cell(&row, "status");
     let visibility = string_cell(&row, "visibility");
