@@ -25,9 +25,9 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     stable_command_request_hash, CartItemMutation, CartLineView, CartStoreFuture, CartView,
-    CommerceCartStore, CreateCartItemCommand, CurrentCartQuery, DeleteCartItemCommand,
-    UpdateCartItemCommand, CART_DEFAULT_CURRENCY_CODE, CART_ITEM_CREATE_IDEMPOTENCY_SCOPE,
-    CART_ITEM_MAX_QUANTITY, CART_MAX_LINES,
+    CommerceCartStore, ConsumeCartItemsCommand, CreateCartItemCommand, CurrentCartQuery,
+    DeleteCartItemCommand, UpdateCartItemCommand, CART_DEFAULT_CURRENCY_CODE,
+    CART_ITEM_CREATE_IDEMPOTENCY_SCOPE, CART_ITEM_MAX_QUANTITY, CART_MAX_LINES,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -310,6 +310,43 @@ impl PostgresCartStore {
         Ok(())
     }
 
+    /// Removes the lines a checkout session consumed in one statement, under the
+    /// same cart lock as every other mutation.
+    pub async fn consume_cart_items(
+        &self,
+        command: ConsumeCartItemsCommand,
+    ) -> Result<u32, CommerceServiceError> {
+        let mut tx = self.begin().await?;
+        let cart = lock_active_cart(
+            &mut tx,
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+            &command.owner_user_id,
+        )
+        .await?;
+
+        let removed = sqlx::query(
+            r#"
+            DELETE FROM commerce_cart_item
+            WHERE cart_id = $1 AND id = ANY($2)
+            RETURNING id
+            "#,
+        )
+        .bind(&cart.cart_id)
+        .bind(&command.cart_item_ids)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to consume the cart lines", error))?;
+        if !removed.is_empty() {
+            touch_cart(&mut tx, &cart.cart_id).await?;
+        }
+
+        tx.commit()
+            .await
+            .map_err(|error| store_error("failed to commit the cart consumption", error))?;
+        Ok(removed.len() as u32)
+    }
+
     async fn begin(&self) -> Result<Transaction<'_, Postgres>, CommerceServiceError> {
         self.pool()
             .begin()
@@ -342,6 +379,13 @@ impl CommerceCartStore for PostgresCartStore {
 
     fn delete_cart_item<'a>(&'a self, command: DeleteCartItemCommand) -> CartStoreFuture<'a, ()> {
         Box::pin(async move { PostgresCartStore::delete_cart_item(self, command).await })
+    }
+
+    fn consume_cart_items<'a>(
+        &'a self,
+        command: ConsumeCartItemsCommand,
+    ) -> CartStoreFuture<'a, u32> {
+        Box::pin(async move { PostgresCartStore::consume_cart_items(self, command).await })
     }
 }
 

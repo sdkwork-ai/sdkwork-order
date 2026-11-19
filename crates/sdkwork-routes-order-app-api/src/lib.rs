@@ -10,8 +10,8 @@ pub mod fulfillment_router;
 pub mod http_route_manifest;
 pub mod membership_router;
 pub mod openapi_contract;
-pub mod order_router;
 pub mod order_discount_router;
+pub mod order_router;
 pub use payment_webhook_framework::{
     classify_webhook_event, collect_webhook_intake, ProviderWebhookFramework, ProviderWebhookPorts,
     WebhookEventFamily, WebhookFamilyPolicy, WEBHOOK_BODY_MAX_BYTES,
@@ -39,16 +39,16 @@ pub use app_template_router::{
     app_app_template_order_router_with_postgres_pool, build_app_app_template_order_router,
     CommerceAppTemplateOrderFuture, CommerceAppTemplateOrderStore,
 };
-pub use checkout_router::{
-    app_checkout_router_with_postgres_pool, build_app_checkout_router,
-    build_app_checkout_router_with_integrations, CommerceCheckoutFuture, CommerceCheckoutStore,
-};
-pub use cart_router::{
-    app_cart_router_with_postgres_pool, build_app_cart_router,
-};
+pub use cart_router::{app_cart_router_with_postgres_pool, build_app_cart_router};
 pub use cashier_router::{
     build_app_cashier_router, AppCashierState, CashierOrderResponse, CashierPaymentResponse,
     CashierStatusResponse,
+};
+pub use checkout_router::{
+    app_checkout_router_with_postgres_pool, build_app_checkout_router,
+    build_app_checkout_router_with_integrations,
+    build_app_checkout_router_with_integrations_and_cart, CommerceCheckoutFuture,
+    CommerceCheckoutStore,
 };
 pub use demand_claim_router::app_demand_claim_router_with_postgres_pool;
 pub use fulfillment_router::{
@@ -61,14 +61,14 @@ pub use membership_router::{
     build_app_membership_order_router_with_payments, CommerceMembershipOrderFuture,
     CommerceMembershipOrderStore,
 };
+pub use order_discount_router::{
+    app_order_discount_router_with_postgres_pool, build_app_order_discount_router,
+    CommerceOrderDiscountStore, OrderDiscountFuture,
+};
 pub use order_router::{
     app_order_router_with_postgres_pool, app_order_router_with_postgres_pool_and_inventory,
     build_app_order_router, build_app_order_router_with_inventory, CommerceOrderFuture,
     CommerceOrderStore, OwnerOrderPaymentStore,
-};
-pub use order_discount_router::{
-    app_order_discount_router_with_postgres_pool, build_app_order_discount_router,
-    CommerceOrderDiscountStore, OrderDiscountFuture,
 };
 pub use payment_webhook_router::{
     app_payment_webhook_router_with_postgres_pool,

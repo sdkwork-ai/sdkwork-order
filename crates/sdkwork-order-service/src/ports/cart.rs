@@ -10,8 +10,8 @@ use std::pin::Pin;
 use sdkwork_contract_service::CommerceServiceError;
 
 use crate::domain::{
-    CartItemMutation, CartView, CreateCartItemCommand, CurrentCartQuery, DeleteCartItemCommand,
-    UpdateCartItemCommand,
+    CartItemMutation, CartView, ConsumeCartItemsCommand, CreateCartItemCommand, CurrentCartQuery,
+    DeleteCartItemCommand, UpdateCartItemCommand,
 };
 
 pub type CartStoreFuture<'a, T> =
@@ -41,4 +41,11 @@ pub trait CommerceCartStore: Send + Sync {
 
     /// Removes one line.
     fn delete_cart_item<'a>(&'a self, command: DeleteCartItemCommand) -> CartStoreFuture<'a, ()>;
+
+    /// Removes the lines a checkout session consumed, returning how many were
+    /// removed. Lines outside the id set stay in the cart.
+    fn consume_cart_items<'a>(
+        &'a self,
+        command: ConsumeCartItemsCommand,
+    ) -> CartStoreFuture<'a, u32>;
 }

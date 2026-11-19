@@ -7990,9 +7990,7 @@
       "CreateCheckoutSessionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "items"
-        ],
+        "required": [],
         "properties": {
           "items": {
             "type": "array",
@@ -8010,8 +8008,17 @@
           "shippingAddress": {
             "$ref": "#/components/schemas/ShippingAddressRequest",
             "description": "实物商品必填；数字商品（如兑换码、虚拟权益）可省略。"
+          },
+          "cartItemIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "description": "Cart lines to check out. When present, `items` must be empty: the server takes the SKU and quantity from the cart snapshot and removes exactly these lines once the session exists."
           }
-        }
+        },
+        "description": "Provide either items or cartItemIds, not both."
       },
       "ShippingAddressRequest": {
         "type": "object",

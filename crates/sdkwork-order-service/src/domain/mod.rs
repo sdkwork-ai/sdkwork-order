@@ -7,8 +7,8 @@ mod membership;
 mod recharge;
 
 pub use cart::{
-    CartItemMutation, CartLineView, CartView, CreateCartItemCommand, CurrentCartQuery,
-    DeleteCartItemCommand, UpdateCartItemCommand, CART_DEFAULT_CURRENCY_CODE,
+    CartItemMutation, CartLineView, CartView, ConsumeCartItemsCommand, CreateCartItemCommand,
+    CurrentCartQuery, DeleteCartItemCommand, UpdateCartItemCommand, CART_DEFAULT_CURRENCY_CODE,
     CART_ITEM_CREATE_IDEMPOTENCY_SCOPE, CART_ITEM_MAX_QUANTITY, CART_MAX_LINES, CART_STATUS_ACTIVE,
 };
 

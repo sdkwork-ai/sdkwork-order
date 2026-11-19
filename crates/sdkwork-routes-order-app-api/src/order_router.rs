@@ -22,8 +22,8 @@ use sdkwork_payment_repository_sqlx::PostgresCommercePaymentRecordStore;
 use sdkwork_payment_service::{
     PaymentRecordItem, PaymentRecordOrderListPage, PaymentRecordOrderListQuery,
 };
-use sdkwork_web_core::WebRequestContext;
 use sdkwork_utils_rust::extract_client_ip_from_headers;
+use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -927,9 +927,15 @@ fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {
         payment_provider: None,
         product_image: None,
         points: value.points,
-        partner_id: value.partner.as_ref().map(|partner| partner.partner_id.clone()),
+        partner_id: value
+            .partner
+            .as_ref()
+            .map(|partner| partner.partner_id.clone()),
         partner_name: value.partner.as_ref().map(|partner| partner.name.clone()),
-        partner_level_no: value.partner.as_ref().map(|partner| partner.level_no.clone()),
+        partner_level_no: value
+            .partner
+            .as_ref()
+            .map(|partner| partner.level_no.clone()),
     }
 }
 

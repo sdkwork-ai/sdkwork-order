@@ -15,9 +15,7 @@ use sdkwork_order_service::{
     CreateMembershipOrderCommand, CreateMembershipOrderOutcome, MAX_MEMBERSHIP_ORDER_QUANTITY,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
-use sdkwork_payment_repository_sqlx::cashier_token::{
-    cashier_url_for_token, CashierTokenSubject,
-};
+use sdkwork_payment_repository_sqlx::cashier_token::{cashier_url_for_token, CashierTokenSubject};
 use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
 };
@@ -562,11 +560,10 @@ async fn apply_cashier_short_link(
         scene: sdkwork_utils_rust::commerce_cashier_scene(Some("membership")),
         key_epoch: 1,
     };
-    let segment =
-        sdkwork_payment_repository_sqlx::cashier_link::mint_cashier_short_link_postgres(
-            pool, &subject,
-        )
-        .await?;
+    let segment = sdkwork_payment_repository_sqlx::cashier_link::mint_cashier_short_link_postgres(
+        pool, &subject,
+    )
+    .await?;
     let Some(segment) = segment else {
         return Ok(outcome);
     };

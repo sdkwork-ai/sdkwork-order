@@ -326,9 +326,7 @@ impl ProviderWebhookFramework {
                 success_command(
                     ctx,
                     None::<String>,
-                    Some(
-                        sdkwork_order_service::PAYMENT_NOTIFY_STATUS_UNSUPPORTED.to_owned(),
-                    ),
+                    Some(sdkwork_order_service::PAYMENT_NOTIFY_STATUS_UNSUPPORTED.to_owned()),
                 )
             }
         }

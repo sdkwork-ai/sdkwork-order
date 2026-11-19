@@ -244,6 +244,59 @@ impl UpdateCartItemCommand {
     }
 }
 
+/// Remove the cart lines a checkout session just consumed.
+///
+/// A cart is the staging area in front of checkout, so the lines that became a
+/// checkout session must not survive it — otherwise the buyer returns to a cart
+/// still holding what they just bought. Consumption is keyed by the line ids the
+/// client selected, so a partially selected cart keeps the rest.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConsumeCartItemsCommand {
+    pub tenant_id: String,
+    pub organization_id: Option<String>,
+    pub owner_user_id: String,
+    pub cart_item_ids: Vec<String>,
+}
+
+impl ConsumeCartItemsCommand {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        owner_user_id: &str,
+        cart_item_ids: &[String],
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
+
+        let mut normalized: Vec<String> = Vec::new();
+        for cart_item_id in cart_item_ids {
+            let Some(cart_item_id) = normalize_optional(Some(cart_item_id.as_str())) else {
+                continue;
+            };
+            if !normalized.contains(&cart_item_id) {
+                normalized.push(cart_item_id);
+            }
+        }
+        if normalized.is_empty() {
+            return Err(CommerceServiceError::validation(
+                "at least one cart item id is required",
+            ));
+        }
+        if normalized.len() as i64 > CART_MAX_LINES {
+            return Err(CommerceServiceError::validation(format!(
+                "cart item ids must not exceed {CART_MAX_LINES}"
+            )));
+        }
+
+        Ok(Self {
+            tenant_id: tenant_id.to_owned(),
+            organization_id: normalize_optional(organization_id),
+            owner_user_id: owner_user_id.to_owned(),
+            cart_item_ids: normalized,
+        })
+    }
+}
+
 /// Remove one cart line.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeleteCartItemCommand {

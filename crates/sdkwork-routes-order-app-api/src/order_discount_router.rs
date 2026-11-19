@@ -22,9 +22,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::api_response::{
-    map_service_error, success_created_item, unauthorized, validation,
-};
+use crate::api_response::{map_service_error, success_created_item, unauthorized, validation};
 use crate::command_headers::required_app_write_command_headers;
 use crate::subject::app_runtime_subject_from_contexts;
 

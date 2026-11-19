@@ -16,17 +16,17 @@ use sdkwork_order_service::{
     default_fulfill_account_value_order_command, redeem_coupon_and_fulfill_account_value_order,
     redeem_coupon_and_fulfill_order, AccountValueAssetCode, AccountValueCatalogListQuery,
     AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
-    AccountValueRequestDetailQuery, AccountValueRequestListPage, AccountValueRequestListQuery,
-    AccountValueRequestView, AccountValueRechargePricing, CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot,
-    CouponRedemptionBenefit, CouponRedemptionPort, CouponRedemptionRequest,
-    CreateAccountRechargeOrderCommand, CreateAccountRechargeOrderOutcome,
-    CreateCashWithdrawalRequestCommand, CreateCouponRechargeOrderCommand,
-    CreateOrderRefundRequestCommand, CreatePointsRechargeOrderCommand,
-    CreatePointsRechargeOrderOutcome, CouponFulfillmentError, FulfillAccountValueOrderCommand,
-    MembershipPurchaseFulfillmentPort, NoopAccountValueLedgerPort, NoopCouponRedemptionPort,
-    NoopMembershipPurchaseFulfillmentPort, OrderOwnerListQuery, PayOwnerOrderCommand,
-    PayOwnerOrderCommandInput, PayOwnerOrderOutcome, RechargeGrantPreview, RechargePackageItem,
-    RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
+    AccountValueRechargePricing, AccountValueRequestDetailQuery, AccountValueRequestListPage,
+    AccountValueRequestListQuery, AccountValueRequestView, CancelOwnerOrderCommand,
+    CheckoutStatusQuery, CheckoutStatusSnapshot, CouponFulfillmentError, CouponRedemptionBenefit,
+    CouponRedemptionPort, CouponRedemptionRequest, CreateAccountRechargeOrderCommand,
+    CreateAccountRechargeOrderOutcome, CreateCashWithdrawalRequestCommand,
+    CreateCouponRechargeOrderCommand, CreateOrderRefundRequestCommand,
+    CreatePointsRechargeOrderCommand, CreatePointsRechargeOrderOutcome,
+    FulfillAccountValueOrderCommand, MembershipPurchaseFulfillmentPort, NoopAccountValueLedgerPort,
+    NoopCouponRedemptionPort, NoopMembershipPurchaseFulfillmentPort, OrderOwnerListQuery,
+    PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome, RechargeGrantPreview,
+    RechargePackageItem, RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
     RechargeSettingsSnapshot, TokenBankPlanItem, TokenBankPlanListPage, TokenBankPlanPeriod,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
@@ -37,8 +37,8 @@ use sqlx::PgPool;
 
 use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query,
-    parse_offset_list_params_validated, problem_with_presentation, resolve_trace_id, success_command,
-    success_created_item, success_item, success_items, unauthorized, validation,
+    parse_offset_list_params_validated, problem_with_presentation, resolve_trace_id,
+    success_command, success_created_item, success_item, success_items, unauthorized, validation,
 };
 use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
@@ -3395,8 +3395,7 @@ mod tests {
         let redeem_requests = harness.coupon.redeem_requests();
         assert_eq!(2, redeem_requests.len());
         assert_eq!(
-            redeem_requests[0].idempotency_key,
-            redeem_requests[1].idempotency_key,
+            redeem_requests[0].idempotency_key, redeem_requests[1].idempotency_key,
             "both attempts must redeem under the same order-scoped idempotency key"
         );
         assert_eq!(
@@ -3408,9 +3407,9 @@ mod tests {
     #[tokio::test]
     async fn coupon_redemption_failure_returns_retryable_503_and_replays_fulfilment() {
         let harness = CouponRedemptionHarness::new();
-        harness.ledger.fail_next(
-            "SDKWORK_ACCESS_TOKEN is required for account value ledger commands",
-        );
+        harness
+            .ledger
+            .fail_next("SDKWORK_ACCESS_TOKEN is required for account value ledger commands");
 
         let failure = harness.call(COUPON_ORDER_IDEMPOTENCY_KEY, "WELCOME").await;
         assert_eq!(failure.status(), StatusCode::SERVICE_UNAVAILABLE);
@@ -3426,10 +3425,7 @@ mod tests {
         assert_eq!(COUPON_BENEFIT_DELIVERY_FAILED_CODE, problem["code"]);
         assert_eq!(COUPON_BENEFIT_DELIVERY_FAILED_TITLE, problem["title"]);
         assert_eq!(COUPON_BENEFIT_DELIVERY_FAILED_DETAIL, problem["detail"]);
-        assert_eq!(
-            COUPON_BENEFIT_DELIVERY_FAILED_I18N_KEY,
-            problem["i18nKey"]
-        );
+        assert_eq!(COUPON_BENEFIT_DELIVERY_FAILED_I18N_KEY, problem["i18nKey"]);
         assert_eq!(COUPON_TRACE_ID, problem["traceId"]);
         assert_eq!("orders.couponRedemptions.create", problem["operationId"]);
         assert_eq!(
@@ -3462,8 +3458,7 @@ mod tests {
         assert_eq!(replay.status(), StatusCode::CREATED);
         let replay_body = response_json(replay).await;
         assert_eq!(
-            order_id,
-            replay_body["data"]["item"]["orderId"],
+            order_id, replay_body["data"]["item"]["orderId"],
             "a retry must resolve to the same persisted order"
         );
         assert_eq!(true, replay_body["data"]["item"]["replayed"]);
@@ -3500,8 +3495,7 @@ mod tests {
         let first_body = response_json(first).await;
         let second_body = response_json(second).await;
         assert_eq!(
-            first_body["data"]["item"]["orderId"],
-            second_body["data"]["item"]["orderId"],
+            first_body["data"]["item"]["orderId"], second_body["data"]["item"]["orderId"],
             "concurrent replays must converge on one order"
         );
         assert_eq!(1, harness.store.insert_calls());
@@ -3742,10 +3736,8 @@ mod tests {
             &'a self,
             _command: FulfillAccountValueOrderCommand,
             context: &'a AccountValueFulfillmentContext,
-        ) -> sdkwork_order_service::AccountValueFulfillmentFuture<
-            'a,
-            FulfillAccountValueOrderOutcome,
-        > {
+        ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, FulfillAccountValueOrderOutcome>
+        {
             *self.commit_calls.lock().expect("commit lock") += 1;
             let mut contexts = self.contexts.lock().expect("contexts lock");
             let Some(current) = contexts.get_mut(&context.order_id) else {
@@ -3756,7 +3748,9 @@ mod tests {
                 });
             };
             if current.already_fulfilled() {
-                return Box::pin(async move { Ok(FulfillAccountValueOrderOutcome::replayed(context)) });
+                return Box::pin(
+                    async move { Ok(FulfillAccountValueOrderOutcome::replayed(context)) },
+                );
             }
             current.fulfillment_status = "fulfilled".to_owned();
             self.failure_evidence
@@ -4018,7 +4012,9 @@ mod tests {
     }
 
     fn mock_store_unsupported() -> CommerceServiceError {
-        CommerceServiceError::unsupported_capability("mock coupon store only serves coupon redemptions")
+        CommerceServiceError::unsupported_capability(
+            "mock coupon store only serves coupon redemptions",
+        )
     }
 
     fn test_subject() -> AppRuntimeSubject {

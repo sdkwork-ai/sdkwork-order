@@ -39,9 +39,8 @@ use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
 };
 use sdkwork_utils_rust::{
-    cashier_openid_binding_message, commerce_cashier_scene,
-    derive_cashier_token_key_with_epoch, extract_client_ip_from_headers, hmac_sha256_base64url,
-    secure_compare, CashierTokenClaims,
+    cashier_openid_binding_message, commerce_cashier_scene, derive_cashier_token_key_with_epoch,
+    extract_client_ip_from_headers, hmac_sha256_base64url, secure_compare, CashierTokenClaims,
 };
 use sdkwork_web_core::WebRequestContext;
 

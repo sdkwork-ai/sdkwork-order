@@ -12,11 +12,11 @@ use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::PostgresCommerceOrderStore;
 use sdkwork_order_service::{
     physical_inventory_reserve_idempotency_key, CheckoutLineInput, CheckoutQuoteView,
-    CheckoutSessionDetailQuery, CheckoutSessionView, CreateCheckoutQuoteCommand,
-    CreateCheckoutSessionCommand, CreateOwnerOrderCommand, CreateOwnerOrderOutcome,
-    PhysicalCheckoutResolverPort, PhysicalInventoryReservationPort,
-    ReservePhysicalOrderInventoryRequest, ResolvePhysicalCheckoutLine,
-    ResolvePhysicalCheckoutRequest, ShippingAddressSnapshot,
+    CheckoutSessionDetailQuery, CheckoutSessionView, CommerceCartStore, ConsumeCartItemsCommand,
+    CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand, CreateOwnerOrderCommand,
+    CreateOwnerOrderOutcome, CurrentCartQuery, PhysicalCheckoutResolverPort,
+    PhysicalInventoryReservationPort, ReservePhysicalOrderInventoryRequest,
+    ResolvePhysicalCheckoutLine, ResolvePhysicalCheckoutRequest, ShippingAddressSnapshot,
     UnavailablePhysicalCheckoutResolverPort, UnavailablePhysicalInventoryReservationPort,
 };
 use sdkwork_web_core::WebRequestContext;
@@ -73,6 +73,9 @@ struct AppCheckoutState {
     store: Arc<dyn CommerceCheckoutStore>,
     checkout_resolver: Arc<dyn PhysicalCheckoutResolverPort>,
     inventory: Arc<dyn PhysicalInventoryReservationPort>,
+    /// Present when the composition also mounts the buyer cart; then a checkout
+    /// session created from cart lines consumes exactly those lines.
+    cart: Option<Arc<dyn CommerceCartStore>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,9 +88,15 @@ struct CheckoutLineRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateCheckoutSessionRequest {
+    /// Explicit lines. Omitted when the buyer checks out their cart, so a body
+    /// carrying only `cartItemIds` deserializes instead of failing validation.
+    #[serde(default)]
     items: Vec<CheckoutLineRequest>,
     currency_code: Option<String>,
     shipping_address: Option<ShippingAddressRequest>,
+    /// Cart lines to check out. When present, `items` must be empty and the
+    /// server takes the SKU and quantity from the cart snapshot.
+    cart_item_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -218,6 +227,18 @@ pub fn build_app_checkout_router_with_integrations(
     checkout_resolver: Arc<dyn PhysicalCheckoutResolverPort>,
     inventory: Arc<dyn PhysicalInventoryReservationPort>,
 ) -> Router {
+    build_app_checkout_router_with_integrations_and_cart(store, checkout_resolver, inventory, None)
+}
+
+/// Same composition, plus the buyer cart store. With a cart mounted, a checkout
+/// session created from `cartItemIds` consumes those lines once the session
+/// exists, so the buyer never returns to a cart holding what they just bought.
+pub fn build_app_checkout_router_with_integrations_and_cart(
+    store: Arc<dyn CommerceCheckoutStore>,
+    checkout_resolver: Arc<dyn PhysicalCheckoutResolverPort>,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
+    cart: Option<Arc<dyn CommerceCartStore>>,
+) -> Router {
     Router::new()
         .route(
             "/app/v3/api/checkout/sessions",
@@ -239,6 +260,7 @@ pub fn build_app_checkout_router_with_integrations(
             store,
             checkout_resolver,
             inventory,
+            cart,
         })
 }
 
@@ -261,9 +283,59 @@ async fn create_checkout_session(
         Err(response) => return *response,
     };
     let request = body.0;
-    let lines = match parse_checkout_lines(&request) {
-        Ok(lines) => lines,
-        Err(message) => return validation(ctx, message),
+    let cart_item_ids = request
+        .cart_item_ids
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    let lines = if cart_item_ids.is_empty() {
+        match parse_checkout_lines(&request) {
+            Ok(lines) => lines,
+            Err(message) => return validation(ctx, message),
+        }
+    } else {
+        if !request.items.is_empty() {
+            return validation(ctx, "provide either items or cartItemIds, not both");
+        }
+        let Some(cart_store) = state.cart.clone() else {
+            return crate::api_response::not_implemented(
+                ctx,
+                "checkout from cart is not available on this deployment",
+            );
+        };
+        let query = match CurrentCartQuery::new(
+            &subject.tenant_id,
+            subject.organization_id.as_deref(),
+            &subject.user_id,
+        ) {
+            Ok(query) => query,
+            Err(error) => return map_service_error(ctx, error),
+        };
+        let cart = match cart_store.retrieve_current_cart(query).await {
+            Ok(cart) => cart,
+            Err(error) => return map_service_error(ctx, error),
+        };
+        let mut lines = Vec::with_capacity(cart_item_ids.len());
+        for cart_item_id in &cart_item_ids {
+            let Some(line) = cart
+                .items
+                .iter()
+                .find(|line| &line.cart_item_id == cart_item_id)
+            else {
+                return validation(ctx, format!("cart item was not found: {cart_item_id}"));
+            };
+            if !line.available {
+                return validation(ctx, "a selected cart item is no longer available for sale");
+            }
+            match CheckoutLineInput::new(&line.sku_id, line.quantity) {
+                Ok(line) => lines.push(line),
+                Err(error) => return validation(ctx, error.message()),
+            }
+        }
+        lines
     };
     let currency_code = request
         .currency_code
@@ -327,11 +399,51 @@ async fn create_checkout_session(
         };
     }
     match state.store.create_checkout_session(command).await {
-        Ok(session) => success_created_item(ctx, map_checkout_session(session)),
+        Ok(session) => {
+            if !cart_item_ids.is_empty() {
+                consume_checked_out_cart_lines(&state, &subject, &cart_item_ids).await;
+            }
+            success_created_item(ctx, map_checkout_session(session))
+        }
         Err(error) => {
             eprintln!("create checkout session failed: {error:?}");
             map_service_error(ctx, error)
         }
+    }
+}
+
+/// Removes the cart lines that just became a checkout session.
+///
+/// The session is already committed at this point, so a failure here must not
+/// fail the checkout: it is reported and the buyer can still remove the leftover
+/// lines. The cart stays the staging area, never the order.
+async fn consume_checked_out_cart_lines(
+    state: &AppCheckoutState,
+    subject: &AppRuntimeSubject,
+    cart_item_ids: &[String],
+) {
+    let Some(cart_store) = state.cart.clone() else {
+        return;
+    };
+    let command = match ConsumeCartItemsCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &subject.user_id,
+        cart_item_ids,
+    ) {
+        Ok(command) => command,
+        Err(error) => {
+            eprintln!("skip cart consumption after checkout: {}", error.message());
+            return;
+        }
+    };
+    match cart_store.consume_cart_items(command).await {
+        Ok(consumed) if consumed as usize == cart_item_ids.len() => {}
+        Ok(consumed) => eprintln!(
+            "cart consumption after checkout removed {consumed} of {} lines",
+            cart_item_ids.len()
+        ),
+        Err(error) => eprintln!("cart consumption after checkout failed: {error:?}"),
     }
 }
 

@@ -14,7 +14,7 @@ use crate::{
     app_order_discount_router_with_postgres_pool,
     app_order_router_with_postgres_pool_and_inventory,
     app_payment_webhook_router_with_postgres_pool_and_integrations,
-    app_shipment_router_with_postgres_pool, build_app_checkout_router_with_integrations,
+    app_shipment_router_with_postgres_pool, build_app_checkout_router_with_integrations_and_cart,
     build_app_recharge_checkout_router_with_integrations,
 };
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
@@ -57,10 +57,13 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
             credentials.clone(),
             physical_inventory.clone(),
         ))
-        .merge(build_app_checkout_router_with_integrations(
+        .merge(build_app_checkout_router_with_integrations_and_cart(
             Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
             physical_checkout_resolver.clone(),
             physical_inventory.clone(),
+            Some(Arc::new(
+                sdkwork_order_repository_sqlx::PostgresCartStore::new(pool.clone()),
+            )),
         ))
         // Anonymous cashier: the scanned QR pays without a platform session. It
         // reuses the same owner-order payment store, so idempotency, attempt

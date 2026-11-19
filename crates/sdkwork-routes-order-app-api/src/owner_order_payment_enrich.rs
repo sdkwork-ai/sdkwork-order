@@ -79,9 +79,7 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
             // login-required link.
             let fallback = if enriched.is_err() {
                 sdkwork_payment_repository_sqlx::cashier_token::apply_cashier_capability_to_outcome(
-                    &pool,
-                    &tenant_id,
-                    fallback,
+                    &pool, &tenant_id, fallback,
                 )
                 .await
             } else {
