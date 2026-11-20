@@ -725,7 +725,7 @@ impl PostgresCommerceRechargeStore {
             SELECT
                 $1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, CAST($6 AS TEXT), $7,
                 CAST($8 AS NUMERIC), $9, CAST($10 AS NUMERIC), $11, 'requested', $12, $13,
-                NULL, NULL, NULL, CAST($14 AS TIMESTAMPTZ), CAST($15 AS TIMESTAMPTZ), CAST($16 AS TIMESTAMPTZ)
+                NULL, NULL, NULL, CAST($14 AS TEXT), CAST($15 AS TIMESTAMPTZ), CAST($16 AS TIMESTAMPTZ)
             FROM commerce_order o
             WHERE o.tenant_id = CAST($2 AS TEXT)
               AND ((o.organization_id = CAST($3 AS TEXT))

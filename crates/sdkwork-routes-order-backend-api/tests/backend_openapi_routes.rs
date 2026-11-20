@@ -352,6 +352,189 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
     );
 }
 
+#[tokio::test]
+async fn approving_after_sales_with_refund_moves_money_and_links_the_case() {
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
+    for sql in [
+        "DELETE FROM commerce_after_sales_event WHERE after_sales_id = 'after-sales-refund-1'",
+        "DELETE FROM commerce_after_sales_request WHERE id = 'after-sales-refund-1'",
+        "DELETE FROM commerce_order_refund_request WHERE id = 'refund-after-sales-after-sales-refund-1'",
+        "DELETE FROM commerce_order_amount_breakdown WHERE order_id = 'order-after-sales-1'",
+        "DELETE FROM commerce_order WHERE id = 'order-after-sales-1'",
+    ] {
+        let _ = sqlx::query(sql).execute(&pool).await;
+    }
+    sqlx::query(
+        r#"
+        INSERT INTO commerce_order
+            (id, tenant_id, organization_id, owner_user_id, order_no, status, subject,
+             currency_code, payment_status, fulfillment_status, refund_status, created_at, updated_at)
+        VALUES
+            ('order-after-sales-1', '100001', 'org-1', '200001', 'ORDER-AS-1', 'paid', 'product',
+             'CNY', 'success', 'awaiting_shipment', 'none', NOW(), NOW())
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("seed after-sales order");
+    sqlx::query(
+        r#"
+        INSERT INTO commerce_order_amount_breakdown
+            (id, tenant_id, organization_id, order_id, allocation_type, payable_amount,
+             discount_amount, currency_code, created_at)
+        VALUES
+            ('breakdown-as-1', '100001', 'org-1', 'order-after-sales-1', 'order_total',
+             500, 0, 'CNY', NOW())
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("seed after-sales amount");
+    sqlx::query(
+        r#"
+        INSERT INTO commerce_after_sales_request
+            (id, tenant_id, organization_id, after_sales_no, order_id, owner_user_id,
+             after_sales_type, status, refund_status, return_status, exchange_status,
+             reason_code, description, requested_amount, approved_amount, refund_request_id,
+             currency_code, requested_by_type, requested_by, request_no, idempotency_key,
+             created_at, updated_at)
+        VALUES
+            ('after-sales-refund-1', '100001', 'org-1', 'AS-REFUND-1', 'order-after-sales-1',
+             '200001', 'refund', 'submitted', 'none', 'none', 'none', 'quality', '',
+             500, 0, NULL, 'CNY', 'buyer', '200001', 'AS-REQ-1', 'as-refund-idem-1',
+             NOW(), NOW())
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("seed after-sales request");
+
+    let ledger = Arc::new(RecordingAccountValueLedgerPort::default());
+    let refunds = Arc::new(RecordingRefundExecutorPort::default());
+    let app = build_test_backend_router_with_ledger(
+        pool.clone(),
+        ledger.clone(),
+        refunds.clone(),
+        Arc::new(NoopPaymentPayoutExecutorPort),
+    );
+    let body = serde_json::json!({
+        "reviewAction": "approve",
+        "approvedAmount": "500",
+        "reviewComment": "approved for refund"
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/backend/v3/api/after_sales/requests/after-sales-refund-1/reviews")
+                .header("content-type", "application/json")
+                .header("Idempotency-Key", "review-after-sales-1")
+                .header("Sdkwork-Request-No", "review-after-sales-1")
+                .extension(backend_after_sales_iam_context())
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    // Money moved through the existing refund chain: hold, provider refund,
+    // hold settlement.
+    assert_eq!(
+        ledger.operations(),
+        vec![
+            AccountValueLedgerOperation::Hold,
+            AccountValueLedgerOperation::HoldSettle
+        ]
+    );
+    let refund_requests = refunds.requests();
+    assert_eq!(1, refund_requests.len());
+    assert_eq!(
+        refund_requests[0].amount,
+        CommerceMoney::new("500").expect("amount")
+    );
+    assert_eq!(refund_requests[0].currency_code, "CNY");
+
+    let row = sqlx::query(
+        r#"
+        SELECT refund_request_id, refund_status, status
+        FROM commerce_after_sales_request
+        WHERE id = 'after-sales-refund-1'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("after sales row");
+    assert_eq!(
+        sqlx::Row::try_get::<Option<String>, _>(&row, "refund_request_id").unwrap(),
+        Some("refund-after-sales-after-sales-refund-1".to_owned())
+    );
+    assert_eq!(
+        sqlx::Row::try_get::<String, _>(&row, "refund_status").unwrap(),
+        "refunded"
+    );
+    assert_eq!(
+        sqlx::Row::try_get::<String, _>(&row, "status").unwrap(),
+        "approved"
+    );
+    let refund_request_status: String =
+        sqlx::query_scalar("SELECT status FROM commerce_order_refund_request WHERE id = $1")
+            .bind("refund-after-sales-after-sales-refund-1")
+            .fetch_one(&pool)
+            .await
+            .expect("after-sales refund request");
+    assert_eq!(refund_request_status, "refunded");
+
+    // A second approval (new command idempotency key) must reuse the same
+    // refund request and never call the provider twice.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/backend/v3/api/after_sales/requests/after-sales-refund-1/reviews")
+                .header("content-type", "application/json")
+                .header("Idempotency-Key", "review-after-sales-2")
+                .header("Sdkwork-Request-No", "review-after-sales-2")
+                .extension(backend_after_sales_iam_context())
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(1, refunds.requests().len());
+    let request_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM commerce_order_refund_request WHERE id = $1",
+    )
+    .bind("refund-after-sales-after-sales-refund-1")
+    .fetch_one(&pool)
+    .await
+    .expect("refund request count");
+    assert_eq!(request_count, 1);
+}
+
+fn backend_after_sales_iam_context() -> IamAppContext {
+    IamAppContext::new(
+        "100001",
+        Some("org-1"),
+        "900001",
+        "session-1",
+        "sdkwork-order-backend",
+        Environment::Dev,
+        DeploymentMode::Saas,
+        AuthLevel::Mfa,
+        vec!["tenant:100001".to_owned(), "organization:org-1".to_owned()],
+        vec![
+            "commerce.afterSales.review".to_owned(),
+            "commerce.accountValue.review".to_owned(),
+        ],
+    )
+}
+
 fn openapi_http_method(method_name: &str) -> Option<Method> {
     match method_name.to_ascii_lowercase().as_str() {
         "get" => Some(Method::GET),

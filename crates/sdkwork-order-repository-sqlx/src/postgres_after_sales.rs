@@ -157,9 +157,13 @@ impl PostgresCommerceOrderStore {
             after_sales_no,
             order_id: command.order_id,
             after_sales_type: command.after_sales_type,
+            owner_user_id: command.owner_user_id,
             reason_code: command.reason_code,
             requested_amount: CommerceMoney::new(&requested_amount)
                 .map_err(CommerceServiceError::storage)?,
+            approved_amount: None,
+            refund_status: "none".to_owned(),
+            refund_request_id: None,
             currency_code,
             status: "submitted".to_owned(),
         })
@@ -172,7 +176,9 @@ impl PostgresCommerceOrderStore {
         let row = sqlx::query(
             r#"
             SELECT id, after_sales_no, order_id, after_sales_type, reason_code,
-                   CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status
+                   CAST(requested_amount AS TEXT) AS requested_amount, owner_user_id,
+                   CAST(approved_amount AS TEXT) AS approved_amount, refund_status,
+                   refund_request_id, currency_code, status
             FROM commerce_after_sales_request
             WHERE tenant_id = CAST($1 AS TEXT)
               AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
@@ -286,7 +292,9 @@ impl PostgresCommerceOrderStore {
         let rows = sqlx::query(
             r#"
             SELECT id, after_sales_no, order_id, after_sales_type, reason_code,
-                   CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status,
+                   CAST(requested_amount AS TEXT) AS requested_amount, owner_user_id,
+                   CAST(approved_amount AS TEXT) AS approved_amount, refund_status,
+                   refund_request_id, currency_code, status,
                    COUNT(*) OVER() AS total_count
             FROM commerce_after_sales_request
             WHERE tenant_id = CAST($1 AS TEXT)
@@ -342,7 +350,9 @@ impl PostgresCommerceOrderStore {
         let rows = sqlx::query(
             r#"
             SELECT id, after_sales_no, order_id, after_sales_type, reason_code,
-                   CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status,
+                   CAST(requested_amount AS TEXT) AS requested_amount, owner_user_id,
+                   CAST(approved_amount AS TEXT) AS approved_amount, refund_status,
+                   refund_request_id, currency_code, status,
                    COUNT(*) OVER() AS total_count
             FROM commerce_after_sales_request
             WHERE tenant_id = CAST($1 AS TEXT)
@@ -396,7 +406,9 @@ impl PostgresCommerceOrderStore {
         let row = sqlx::query(
             r#"
             SELECT id, after_sales_no, order_id, after_sales_type, reason_code,
-                   CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status
+                   CAST(requested_amount AS TEXT) AS requested_amount, owner_user_id,
+                   CAST(approved_amount AS TEXT) AS approved_amount, refund_status,
+                   refund_request_id, currency_code, status
             FROM commerce_after_sales_request
             WHERE tenant_id = CAST($1 AS TEXT)
               AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
@@ -514,6 +526,101 @@ impl PostgresCommerceOrderStore {
         })
         .await?
         .ok_or_else(|| CommerceServiceError::not_found("after sales request was not found"))
+    }
+
+    /// Records the refund execution an approved after-sales case triggered.
+    ///
+    /// Idempotent: re-linking the same refund request is a no-op (no duplicate
+    /// audit event), and a different refund request can never replace the one
+    /// already bound to this case.
+    pub async fn link_after_sales_refund(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        after_sales_request_id: &str,
+        refund_request_id: &str,
+        refund_status: &str,
+        request_no: &str,
+        idempotency_key: &str,
+    ) -> Result<(), CommerceServiceError> {
+        let now = current_timestamp_string();
+        let mut tx = self.pool().begin().await.map_err(|error| {
+            store_error("failed to begin after sales refund link transaction", error)
+        })?;
+        let updated = sqlx::query(
+            r#"
+            UPDATE commerce_after_sales_request
+            SET refund_request_id = CAST($1 AS TEXT),
+                refund_status = CAST($2 AS TEXT),
+                updated_at = CAST($3 AS TIMESTAMPTZ)
+            WHERE tenant_id = CAST($4 AS TEXT)
+              AND ((organization_id = CAST($5 AS TEXT)) OR (organization_id = '0' AND $6 IS NULL))
+              AND id = CAST($7 AS TEXT)
+              AND (refund_request_id IS NULL OR refund_request_id = CAST($1 AS TEXT))
+            "#,
+        )
+        .bind(refund_request_id)
+        .bind(refund_status)
+        .bind(&now)
+        .bind(tenant_id)
+        .bind(organization_id)
+        .bind(organization_id)
+        .bind(after_sales_request_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to link after sales refund", error))?
+        .rows_affected();
+        if updated == 0 {
+            // Either the case is gone or a different refund request is already
+            // linked; both must fail closed instead of silently rebinding.
+            let existing = sqlx::query_scalar::<_, Option<String>>(
+                r#"
+                SELECT refund_request_id
+                FROM commerce_after_sales_request
+                WHERE tenant_id = CAST($1 AS TEXT)
+                  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id = '0' AND $3 IS NULL))
+                  AND id = CAST($4 AS TEXT)
+                LIMIT 1
+                "#,
+            )
+            .bind(tenant_id)
+            .bind(organization_id)
+            .bind(organization_id)
+            .bind(after_sales_request_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|error| store_error("failed to load after sales refund link", error))?;
+            return match existing {
+                None => Err(CommerceServiceError::not_found(
+                    "after sales request was not found",
+                )),
+                Some(Some(existing)) if existing == refund_request_id => {
+                    tx.commit().await.map_err(|error| {
+                        store_error("failed to commit idempotent after sales refund link", error)
+                    })?;
+                    Ok(())
+                }
+                Some(_) => Err(CommerceServiceError::conflict(
+                    "after sales request is already linked to a different refund request",
+                )),
+            };
+        }
+        insert_after_sales_event(
+            &mut tx,
+            tenant_id,
+            organization_id,
+            after_sales_request_id,
+            "refund_linked",
+            refund_status,
+            request_no,
+            idempotency_key,
+            &now,
+        )
+        .await?;
+        tx.commit().await.map_err(|error| {
+            store_error("failed to commit after sales refund link transaction", error)
+        })?;
+        Ok(())
     }
 
     pub async fn list_after_sales_events(
@@ -753,7 +860,9 @@ impl PostgresCommerceOrderStore {
         let row = sqlx::query(
             r#"
             SELECT id, after_sales_no, order_id, after_sales_type, reason_code,
-                   CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status
+                   CAST(requested_amount AS TEXT) AS requested_amount, owner_user_id,
+                   CAST(approved_amount AS TEXT) AS approved_amount, refund_status,
+                   refund_request_id, currency_code, status
             FROM commerce_after_sales_request
             WHERE tenant_id = CAST($1 AS TEXT)
               AND order_id = CAST($2 AS TEXT)
@@ -865,13 +974,30 @@ fn map_after_sales_request_row(
         "requested_amount",
         &after_sales_request_id,
     )?;
+    let approved_amount = row
+        .try_get::<Option<String>, _>("approved_amount")
+        .ok()
+        .flatten()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| {
+            commerce_money_stored(&value, "approved_amount", &after_sales_request_id)
+        })
+        .transpose()?;
     Ok(AfterSalesRequestView {
         after_sales_request_id,
         after_sales_no: string_cell(&row, "after_sales_no"),
         order_id: string_cell(&row, "order_id"),
         after_sales_type: string_cell(&row, "after_sales_type"),
+        owner_user_id: string_cell(&row, "owner_user_id"),
         reason_code: string_cell(&row, "reason_code"),
         requested_amount,
+        approved_amount,
+        refund_status: string_cell(&row, "refund_status"),
+        refund_request_id: row
+            .try_get::<Option<String>, _>("refund_request_id")
+            .ok()
+            .flatten()
+            .filter(|value| !value.trim().is_empty()),
         currency_code: string_cell(&row, "currency_code"),
         status: string_cell(&row, "status"),
     })

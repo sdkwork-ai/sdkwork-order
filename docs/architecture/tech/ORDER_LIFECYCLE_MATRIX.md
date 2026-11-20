@@ -24,8 +24,10 @@
 | 发货 | 不适用 | 支付成功后 `PhysicalGoodsFulfillmentPort.fulfill`（consume 已随支付完成）；**商家包裹置 `shipped` → 沿 shipment → fulfillment → 订单推进 `status='shipped'` + 事件**（`postgres_shipment.rs`，幂等） | 实物：consume（支付时） |
 | 确认收货 | 不适用 | `POST /app/v3/api/orders/{orderId}/receipt-confirmations`（`orders.receipts.confirm`，幂等）：`paid/fulfilled/shipped` → **`completed`（fulfillment `delivered`）** + 事件 | 无 |
 | 退款（资金） | `commerce_order_refund_request`：**仅已支付订单可发起**（创建时校验 `payment_status`，未支付/取消/关闭/过期 → 拒绝）；hold → provider refund → settle，扣回积分/账户价值；成功后同步 `refund_status='refunded'` | 同左；**未发货实物订单退款成功后自动释放预留库存**（`account_value_request_execution.rs`，release 幂等语义对虚拟/已发货订单自动跳过） | 实物未发货：release |
-| 售后/退货 | after_sales 状态机（虚拟退款走 refund_request 扣回路径） | after_sales 审核 `completed` 后按 `fulfillment_status` 回补：`awaiting_shipment/shipped/delivered` → restock；`inventory_reserved` → release | 实物：restock（回补 available、减 sold）或 release |
+| 售后/退货 | after_sales 状态机；审核 `approve` 且类型含 refund、金额 > 0：创建幂等 `refund_request`（`refund-after-sales-{afterSalesRequestId}`）→ hold → provider refund → settle，并把 `refund_request_id`/`refund_status` 回写售后单（`backend_commerce_admin_router.rs`、`postgres_refund_request_settlement.rs`） | after_sales 审核 `completed` 后按 `fulfillment_status` 回补：`awaiting_shipment/shipped/delivered` → restock；`inventory_reserved` → release | 实物：restock（回补 available、减 sold）或 release |
 | 退款成功 | 订单 `refund_status='refunded'` 同步 | 同左 + 未发货预留释放 | 实物未发货：release |
+
+> **权限提示**：`commerce.afterSales.review` 在 `approve` 时会直接触发资金退款（创建退款请求 → hold → provider refund → settle）。需要职责分离的部署应只把该权限授予财务角色；退款失败时售后单保持 approved、`refund_status='failed'`，由退款中心 `/backend/v3/api/refund_requests/{id}/retry` 重试。
 
 ## 3. 库存状态机（实物订单）
 
@@ -65,9 +67,9 @@ reserve ──► reserved ──► consumed（支付结算）──► restock
 
 ## 6. 明确边界（暂不支持）
 
-- after_sales 审核触发真实资金退款（需与 `commerce_order_refund_request` 体系合并）
 - 售后多行部分退货的按行库存回补（当前按订单整体回补）
 - 独立 worker 进程部署（scheduler 内嵌 gateway）
+- 售后退款结果仅通过退款中心与库内 `refund_request_id` 关联展示；售后 API 响应暂不新增 `refundStatus/refundRequestId` 字段（需 OpenAPI + SDK 再生成）
 
 ## 7. 关键文件索引
 
@@ -80,5 +82,7 @@ reserve ──► reserved ──► consumed（支付结算）──► restock
 | 库存预留/释放/回补 | `crates/sdkwork-order-integration-physical-commerce/src/inventory.rs` |
 | 取消库存判断 | `crates/sdkwork-routes-order-app-api/src/owner_order_cancel.rs` |
 | 售后库存回补 | `crates/sdkwork-routes-order-backend-api/src/backend_commerce_admin_router.rs` |
+| 售后退款执行/关联 | `crates/sdkwork-routes-order-backend-api/src/backend_commerce_admin_router.rs`、`crates/sdkwork-order-repository-sqlx/src/postgres_after_sales.rs` |
+| 退款回调回写售后 | `crates/sdkwork-order-repository-sqlx/src/postgres_refund_request_settlement.rs` |
 | 退款订单同步 | `crates/sdkwork-order-service/src/service/account_value_request_execution.rs` |
 | after_sales DDL | `database/ddl/baseline/postgres/0001_order_baseline.sql` |

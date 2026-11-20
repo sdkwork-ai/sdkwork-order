@@ -90,10 +90,20 @@ pub struct AfterSalesRequestView {
     pub after_sales_no: String,
     pub after_sales_request_id: String,
     pub after_sales_type: String,
+    pub owner_user_id: String,
     pub currency_code: String,
     pub order_id: String,
     pub reason_code: String,
     pub requested_amount: CommerceMoney,
+    /// Approved refund amount in smallest units, when the reviewer supplied
+    /// one. Stored money conventions apply (integer minor units; legacy
+    /// decimal major-unit values are normalized on read).
+    pub approved_amount: Option<CommerceMoney>,
+    /// Refund lifecycle mirrored from the refund execution
+    /// (`none` / `processing` / `refunded` / `failed`).
+    pub refund_status: String,
+    /// `commerce_order_refund_request.id` created for this case, if any.
+    pub refund_request_id: Option<String>,
     pub status: String,
 }
 

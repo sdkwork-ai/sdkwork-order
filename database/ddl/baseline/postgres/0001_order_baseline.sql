@@ -511,6 +511,7 @@ CREATE TABLE IF NOT EXISTS commerce_after_sales_request (
     description TEXT,
     requested_amount TEXT NOT NULL,
     approved_amount TEXT NOT NULL DEFAULT '0.00',
+    refund_request_id TEXT,
     currency_code TEXT NOT NULL,
     requested_by_type TEXT NOT NULL DEFAULT 'buyer',
     requested_by TEXT,

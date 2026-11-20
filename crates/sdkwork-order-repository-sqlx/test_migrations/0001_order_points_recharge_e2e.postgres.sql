@@ -288,6 +288,7 @@ CREATE TABLE IF NOT EXISTS commerce_after_sales_request (
     description TEXT,
     requested_amount NUMERIC(20,0) NOT NULL,
     approved_amount NUMERIC(20,0) NOT NULL DEFAULT 0,
+    refund_request_id TEXT,
     currency_code TEXT NOT NULL,
     requested_by_type TEXT NOT NULL DEFAULT 'buyer',
     requested_by TEXT,
@@ -302,6 +303,10 @@ CREATE INDEX IF NOT EXISTS idx_after_sales_request_tenant_owner
 
 CREATE INDEX IF NOT EXISTS idx_after_sales_request_idempotency
     ON commerce_after_sales_request(tenant_id, order_id, idempotency_key);
+
+-- Additive for pre-existing test databases created before the refund link.
+ALTER TABLE commerce_after_sales_request
+    ADD COLUMN IF NOT EXISTS refund_request_id TEXT;
 
 CREATE TABLE IF NOT EXISTS commerce_after_sales_request_item (
     id TEXT NOT NULL PRIMARY KEY,

@@ -15,8 +15,9 @@ use sdkwork_order_service::{
     AccountValueAssetCode, AccountValueCatalogListQuery, AccountValueLedgerPort,
     AccountValueOrderSubject, AccountValuePackageItem, AccountValuePackageListPage,
     AccountValueRequestListPage, AccountValueRequestListQuery, AccountValueRequestReviewAction,
-    AccountValueRequestView, AfterSalesManagementDetailQuery, AfterSalesManagementListQuery,
+    AccountValueRequestDetailQuery, AccountValueRequestView, AfterSalesManagementDetailQuery, AfterSalesManagementListQuery,
     AfterSalesRequestView, CarrierListQuery, CarrierPage, CarrierView, CreateCarrierCommand,
+    CreateOrderRefundRequestCommand,
     CreateShipmentCommand, CreateShipmentPackageCommand, CreateShipmentTrackingEventCommand,
     FulfillmentListPage, FulfillmentManagementListQuery, FulfillmentView,
     MarkShipmentShippedCommand, NoopAccountValueLedgerPort, NoopPaymentPayoutExecutorPort,
@@ -378,6 +379,67 @@ impl BackendCommerceAdminStore {
     ) -> Result<AfterSalesRequestView, CommerceServiceError> {
         match self {
             Self::Postgres { orders, .. } => orders.review_after_sales_request(command).await,
+        }
+    }
+
+    async fn create_after_sales_refund_request(
+        &self,
+        command: CreateOrderRefundRequestCommand,
+    ) -> Result<AccountValueRequestView, CommerceServiceError> {
+        match self {
+            Self::Postgres { recharge, .. } => {
+                recharge.create_admin_order_refund_request(command).await
+            }
+        }
+    }
+
+    async fn retrieve_after_sales_refund_request(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        owner_user_id: &str,
+        refund_request_id: &str,
+    ) -> Result<Option<AccountValueRequestView>, CommerceServiceError> {
+        match self {
+            Self::Postgres { recharge, .. } => {
+                recharge
+                    .retrieve_order_refund_request(AccountValueRequestDetailQuery {
+                        tenant_id: tenant_id.to_owned(),
+                        organization_id: organization_id.map(str::to_owned),
+                        owner_user_id: Some(owner_user_id.to_owned()),
+                        subject: Some(AccountValueOrderSubject::RefundRequest),
+                        request_id: refund_request_id.to_owned(),
+                    })
+                    .await
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn link_after_sales_refund(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        after_sales_request_id: &str,
+        refund_request_id: &str,
+        refund_status: &str,
+        request_no: &str,
+        idempotency_key: &str,
+    ) -> Result<(), CommerceServiceError> {
+        match self {
+            Self::Postgres { orders, .. } => {
+                orders
+                    .link_after_sales_refund(
+                        tenant_id,
+                        organization_id,
+                        after_sales_request_id,
+                        refund_request_id,
+                        refund_status,
+                        request_no,
+                        idempotency_key,
+                    )
+                    .await
+            }
         }
     }
 
@@ -1596,7 +1658,7 @@ async fn review_after_sales_request(
     };
 
     match state.store.review_after_sales(command).await {
-        Ok(request) => {
+        Ok(mut request) => {
             if request.status.eq_ignore_ascii_case("completed") {
                 // Completed physical returns restore inventory: shipped
                 // orders restock consumed reservations, unshipped orders
@@ -1610,10 +1672,188 @@ async fn review_after_sales_request(
                 )
                 .await;
             }
+            if after_sales_refund_requested(&request, &body.review_action) {
+                match execute_after_sales_refund(
+                    &state,
+                    &subject,
+                    &request,
+                    &after_sales_request_id,
+                    &write_headers.request_no,
+                    &write_headers.idempotency_key,
+                )
+                .await
+                {
+                    Ok(refund_status) => {
+                        request.refund_status = refund_status;
+                        request.refund_request_id =
+                            Some(after_sales_refund_request_id(&after_sales_request_id));
+                    }
+                    Err(error) => {
+                        // The review itself stands; the refund request (when it
+                        // was created) stays in the refund center for operator
+                        // retry, and the after-sales view reports the failure.
+                        tracing::warn!(
+                            target = "order.after_sales_refund",
+                            after_sales_request_id = %after_sales_request_id,
+                            error = %error.message(),
+                            "after sales refund execution failed after approval"
+                        );
+                        if let Ok(Some(refreshed)) = state
+                            .store
+                            .retrieve_management_after_sales(AfterSalesManagementDetailQuery {
+                                tenant_id: subject.tenant_id.clone(),
+                                organization_id: subject.organization_id.clone(),
+                                after_sales_request_id: after_sales_request_id.clone(),
+                            })
+                            .await
+                        {
+                            request = refreshed;
+                        }
+                    }
+                }
+            }
             success_created_item(ctx, map_after_sales_request(request))
         }
         Err(error) => map_service_error(ctx, error),
     }
+}
+
+/// Deterministic refund-request identity for an after-sales case. The same
+/// approval replay resolves the same request instead of creating a second one.
+fn after_sales_refund_request_id(after_sales_request_id: &str) -> String {
+    format!("refund-after-sales-{after_sales_request_id}")
+}
+
+/// Whether an approval must move money for this case: a refund-like case that
+/// is approved (or completed) with a positive refund amount.
+fn after_sales_refund_requested(request: &AfterSalesRequestView, review_action: &str) -> bool {
+    let action = review_action.trim().to_ascii_lowercase();
+    let approved = matches!(action.as_str(), "approve" | "approved")
+        || matches!(
+            request.status.trim().to_ascii_lowercase().as_str(),
+            "approved" | "completed"
+        );
+    if !approved || !request.after_sales_type.to_ascii_lowercase().contains("refund") {
+        return false;
+    }
+    let amount = request
+        .approved_amount
+        .as_ref()
+        .filter(|amount| amount.as_str() != "0")
+        .unwrap_or(&request.requested_amount);
+    amount.as_str() != "0"
+}
+
+/// Executes the provider refund for an approved after-sales case through the
+/// existing refund-request approval chain (hold -> provider refund -> hold
+/// settlement), then links the request and mirrors the outcome onto the case.
+async fn execute_after_sales_refund(
+    state: &BackendCommerceAdminState,
+    subject: &BackendOperatorScope,
+    request: &AfterSalesRequestView,
+    after_sales_request_id: &str,
+    request_no: &str,
+    idempotency_key: &str,
+) -> Result<String, CommerceServiceError> {
+    let amount = request
+        .approved_amount
+        .clone()
+        .filter(|amount| amount.as_str() != "0")
+        .unwrap_or_else(|| request.requested_amount.clone());
+    let refund_request_id = after_sales_refund_request_id(after_sales_request_id);
+    let mut create = CreateOrderRefundRequestCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &request.owner_user_id,
+        &refund_request_id,
+        &request.order_id,
+        AccountValueAssetCode::TokenBank,
+        amount,
+        &request.currency_code,
+        &format!("after-sales-refund-{after_sales_request_id}"),
+    )?;
+    create.request_no = format!("AS-REFUND-{after_sales_request_id}");
+    create.reason_code = Some("after_sales_refund".to_owned());
+    create.reason_detail = Some(request.after_sales_no.clone());
+    // Idempotent by request id: the execution path rewrites the request's
+    // idempotency key to its terminal state, so replay detection keys off the
+    // deterministic refund request id rather than the creation key.
+    if state
+        .store
+        .retrieve_after_sales_refund_request(
+            &subject.tenant_id,
+            subject.organization_id.as_deref(),
+            &request.owner_user_id,
+            &refund_request_id,
+        )
+        .await?
+        .is_none()
+    {
+        state
+            .store
+            .create_after_sales_refund_request(create)
+            .await?;
+    }
+
+    let review = ReviewAccountValueRequestCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        AccountValueOrderSubject::RefundRequest,
+        &refund_request_id,
+        AccountValueRequestReviewAction::Approve,
+        Some("after_sales_refund"),
+        Some(&format!("after sales {}", request.after_sales_no)),
+        request_no,
+        idempotency_key,
+    )?;
+    let view = match state
+        .store
+        .execute_account_value_request_review(
+            state.account_value_ledger_port.as_ref(),
+            state.payment_refund_executor_port.as_ref(),
+            state.payment_payout_executor_port.as_ref(),
+            state.inventory.as_ref(),
+            review,
+        )
+        .await
+    {
+        Ok(view) => view,
+        Err(error) => {
+            // The refund request exists (creation succeeded); bind it so the
+            // refund center and the after-sales case agree on the failure.
+            let _ = state
+                .store
+                .link_after_sales_refund(
+                    &subject.tenant_id,
+                    subject.organization_id.as_deref(),
+                    after_sales_request_id,
+                    &refund_request_id,
+                    "failed",
+                    request_no,
+                    idempotency_key,
+                )
+                .await;
+            return Err(error);
+        }
+    };
+    let after_sales_status = match view.status.as_str() {
+        "refunded" => "refunded",
+        "provider_refund_failed" => "failed",
+        _ => "processing",
+    };
+    state
+        .store
+        .link_after_sales_refund(
+            &subject.tenant_id,
+            subject.organization_id.as_deref(),
+            after_sales_request_id,
+            &refund_request_id,
+            after_sales_status,
+            request_no,
+            idempotency_key,
+        )
+        .await?;
+    Ok(after_sales_status.to_owned())
 }
 
 /// Restores physical inventory after a completed return review. The decision

@@ -108,12 +108,14 @@ impl RefundRequestSettlementPort for PostgresRefundRequestSettlementStore {
         provider_reference_id: Option<&'a str>,
     ) -> RefundRequestSettlementFuture<'a, bool> {
         Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(|error| {
+                map_sql_store_error("failed to begin refund request settlement", error)
+            })?;
             let result = sqlx::query(
                 r#"
                 UPDATE commerce_order_refund_request
                 SET status = CAST($2 AS TEXT),
-                    updated_at = to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC',
-                                         'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+                    updated_at = CURRENT_TIMESTAMP,
                     provider_reference_id = COALESCE(CAST($3 AS TEXT), provider_reference_id)
                 WHERE tenant_id = CAST($1 AS TEXT)
                   AND id = CAST($4 AS TEXT)
@@ -124,10 +126,42 @@ impl RefundRequestSettlementPort for PostgresRefundRequestSettlementStore {
             .bind(target_status)
             .bind(provider_reference_id)
             .bind(request_id)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await
             .map_err(|error| map_sql_store_error("failed to mark refund request settled", error))?;
-            Ok(result.rows_affected() == 1)
+            let settled = result.rows_affected() == 1;
+            if settled {
+                // Mirror the provider outcome onto the after-sales case that
+                // triggered this refund (if any). Same transaction, so the
+                // refund request and the after-sales audit state never
+                // disagree after a crash.
+                let after_sales_status = match target_status {
+                    "refunded" => "refunded",
+                    "provider_refund_failed" => "failed",
+                    _ => "processing",
+                };
+                sqlx::query(
+                    r#"
+                    UPDATE commerce_after_sales_request
+                    SET refund_status = CAST($1 AS TEXT),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE tenant_id = CAST($2 AS TEXT)
+                      AND refund_request_id = CAST($3 AS TEXT)
+                    "#,
+                )
+                .bind(after_sales_status)
+                .bind(tenant_id)
+                .bind(request_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|error| {
+                    map_sql_store_error("failed to sync after sales refund status", error)
+                })?;
+            }
+            tx.commit().await.map_err(|error| {
+                map_sql_store_error("failed to commit refund request settlement", error)
+            })?;
+            Ok(settled)
         })
     }
 }
