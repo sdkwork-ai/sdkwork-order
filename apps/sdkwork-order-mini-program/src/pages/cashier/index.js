@@ -1,23 +1,23 @@
 const ordersService = require("../../services/order-service");
 const { formatMinor, formatCountdown, orderStatusLabel } = require("../../utils/format");
+const {
+  buildWechatRequestPaymentOptions,
+  paymentCancelledError,
+} = require("../../utils/provider-payment");
 
 /**
  * Cashier page: pick a payment method → create the payment session
- * (POST /orders/{orderId}/payments) → poll payment_success with backoff and a
+ * (POST /orders/{orderId}/payments) → launch `wx.requestPayment` with the
+ * backend-signed JSAPI params → poll payment_success with backoff and a
  * deadline final check → jump to the payment result page.
- *
- * `paymentSession.paymentParams` is the wx.requestPayment handoff point: once
- * the WeChat pay provider contract for MP lands, launchProviderPayment calls
- * wx.requestPayment with those params before polling starts (docs/decisions.md).
  */
 
-// WeChat MP runs inside the WeChat app; JSAPI is the primary channel. The
-// backend whitelist is wechat_pay | wechat_jsapi | alipay | alipay_wap | balance.
-const PAYMENT_METHODS = [
-  { code: "wechat_jsapi", label: "微信支付" },
-  { code: "wechat_pay", label: "微信支付（扫码）" },
-  { code: "balance", label: "余额支付" },
-];
+// The mini-program runs inside the WeChat app, so WeChat Pay JSAPI is the only
+// product it can complete in place: a native trade has no QR to scan here and
+// there is no balance instrument behind `balance`. Offering either only produced
+// a payment the payer could never finish.
+const PAYMENT_METHODS = [{ code: "wechat_jsapi", label: "微信支付" }];
+
 
 Page({
   data: {
@@ -91,6 +91,12 @@ Page({
       await this.launchProviderPayment(paymentSession);
       this.startPolling(paymentSession);
     } catch (cause) {
+      if (cause && cause.code === "PAYMENT_CANCELLED") {
+        // Closing the payment sheet is a normal choice: return to the ready
+        // state so the payer can pick again, without an error banner.
+        this.setData({ paying: false, phase: "ready", error: "" });
+        return;
+      }
       this.setData({
         paying: false,
         error: cause && cause.message ? cause.message : "发起支付失败，请稍后再试",
@@ -99,16 +105,36 @@ Page({
   },
 
   /**
-   * Provider launch seam. The backend returns paymentParams for the selected
-   * channel; until the WeChat pay provider contract lands, the MP cashier
-   * relies on backend-side settlement and goes straight to polling.
+   * Launches the provider payment the backend prepared.
+   *
+   * WeChat Pay JSAPI is the only product the mini-program can complete in-app;
+   * when the session carries no launchable payload (native/redirect/misconfigured
+   * provider) the cashier keeps polling instead of pretending to start a payment
+   * with a half-built call.
    */
   async launchProviderPayment(paymentSession) {
-    if (paymentSession && paymentSession.paymentMethod === "wechat_jsapi" && false) {
-      // Future plug point:
-      // wx.requestPayment({ ...paymentSession.paymentParams, success, fail });
+    const options = buildWechatRequestPaymentOptions(
+      paymentSession ? paymentSession.paymentParams : null,
+    );
+    if (!options) {
+      return paymentSession;
     }
-    return Promise.resolve(paymentSession);
+    await new Promise((resolve, reject) => {
+      wx.requestPayment({
+        ...options,
+        success: () => resolve(),
+        fail: (failure) => {
+          const message =
+            failure && typeof failure.errMsg === "string" ? failure.errMsg : "";
+          reject(
+            message.indexOf("cancel") >= 0
+              ? paymentCancelledError()
+              : new Error("微信支付调起失败，请稍后重试"),
+          );
+        },
+      });
+    });
+    return paymentSession;
   },
 
   startPolling(paymentSession) {
