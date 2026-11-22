@@ -6,6 +6,7 @@ export 'src/logic/cashier_logic.dart';
 export 'src/logic/envelope.dart';
 export 'src/logic/idempotency.dart';
 export 'src/logic/money.dart';
+export 'src/logic/payment_launch.dart';
 export 'src/models/account_value_models.dart';
 export 'src/models/fulfillment_models.dart';
 export 'src/models/order_models.dart';
