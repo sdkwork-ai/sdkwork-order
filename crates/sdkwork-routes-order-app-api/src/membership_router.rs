@@ -565,6 +565,20 @@ async fn apply_cashier_short_link(
     )
     .await?;
     let Some(segment) = segment else {
+        // No capability could be minted. If the cashier is *enabled* but the
+        // deployment cannot mint (no KEK, or a stored secret the KEK cannot
+        // open), the order-scoped link below can never be exchanged for a
+        // capability — the buyer would scan a QR that only 404s. Answer
+        // "temporarily unavailable" instead of handing out a dead code.
+        if sdkwork_payment_repository_sqlx::cashier_token_setting::cashier_token_mint_is_blocked_postgres(
+            pool, tenant_id,
+        )
+        .await?
+        {
+            return Err(CommerceServiceError::provider_unavailable(
+                "the cashier is temporarily unavailable; retry shortly",
+            ));
+        }
         return Ok(outcome);
     };
     let Some(cashier_url) = cashier_url_for_token(&segment, Some(&base_url)) else {
