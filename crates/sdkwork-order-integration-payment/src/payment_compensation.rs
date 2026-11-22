@@ -38,7 +38,8 @@ use sdkwork_order_service::{
     PaymentNotifyEvent, PaymentNotifyHandlerRegistry, RefundNotifyHandlerRegistry,
 };
 use sdkwork_payment_providers::{
-    query_provider_payment_intent, query_provider_refund, ProviderCredentialBundle,
+    capture_provider_payment, provider_payment_awaits_capture, query_provider_payment_intent,
+    query_provider_refund, ProviderCredentialBundle,
     ProviderPaymentQueryState, ProviderRefundSubmissionState,
 };
 use sdkwork_payment_repository_sqlx::{
@@ -315,7 +316,7 @@ async fn compensate_payment_attempt(
         attempt.provider_account_id.as_deref(),
     )
     .await?;
-    let Some(state) = query_provider_payment_intent(
+    let Some(query) = query_provider_payment_intent(
         &registry,
         &provider_code,
         &attempt.out_trade_no,
@@ -331,6 +332,7 @@ async fn compensate_payment_attempt(
         );
         return Ok(AppliedCompensation::NotFound);
     };
+    let mut state = query.state;
     let Some(raw_status) = compensation_payment_raw_status(&provider_code, state) else {
         tracing::warn!(
             target = "order.payment_compensation",
@@ -341,6 +343,60 @@ async fn compensate_payment_attempt(
         );
         return Ok(AppliedCompensation::Unrepresentable);
     };
+    // PayPal CAPTURE-intent orders stop at APPROVED: without a merchant capture
+    // no money moves and no success webhook ever arrives. This compensation pass
+    // is the retry surface, so capture here (idempotently) and settle from the
+    // result instead of waiting for a callback that can never come.
+    if state == ProviderPaymentQueryState::Pending
+        && provider_payment_awaits_capture(&provider_code, query.raw_status.as_deref())
+    {
+        let Some(provider_order_id) = attempt.provider_transaction_id.as_deref() else {
+            tracing::warn!(
+                target = "order.payment_compensation",
+                provider_code,
+                attempt_id = %attempt.id,
+                "payment compensation: approved payment has no provider order id; cannot capture"
+            );
+            return Ok(AppliedCompensation::Unrepresentable);
+        };
+        // Deterministic per attempt: a retry of this pass reuses the key, so a
+        // lost capture response cannot double-charge the payer.
+        let capture_key = format!("capture:{provider_code}:{}", attempt.out_trade_no);
+        match capture_provider_payment(
+            &registry,
+            &provider_code,
+            provider_order_id,
+            Some(&capture_key),
+        )
+        .await
+        {
+            Ok(captured) => {
+                tracing::info!(
+                    target = "order.payment_compensation",
+                    provider_code,
+                    attempt_id = %attempt.id,
+                    captured = ?captured,
+                    "payment compensation: captured an approved provider order"
+                );
+                if captured != ProviderPaymentQueryState::Succeeded {
+                    return Ok(AppliedCompensation::StillPending);
+                }
+                state = ProviderPaymentQueryState::Succeeded;
+            }
+            Err(error) => {
+                // Staying pending is the safe state: nothing settles and the next
+                // pass retries with the same idempotency key.
+                tracing::warn!(
+                    target = "order.payment_compensation",
+                    provider_code,
+                    attempt_id = %attempt.id,
+                    error = %format!("{error:?}"),
+                    "payment compensation: capture failed; attempt stays pending"
+                );
+                return Ok(AppliedCompensation::StillPending);
+            }
+        }
+    }
     if state == ProviderPaymentQueryState::Pending {
         // Still in flight at the PSP; the webhook window is still open. Leave
         // the attempt untouched and claim it again on the next pass.
