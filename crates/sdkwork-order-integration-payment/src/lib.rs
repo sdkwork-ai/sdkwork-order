@@ -1,7 +1,6 @@
 //! Order to Payment executor integration adapters.
 
 mod payment_compensation;
-mod paypal_capture;
 mod payment_notify_ports;
 mod payment_reconciliation;
 
