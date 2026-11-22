@@ -26,6 +26,9 @@ class _CashierScreenState extends State<CashierScreen> {
   PaymentSession? _session;
   int _remainingSeconds = 0;
   int _consecutivePollFailures = 0;
+  /// When the payment attempt was created; the capability window starts here and
+  /// must not be re-anchored to the current time on every countdown tick.
+  int? _paymentCreatedAtMs;
   bool _loading = true;
   bool _creating = false;
   String _error = '';
@@ -285,15 +288,20 @@ class _CashierScreenState extends State<CashierScreen> {
       if (_disposed) {
         return;
       }
+      // Anchor the capability window at creation time: re-anchoring it to `now`
+      // on every tick would keep the 15-minute cap alive forever and leave the
+      // payer looking at a dead QR.
+      final createdAtMs = DateTime.now().millisecondsSinceEpoch;
       setState(() {
         _session = session;
         _creating = false;
+        _paymentCreatedAtMs = createdAtMs;
         _consecutivePollFailures = 0;
         _pollNotice = null;
         _remainingSeconds = computeCashierRemainingSeconds(
           _order?.expireTime,
-          DateTime.now().millisecondsSinceEpoch,
-          DateTime.now().millisecondsSinceEpoch,
+          createdAtMs,
+          createdAtMs,
         );
       });
       _startCountdown(_order?.expireTime);
@@ -315,10 +323,11 @@ class _CashierScreenState extends State<CashierScreen> {
         timer.cancel();
         return;
       }
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
       final next = computeCashierRemainingSeconds(
         expireTime,
-        DateTime.now().millisecondsSinceEpoch,
-        DateTime.now().millisecondsSinceEpoch,
+        _paymentCreatedAtMs ?? nowMs,
+        nowMs,
       );
       if (mounted) {
         setState(() => _remainingSeconds = next);
