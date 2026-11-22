@@ -131,13 +131,7 @@ impl PaymentNotifyVerifyPort for StorePaymentNotifyPorts {
                 Ok(_) => {
                     let reason = "webhook signature verification failed";
                     tracing::warn!(target = "order.payment_notify", provider_code, reason);
-                    record_rejected_provider_webhook_postgres(
-                        &self.pool,
-                        &provider_code,
-                        body,
-                        reason,
-                    )
-                    .await?;
+                    record_rejection(&self.pool, &provider_code, body, reason).await;
                     return Err(CommerceServiceError::validation(
                         "webhook signature verification failed",
                     ));
@@ -149,13 +143,13 @@ impl PaymentNotifyVerifyPort for StorePaymentNotifyPorts {
                         error = %format!("{error:?}"),
                         "webhook verification provider error"
                     );
-                    record_rejected_provider_webhook_postgres(
+                    record_rejection(
                         &self.pool,
                         &provider_code,
                         body,
                         "webhook verification provider error",
                     )
-                    .await?;
+                    .await;
                     // Sanitized: internal provider error details stay in logs.
                     return Err(CommerceServiceError::validation(
                         "webhook signature verification failed",
@@ -177,13 +171,13 @@ impl PaymentNotifyVerifyPort for StorePaymentNotifyPorts {
                         error = %format!("{error:?}"),
                         "webhook normalization provider error"
                     );
-                    record_rejected_provider_webhook_postgres(
+                    record_rejection(
                         &self.pool,
                         &provider_code,
                         body,
                         "webhook normalization provider error",
                     )
-                    .await?;
+                    .await;
                     return Err(CommerceServiceError::validation("bad request"));
                 }
             };
@@ -304,6 +298,26 @@ impl RefundNotifyIngestPort for StorePaymentNotifyPorts {
                 }),
             })
         })
+    }
+}
+
+/// Records an unverifiable provider delivery for forensics without changing the
+/// acknowledgement.
+///
+/// A rejected callback must answer 4xx so the PSP stops retrying it. A storage
+/// failure while writing the forensic row used to propagate as a 5xx, which made
+/// the PSP retry a forged callback forever and left no audit row at all; the
+/// write is best-effort and its failure is logged instead.
+async fn record_rejection(pool: &PgPool, provider_code: &str, body: &[u8], reason: &str) {
+    if let Err(error) =
+        record_rejected_provider_webhook_postgres(pool, provider_code, body, reason).await
+    {
+        tracing::warn!(
+            target = "order.payment_notify",
+            provider_code,
+            error = %format!("{error:?}"),
+            "failed to record the rejected webhook for forensics"
+        );
     }
 }
 
