@@ -135,3 +135,31 @@ PaymentLaunchPlan resolvePaymentLaunchPlan(Map<String, String> paymentParams) {
     _read(paymentParams, 'cashierUrl'),
   );
 }
+
+/// User-facing instruction for a launch plan.
+///
+/// The native provider SDKs are not linked into this app yet, so the cashier must
+/// at least tell the payer what the session expects instead of appearing to wait:
+/// the payer can move to the provider's app, open the hosted page, or scan the
+/// payload. Kept here (pure) so the wording is unit-tested alongside the plan.
+String describePaymentLaunch(PaymentLaunchPlan plan) {
+  switch (plan.kind) {
+    case PaymentLaunchKind.jsapi:
+      return '已生成微信支付参数，请在微信中完成支付。';
+    case PaymentLaunchKind.wechatApp:
+    case PaymentLaunchKind.alipayApp:
+      return '请在微信或支付宝 App 中完成支付。';
+    case PaymentLaunchKind.stripeConfirm:
+      return '请完成银行卡验证以支付该订单。';
+    case PaymentLaunchKind.redirect:
+      return plan.payload == null
+          ? '请继续前往收银台完成支付。'
+          : '请在浏览器中打开支付页完成支付。';
+    case PaymentLaunchKind.qr:
+      return plan.payload == null
+          ? '请使用手机扫码完成支付。'
+          : '请使用手机扫描支付二维码完成支付。';
+    case PaymentLaunchKind.cashier:
+      return '支付尚未开始，请返回收银台重新选择支付方式。';
+  }
+}

@@ -33,6 +33,8 @@ class _CashierScreenState extends State<CashierScreen> {
   bool _creating = false;
   String _error = '';
   String? _pollNotice;
+  /// What the payer still has to do with the created payment, from the launch plan.
+  String? _launchHint;
 
   bool _disposed = false;
   Timer? _pollTimer;
@@ -73,6 +75,14 @@ class _CashierScreenState extends State<CashierScreen> {
                           child: Text(
                             _pollNotice!,
                             style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ),
+                      if (_launchHint != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            _launchHint!,
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ),
                     ],
@@ -298,6 +308,9 @@ class _CashierScreenState extends State<CashierScreen> {
         _paymentCreatedAtMs = createdAtMs;
         _consecutivePollFailures = 0;
         _pollNotice = null;
+        _launchHint = describePaymentLaunch(
+          resolvePaymentLaunchPlan(session.paymentParams),
+        );
         _remainingSeconds = computeCashierRemainingSeconds(
           _order?.expireTime,
           createdAtMs,

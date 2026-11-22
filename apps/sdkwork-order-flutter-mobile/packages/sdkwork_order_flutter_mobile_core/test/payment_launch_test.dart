@@ -61,4 +61,24 @@ void main() {
     expect(empty.kind, PaymentLaunchKind.qr);
     expect(empty.payload, isNull);
   });
+
+  test('every launch plan has a payer-facing instruction', () {
+    for (final params in <Map<String, String>>[
+      {'nextAction': 'jsapi', 'jsapiPayload': '{}'},
+      {'nextAction': 'app', 'appPayload': '{}'},
+      {'nextAction': 'app', 'orderStr': 's'},
+      {'nextAction': 'stripe_confirm', 'clientSecret': 'pi_1'},
+      {'nextAction': 'redirect', 'payUrl': 'https://p'},
+      {'nextAction': 'qr_code', 'qrCodeUrl': 'q'},
+      {'nextAction': 'cashier'},
+    ]) {
+      final text = describePaymentLaunch(resolvePaymentLaunchPlan(params));
+      expect(text.trim(), isNotEmpty, reason: params.toString());
+    }
+    // The empty-payload plans still say what to do.
+    expect(
+      describePaymentLaunch(resolvePaymentLaunchPlan({'nextAction': 'qr_code'})),
+      contains('扫码'),
+    );
+  });
 }
