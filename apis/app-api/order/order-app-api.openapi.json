@@ -10339,7 +10339,8 @@
           "status",
           "payable",
           "scene",
-          "allowedMethods"
+          "allowedMethods",
+          "capabilityExpiresAt"
         ],
         "properties": {
           "orderId": {
@@ -10386,6 +10387,10 @@
               "string",
               "null"
             ]
+          },
+          "capabilityExpiresAt": {
+            "type": "string",
+            "description": "Deadline after which this cashier session is no longer payable (earlier than expireTime when the order outlives the payment capability)."
           }
         }
       },

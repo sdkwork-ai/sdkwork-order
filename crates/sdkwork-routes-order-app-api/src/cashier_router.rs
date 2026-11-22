@@ -32,15 +32,17 @@ use sdkwork_order_repository_sqlx::cashier_order::{
     load_cashier_link_order_postgres, load_cashier_order_postgres, CashierOrderRecord,
 };
 use sdkwork_payment_repository_sqlx::cashier_token::{
-    mint_cashier_token_with_secret, CashierTokenSubject,
+    mint_cashier_token_with_secret, CashierTokenSubject, CASHIER_TOKEN_TTL_SECONDS,
 };
 use sdkwork_payment_repository_sqlx::cashier_token_setting::load_cashier_token_signing_secrets_postgres;
 use sdkwork_payment_service::{
     PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
 };
 use sdkwork_utils_rust::{
-    cashier_openid_binding_message, commerce_cashier_scene, derive_cashier_token_key_with_epoch,
-    extract_client_ip_from_headers, hmac_sha256_base64url, secure_compare, CashierTokenClaims,
+    cashier_openid_binding_message, commerce_cashier_scene,
+    datetime::{add_minutes, format_datetime, is_before, now, parse_datetime},
+    derive_cashier_token_key_with_epoch, extract_client_ip_from_headers, hmac_sha256_base64url,
+    secure_compare, CashierTokenClaims,
 };
 use sdkwork_web_core::WebRequestContext;
 
@@ -87,6 +89,12 @@ pub struct CashierOrderResponse {
     pub allowed_methods: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expire_time: Option<String>,
+    /// Deadline after which this cashier session can no longer be paid even
+    /// though the order stays payable longer: the anonymous capability token,
+    /// the short link and the provider trade all stop at this instant. Clients
+    /// must count down and hide the QR at this deadline, never at
+    /// [`Self::expire_time`].
+    pub capability_expires_at: String,
 }
 
 /// Public wire view of a created payment.
@@ -470,7 +478,28 @@ fn to_cashier_view(
             .map(|value| (*value).to_owned())
             .collect(),
         expire_time: order.expire_time.clone(),
+        capability_expires_at: cashier_capability_expires_at(order.expire_time.as_deref()),
     }
+}
+
+/// The anonymous cashier capability deadline.
+///
+/// The capability token, its short link and the provider trade all live for
+/// [`CASHIER_TOKEN_TTL_SECONDS`], which is shorter than the order's own payment
+/// window. Exposing the earlier of the two lets every client stop rendering a
+/// scannable QR at the instant it stops being payable instead of guessing.
+fn cashier_capability_expires_at(order_expire_time: Option<&str>) -> String {
+    let capability_deadline = add_minutes(now(), CASHIER_TOKEN_TTL_SECONDS / 60);
+    let deadline = order_expire_time
+        .and_then(|value| parse_datetime(value.trim(), None))
+        .map_or(capability_deadline, |order_deadline| {
+            if is_before(order_deadline, capability_deadline) {
+                order_deadline
+            } else {
+                capability_deadline
+            }
+        });
+    format_datetime(deadline, None)
 }
 
 fn to_payment_view(outcome: PayOwnerOrderOutcome) -> CashierPaymentResponse {
@@ -596,6 +625,43 @@ mod tests {
         }
     }
 
+    fn order_deadline(minutes: i64) -> String {
+        format_datetime(add_minutes(now(), minutes), None)
+    }
+
+    #[test]
+    fn capability_deadline_uses_the_order_window_when_it_closes_first() {
+        // A short-lived order must stop the cashier at its own deadline.
+        let order_expiry = order_deadline(5);
+        assert_eq!(
+            cashier_capability_expires_at(Some(&order_expiry)),
+            order_expiry
+        );
+    }
+
+    #[test]
+    fn capability_deadline_caps_a_long_order_window_at_the_capability_ttl() {
+        // The order stays payable for 30 minutes; the capability token, short
+        // link and provider trade all stop at 15. Clients must see the earlier
+        // deadline or they keep rendering a scannable, dead QR.
+        let far = order_deadline(30);
+        let deadline = cashier_capability_expires_at(Some(&far));
+        assert_ne!(deadline, far);
+        let parsed = parse_datetime(&deadline, None).expect("capability deadline parses");
+        let expected = add_minutes(now(), CASHIER_TOKEN_TTL_SECONDS / 60);
+        assert!(
+            sdkwork_utils_rust::datetime::diff_millis(parsed, expected).abs() < 5_000,
+            "deadline {deadline} must be about now + {CASHIER_TOKEN_TTL_SECONDS}s"
+        );
+    }
+
+    #[test]
+    fn capability_deadline_defaults_to_the_capability_ttl_without_an_order_window() {
+        let deadline = cashier_capability_expires_at(None);
+        let parsed = parse_datetime(&deadline, None).expect("capability deadline parses");
+        let expected = add_minutes(now(), CASHIER_TOKEN_TTL_SECONDS / 60);
+        assert!(sdkwork_utils_rust::datetime::diff_millis(parsed, expected).abs() < 5_000);
+    }
     #[test]
     fn amount_and_currency_must_match_the_stored_order() {
         assert!(amount_and_currency_match(
