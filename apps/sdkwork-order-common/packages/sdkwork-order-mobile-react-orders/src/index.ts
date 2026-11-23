@@ -11,6 +11,7 @@ export * from "./pages/CashierPage";
 export * from "./pages/VoucherCodePage";
 export * from "./pages/RefundRequestsPage";
 export * from "./services/OrderService";
+export * from "./services/orderTitle";
 export * from "./services/datetime";
 export * from "./services/OrderLogisticsRuntime";
 export * from "./services/CashierLogic";
