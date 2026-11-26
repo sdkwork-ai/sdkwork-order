@@ -370,15 +370,24 @@ async fn compensate_payment_attempt(
         )
         .await
         {
-            Ok(captured) => {
+            Ok(captured_status) => {
                 tracing::info!(
                     target = "order.payment_compensation",
                     provider_code,
                     attempt_id = %attempt.id,
-                    captured = ?captured,
+                    captured = ?captured_status,
                     "payment compensation: captured an approved provider order"
                 );
-                if captured != ProviderPaymentQueryState::Succeeded {
+                // The capture reports the provider's own status vocabulary, so
+                // it is read exactly like a query response would be.
+                let captured_state = if captured_status.as_deref().is_some_and(|status| {
+                    status.trim().eq_ignore_ascii_case("completed")
+                }) {
+                    ProviderPaymentQueryState::Succeeded
+                } else {
+                    ProviderPaymentQueryState::Pending
+                };
+                if captured_state != ProviderPaymentQueryState::Succeeded {
                     return Ok(AppliedCompensation::StillPending);
                 }
                 state = ProviderPaymentQueryState::Succeeded;
