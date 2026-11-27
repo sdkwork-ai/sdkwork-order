@@ -73,6 +73,56 @@
             "description": "Include orders created at or before this timestamp (inclusive)."
           },
           {
+            "name": "scene",
+            "in": "query",
+            "required": false,
+            "description": "Commerce scene facet. Accepts a canonical scene or a documented alias (pc/wap/miniprogram/...). `all` or `*` disables the filter. An unknown scene is rejected with 400 rather than silently ignored, so a filter can never appear applied while returning everything.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "web",
+                "h5",
+                "app",
+                "mini_program",
+                "cashier",
+                "membership",
+                "recharge",
+                "platform",
+                "default"
+              ]
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "description": "Tag facet. Accepts `tags=a,b`, `tags=a|b`, or repeated `tags=a&tags=b`. Values are canonicalized (lowercased, whitespace folded to `-`, deduplicated) before matching; at most 20 values and 32 characters per tag.",
+            "schema": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "string",
+                "maxLength": 32
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "tag_match",
+            "in": "query",
+            "required": false,
+            "description": "How multiple `tags` combine: `any` matches orders carrying at least one requested tag, `all` requires every requested tag.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "any",
+                "all"
+              ],
+              "default": "any"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -3670,6 +3720,303 @@
         "x-sdkwork-api-authority": "sdkwork-order-backend-api",
         "x-sdkwork-permission": "commerce.orders.manage"
       }
+    },
+    "/backend/v3/api/orders/facets": {
+      "get": {
+        "operationId": "orders.admin.facets.list",
+        "summary": "List order scene and tag facet buckets",
+        "description": "Aggregated facet counts for the order centre filter bar. Counts honour status/q/created_from/created_to but ignore the tags/scene predicates, so each bucket shows the result size of *adding* that value to the current selection.",
+        "tags": [
+          "orderAdminOrders"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "created_from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "created_to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/OrderFacet"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
+      }
+    },
+    "/backend/v3/api/orders/{orderId}/tags": {
+      "post": {
+        "operationId": "orders.admin.tags.create",
+        "summary": "Add tags to an order",
+        "description": "Adds the supplied tags to the order's existing set and records the optional remark. Adding a tag the order already carries is a no-op, so the endpoint is safe to retry. To *remove* tags, PUT the resulting set to `/orders/{orderId}/classification`.",
+        "tags": [
+          "orderAdminOrders"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Required on every backend command: replays the same result.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderClassificationWriteBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tags added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/OrderClassification"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage",
+        "x-sdkwork-idempotent": true
+      }
+    },
+    "/backend/v3/api/orders/{orderId}/classification": {
+      "put": {
+        "operationId": "orders.admin.classification.update",
+        "summary": "Replace an order's tag and scene classification",
+        "description": "Replaces the whole tag set and optionally switches the scene. This is the idempotent write path an operator token editor submits: the same body always yields the same classification. An empty `tags` array clears the tags.",
+        "tags": [
+          "orderAdminOrders"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Required on every backend command: replays the same result.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderClassificationWriteBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "item"
+                          ],
+                          "properties": {
+                            "item": {
+                              "$ref": "#/components/schemas/OrderClassification"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage",
+        "x-sdkwork-idempotent": true
+      }
     }
   },
   "components": {
@@ -3912,14 +4259,16 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "createdAt",
           "orderId",
           "orderSn",
+          "quantity",
+          "scene",
           "status",
           "statusName",
           "subject",
-          "totalAmount",
-          "quantity",
-          "createdAt"
+          "tags",
+          "totalAmount"
         ],
         "properties": {
           "orderId": {
@@ -3978,6 +4327,32 @@
           "partnerStatus": {
             "type": "string",
             "description": "Partner status snapshot at order creation."
+          },
+          "scene": {
+            "type": "string",
+            "description": "Commerce scene the order was placed in.",
+            "enum": [
+              "web",
+              "h5",
+              "app",
+              "mini_program",
+              "cashier",
+              "membership",
+              "recharge",
+              "platform",
+              "default"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "description": "Canonical operator/attribution tags. Empty when untagged.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remark": {
+            "type": "string",
+            "description": "Operator note recorded beside the classification."
           }
         }
       },
@@ -5102,6 +5477,163 @@
             }
           }
         ]
+      },
+      "OrderTagFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tag",
+          "count"
+        ],
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "count": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true
+          }
+        }
+      },
+      "OrderSceneFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scene",
+          "count"
+        ],
+        "properties": {
+          "scene": {
+            "type": "string",
+            "enum": [
+              "web",
+              "h5",
+              "app",
+              "mini_program",
+              "cashier",
+              "membership",
+              "recharge",
+              "platform",
+              "default"
+            ]
+          },
+          "count": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true
+          }
+        }
+      },
+      "OrderFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenes",
+          "tags",
+          "totalOrders"
+        ],
+        "properties": {
+          "scenes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderSceneFacet"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderTagFacet"
+            }
+          },
+          "totalOrders": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true
+          }
+        }
+      },
+      "OrderClassification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "scene",
+          "tags",
+          "updatedAt"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "scene": {
+            "type": "string",
+            "enum": [
+              "web",
+              "h5",
+              "app",
+              "mini_program",
+              "cashier",
+              "membership",
+              "recharge",
+              "platform",
+              "default"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remark": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OrderClassificationWriteBody": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "maxLength": 32
+            },
+            "description": "Tags to add/remove, or the full replacement set. Canonicalized server-side (lowercased, whitespace folded to `-`, deduplicated, rejected characters removed by validation)."
+          },
+          "scene": {
+            "type": "string",
+            "enum": [
+              "web",
+              "h5",
+              "app",
+              "mini_program",
+              "cashier",
+              "membership",
+              "recharge",
+              "platform",
+              "default"
+            ],
+            "description": "Replacement scene. Ignored by add/remove endpoints."
+          },
+          "remark": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
       }
     },
     "parameters": {

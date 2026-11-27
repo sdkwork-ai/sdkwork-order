@@ -75,6 +75,8 @@ export type { UpdateCartItemRequest } from './update-cart-item-request';
 export type { CartCurrentResponse } from './cart-current-response';
 export type { CreateCartItemResponse } from './create-cart-item-response';
 export type { UpdateCartItemResponse } from './update-cart-item-response';
+export type { OrderSummary } from './order-summary';
+export type { OrdersListResponse } from './orders-list-response';
 export type { OrdersDiscountCreateRequest } from './orders-discount-create-request';
 export type { AfterSalesRequestsCreateResponse201 } from './after-sales-requests-create-response201';
 export type { AfterSalesRequestsRetrieveResponse } from './after-sales-requests-retrieve-response';

@@ -1,16 +1,25 @@
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{
-    CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
-    OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
-    OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
+    AddOrderTagsCommand, CancelManagementOrderCommand, CloseManagementOrderCommand,
+    OrderCancellationListQuery, OrderCancellationPage, OrderCancellationView,
+    OrderClassificationView, OrderManagementDetailQuery, OrderManagementEventListQuery,
+    OrderManagementEventPage, OrderManagementEventView, OrderManagementFacetView,
     OrderManagementListPage, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerItem,
-    OrderOwnerSummary, OrderPartnerSnapshot,
+    OrderOwnerSummary, OrderPartnerSnapshot, OrderScene, OrderSceneFacetView, OrderTagFacetView,
+    ReplaceOrderClassificationCommand, ORDER_TAG_MAX_COUNT,
 };
 use sqlx::{PgPool, Row};
 
 use crate::money_amount::commerce_money_stored;
 use crate::order_limits::MAX_ORDER_LINE_ITEMS;
 use crate::postgres_order::PostgresCommerceOrderStore;
+
+/// Upper bound on tag buckets returned by the facet aggregation.
+///
+/// A tag facet is a suggestion surface, not an exhaustive dump: capping it
+/// keeps the response bounded for tenants with thousands of distinct labels,
+/// and the UI always offers free-text entry for labels outside the top N.
+const TAG_FACET_BUCKET_LIMIT: i32 = 100;
 
 /// Admin order list.
 ///
@@ -70,6 +79,9 @@ SELECT
     COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
     o.partner_id,
     o.partner_snapshot_json,
+    o.scene_code,
+    o.tags,
+    o.remark,
     COUNT(*) OVER() AS total_count
 FROM commerce_order o
 LEFT JOIN LATERAL (
@@ -101,6 +113,8 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
       )
   AND ($5 IS NULL OR o.created_at >= $5::timestamptz)
   AND ($6 IS NULL OR o.created_at <= $6::timestamptz)
+  /* facets:scene */
+  /* facets:tags */
 ORDER BY o.created_at DESC, o.id DESC
 LIMIT $7 OFFSET $8
 "#;
@@ -122,7 +136,104 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
       )
   AND ($5 IS NULL OR o.created_at >= $5::timestamptz)
   AND ($6 IS NULL OR o.created_at <= $6::timestamptz)
+  /* facets:scene */
+  /* facets:tags */
 "#;
+
+/// Aggregates the scene facet for the filter bar.
+///
+/// Like the tag facet below it, this deliberately does **not** apply the scene
+/// or tag predicate, so every bucket shows the count the operator would get by
+/// adding that value to the current selection (faceted-search semantics). It
+/// does honour `status` / `q` / `created_*`, keeping the numbers faithful to
+/// the result set the operator is looking at.
+const FACET_MANAGEMENT_ORDER_SCENES: &str = r#"
+SELECT o.scene_code, COUNT(*) AS bucket_count
+FROM commerce_order o
+WHERE o.tenant_id = CAST($1 AS TEXT)
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ($3 IS NULL OR o.status = $3)
+  AND (
+        $4 IS NULL
+        OR o.order_no ILIKE $4
+        OR o.subject ILIKE $4
+        OR o.id ILIKE $4
+      )
+  AND ($5 IS NULL OR o.created_at >= $5::timestamptz)
+  AND ($6 IS NULL OR o.created_at <= $6::timestamptz)
+GROUP BY o.scene_code
+ORDER BY bucket_count DESC, o.scene_code ASC
+"#;
+
+/// Aggregates the tag facet for the filter bar (`jsonb_array_elements_text`
+/// unnests each order's tag array so one order contributes one row per tag).
+const FACET_MANAGEMENT_ORDER_TAGS: &str = r#"
+SELECT tag.value AS tag, COUNT(*) AS bucket_count
+FROM commerce_order o
+CROSS JOIN LATERAL jsonb_array_elements_text(o.tags) AS tag(value)
+WHERE o.tenant_id = CAST($1 AS TEXT)
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id = '0' AND $2 IS NULL))
+  AND ($3 IS NULL OR o.status = $3)
+  AND (
+        $4 IS NULL
+        OR o.order_no ILIKE $4
+        OR o.subject ILIKE $4
+        OR o.id ILIKE $4
+      )
+  AND ($5 IS NULL OR o.created_at >= $5::timestamptz)
+  AND ($6 IS NULL OR o.created_at <= $6::timestamptz)
+GROUP BY tag.value
+ORDER BY bucket_count DESC, tag.value ASC
+LIMIT $7
+"#;
+
+/// Substitutes the facet predicates into a management list/count statement.
+///
+/// The fragments come from [`crate::order_facets`] and contain only `$N`
+/// placeholders, so this never interpolates user text.
+fn render_management_sql(
+    template: &str,
+    scene_predicate: &str,
+    tags_predicate: &str,
+) -> String {
+    template
+        .replace("  /* facets:scene */\n", &facet_line(scene_predicate))
+        .replace("  /* facets:tags */\n", &facet_line(tags_predicate))
+}
+
+fn facet_line(predicate: &str) -> String {
+    let trimmed = predicate.trim();
+    if trimmed.is_empty() {
+        String::new()
+    } else {
+        format!("  {trimmed}\n")
+    }
+}
+
+/// Binds the facet parameters (scene, then every tag literal) in the exact
+/// order their placeholders appear in the rendered statement.
+///
+/// Kept as a macro-free helper on [`FacetBinding`] because sqlx's `Query`
+/// builder is not object-safe for a generic "bind these" function; the three
+/// call sites all need the identical ordering rule, so the rule lives once.
+struct FacetBinding<'a> {
+    scene: Option<&'a str>,
+    tag_literals: Vec<String>,
+}
+
+impl<'a> FacetBinding<'a> {
+    fn for_query(query: &'a OrderManagementListQuery) -> Self {
+        Self {
+            scene: query.scene.map(|scene| scene.as_str()),
+            tag_literals: crate::order_facets::json_tag_literals(&query.tags),
+        }
+    }
+
+    /// Base index for the first tag placeholder, given six fixed parameters.
+    fn first_tag_parameter(&self) -> usize {
+        6 + 1 + usize::from(self.scene.is_some())
+    }
+}
 
 /// Escapes LIKE wildcards in user-provided free text so `q` cannot widen the
 /// search into a full scan (`%`/`_`/`\` are the LIKE metacharacters).
@@ -146,13 +257,40 @@ impl PostgresCommerceOrderStore {
             .q
             .as_deref()
             .map(|value| format!("%{}%", escape_ilike_pattern(value.trim())));
-        let rows = sqlx::query(LIST_MANAGEMENT_ORDERS)
+        let binding = FacetBinding::for_query(&query);
+        let scene_predicate = crate::order_facets::order_scene_predicate(query.scene, 7);
+        let tags_predicate = crate::order_facets::order_tags_predicate(
+            &query.tags,
+            query.tag_match,
+            binding.first_tag_parameter(),
+        );
+        let list_sql = render_management_sql(
+            LIST_MANAGEMENT_ORDERS,
+            scene_predicate.as_deref().unwrap_or_default(),
+            tags_predicate.as_deref().unwrap_or_default(),
+        );
+        // Page placeholders follow the facets, so their positions depend on how
+        // many facet values were bound. The template fixes them at $7/$8.
+        let facet_count = usize::from(binding.scene.is_some()) + binding.tag_literals.len();
+        let list_sql = list_sql.replace(
+            "LIMIT $7 OFFSET $8",
+            &format!("LIMIT ${} OFFSET ${}", 7 + facet_count, 8 + facet_count),
+        );
+
+        let mut list_statement = sqlx::query(sqlx::AssertSqlSafe(list_sql.as_str()))
             .bind(&query.tenant_id)
             .bind(query.organization_id.as_deref())
             .bind(query.status.as_deref())
             .bind(search.as_deref())
             .bind(query.created_from.as_deref())
-            .bind(query.created_to.as_deref())
+            .bind(query.created_to.as_deref());
+        if let Some(scene) = binding.scene {
+            list_statement = list_statement.bind(scene);
+        }
+        for literal in &binding.tag_literals {
+            list_statement = list_statement.bind(literal);
+        }
+        let rows = list_statement
             .bind(query.limit())
             .bind(query.offset())
             .fetch_all(self.pool())
@@ -160,13 +298,25 @@ impl PostgresCommerceOrderStore {
             .map_err(|error| store_error("failed to list management orders", error))?;
 
         let total = if rows.is_empty() {
-            sqlx::query_scalar::<_, i64>(COUNT_MANAGEMENT_ORDERS)
+            let count_sql = render_management_sql(
+                COUNT_MANAGEMENT_ORDERS,
+                scene_predicate.as_deref().unwrap_or_default(),
+                tags_predicate.as_deref().unwrap_or_default(),
+            );
+            let mut count_statement = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count_sql.as_str()))
                 .bind(&query.tenant_id)
                 .bind(query.organization_id.as_deref())
                 .bind(query.status.as_deref())
                 .bind(search.as_deref())
                 .bind(query.created_from.as_deref())
-                .bind(query.created_to.as_deref())
+                .bind(query.created_to.as_deref());
+            if let Some(scene) = binding.scene {
+                count_statement = count_statement.bind(scene);
+            }
+            for literal in &binding.tag_literals {
+                count_statement = count_statement.bind(literal);
+            }
+            count_statement
                 .fetch_one(self.pool())
                 .await
                 .map_err(|error| store_error("failed to count management orders", error))?
@@ -186,6 +336,185 @@ impl PostgresCommerceOrderStore {
             page_size: query.page_size,
             total,
         })
+    }
+
+    /// Aggregates the scene and tag facets for a management list scope.
+    ///
+    /// The tag/scene predicates on `query` are intentionally ignored (see
+    /// [`FACET_MANAGEMENT_ORDER_SCENES`]); only `status`, `q`, and the created
+    /// range narrow the buckets.
+    pub async fn management_order_facets(
+        &self,
+        query: &OrderManagementListQuery,
+    ) -> Result<OrderManagementFacetView, CommerceServiceError> {
+        let search = query
+            .q
+            .as_deref()
+            .map(|value| format!("%{}%", escape_ilike_pattern(value.trim())));
+
+        let scene_rows = sqlx::query(FACET_MANAGEMENT_ORDER_SCENES)
+            .bind(&query.tenant_id)
+            .bind(query.organization_id.as_deref())
+            .bind(query.status.as_deref())
+            .bind(search.as_deref())
+            .bind(query.created_from.as_deref())
+            .bind(query.created_to.as_deref())
+            .fetch_all(self.pool())
+            .await
+            .map_err(|error| store_error("failed to aggregate order scene facets", error))?;
+
+        let mut scenes: Vec<OrderSceneFacetView> = Vec::with_capacity(scene_rows.len());
+        for row in &scene_rows {
+            // Unknown stored scenes collapse into `Default` so the bucket list
+            // stays within the closed enum the UI renders.
+            let scene = optional_string_cell(row, "scene_code")
+                .as_deref()
+                .and_then(|value| OrderScene::parse(value).ok())
+                .unwrap_or_default();
+            let count = row.try_get::<i64, _>("bucket_count").unwrap_or(0);
+            match scenes.iter_mut().find(|bucket| bucket.scene == scene) {
+                Some(bucket) => bucket.count += count,
+                None => scenes.push(OrderSceneFacetView { scene, count }),
+            }
+        }
+        let total_orders = scenes.iter().map(|bucket| bucket.count).sum();
+
+        let tag_rows = sqlx::query(FACET_MANAGEMENT_ORDER_TAGS)
+            .bind(&query.tenant_id)
+            .bind(query.organization_id.as_deref())
+            .bind(query.status.as_deref())
+            .bind(search.as_deref())
+            .bind(query.created_from.as_deref())
+            .bind(query.created_to.as_deref())
+            .bind(TAG_FACET_BUCKET_LIMIT)
+            .fetch_all(self.pool())
+            .await
+            .map_err(|error| store_error("failed to aggregate order tag facets", error))?;
+
+        let tags = tag_rows
+            .iter()
+            .filter_map(|row| {
+                let tag = string_cell(row, "tag");
+                if tag.is_empty() {
+                    return None;
+                }
+                Some(OrderTagFacetView {
+                    tag,
+                    count: row.try_get::<i64, _>("bucket_count").unwrap_or(0),
+                })
+            })
+            .collect();
+
+        Ok(OrderManagementFacetView {
+            scenes,
+            tags,
+            total_orders,
+        })
+    }
+
+    /// Adds tags to one order, returning the resulting classification.
+    pub async fn add_management_order_tags(
+        &self,
+        command: AddOrderTagsCommand,
+    ) -> Result<OrderClassificationView, CommerceServiceError> {
+        let added: serde_json::Value = serde_json::Value::Array(
+            command
+                .tags
+                .iter()
+                .map(|tag| serde_json::Value::String(tag.as_str().to_owned()))
+                .collect(),
+        );
+        let row = sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET tags = (
+                    SELECT COALESCE(jsonb_agg(DISTINCT value ORDER BY value), '[]'::jsonb)
+                    FROM jsonb_array_elements_text(o.tags || CAST($3 AS jsonb)) AS value
+                ),
+                remark = COALESCE(CAST($4 AS TEXT), remark),
+                updated_at = CAST($5 AS TIMESTAMPTZ)
+            FROM commerce_order o
+            WHERE commerce_order.tenant_id = CAST($1 AS TEXT)
+              AND ((commerce_order.organization_id = CAST($2 AS TEXT))
+                   OR (commerce_order.organization_id = '0' AND $2 IS NULL))
+              AND commerce_order.id = CAST($6 AS TEXT)
+              AND o.tenant_id = commerce_order.tenant_id
+              AND o.id = commerce_order.id
+              AND jsonb_array_length(commerce_order.tags || CAST($3 AS jsonb))
+                  <= CAST($7 AS INTEGER)
+            RETURNING
+                commerce_order.id AS order_id,
+                commerce_order.scene_code,
+                commerce_order.tags,
+                commerce_order.remark,
+                TO_CHAR(commerce_order.updated_at AT TIME ZONE 'UTC',
+                        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(serde_json::to_string(&added).unwrap_or_else(|_| "[]".to_owned()))
+        .bind(command.remark.as_deref())
+        .bind(crate::store_clock::now_canonical())
+        .bind(&command.order_id)
+        .bind(ORDER_TAG_MAX_COUNT as i32)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to add management order tags", error))?;
+
+        map_classification_row(row, &command.order_id)
+    }
+
+    /// Replaces the whole tag set and (optionally) the scene of one order.
+    ///
+    /// This is the idempotent write path: submitting the same classification
+    /// twice leaves the same row. Tag *removal* is expressed by submitting the
+    /// resulting set here rather than through a separate delete command, so
+    /// there is exactly one way the classification can change.
+    pub async fn replace_management_order_classification(
+        &self,
+        command: ReplaceOrderClassificationCommand,
+    ) -> Result<OrderClassificationView, CommerceServiceError> {
+        let tags: Vec<String> = command
+            .tags
+            .iter()
+            .map(|tag| tag.as_str().to_owned())
+            .collect();
+        let row = sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET tags = CAST($3 AS jsonb),
+                scene_code = COALESCE(CAST($4 AS TEXT), scene_code),
+                remark = COALESCE(CAST($5 AS TEXT), remark),
+                updated_at = CAST($6 AS TIMESTAMPTZ)
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT))
+                   OR (organization_id = '0' AND $2 IS NULL))
+              AND id = CAST($7 AS TEXT)
+            RETURNING
+                id AS order_id,
+                scene_code,
+                tags,
+                remark,
+                TO_CHAR(updated_at AT TIME ZONE 'UTC',
+                        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(
+            serde_json::to_string(&tags)
+                .map_err(|error| store_error("failed to encode order tags", error))?,
+        )
+        .bind(command.scene.map(|scene| scene.as_str()))
+        .bind(command.remark.as_deref())
+        .bind(crate::store_clock::now_canonical())
+        .bind(&command.order_id)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to replace order classification", error))?;
+
+        map_classification_row(row, &command.order_id)
     }
 
     /// Refund safety bounds for an order: payment state, payable amount, and
@@ -244,6 +573,9 @@ impl PostgresCommerceOrderStore {
                 COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
                 o.partner_id,
                 o.partner_snapshot_json,
+                o.scene_code,
+                o.tags,
+                o.remark,
                 COALESCE(NULLIF(pa.out_trade_no, ''), NULLIF(o.order_no, '')) AS out_trade_no,
                 CAST(pa.id AS TEXT) AS transaction_id
             FROM commerce_order o
@@ -758,6 +1090,12 @@ fn map_management_summary_row(
                     status: String::new(),
                 })
             }),
+        scene: optional_string_cell(row, "scene_code")
+            .as_deref()
+            .and_then(|value| OrderScene::parse(value).ok())
+            .unwrap_or_default(),
+        tags: json_string_array_cell(row, "tags"),
+        remark: optional_string_cell(row, "remark"),
     })
 }
 
@@ -774,6 +1112,42 @@ fn optional_string_cell(row: &sqlx::postgres::PgRow, column: &str) -> Option<Str
 
 fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceError {
     crate::sql_store_error::map_sql_store_error(message, error)
+}
+
+/// Maps a `RETURNING` classification row, reporting a missing order as
+/// `not_found` so the admin API can answer 404 rather than 500.
+fn map_classification_row(
+    row: Option<sqlx::postgres::PgRow>,
+    order_id: &str,
+) -> Result<OrderClassificationView, CommerceServiceError> {
+    let Some(row) = row else {
+        return Err(CommerceServiceError::not_found(format!(
+            "order {order_id} was not found"
+        )));
+    };
+    let scene = optional_string_cell(&row, "scene_code")
+        .as_deref()
+        .and_then(|value| OrderScene::parse(value).ok())
+        .unwrap_or_default();
+    Ok(OrderClassificationView {
+        order_id: string_cell(&row, "order_id"),
+        scene,
+        tags: json_string_array_cell(&row, "tags"),
+        remark: optional_string_cell(&row, "remark"),
+        updated_at: string_cell(&row, "updated_at"),
+    })
+}
+
+/// Reads a JSONB text array into `Vec<String>`, dropping non-string elements.
+fn json_string_array_cell(row: &sqlx::postgres::PgRow, column: &str) -> Vec<String> {
+    let raw: Option<serde_json::Value> = row.try_get(column).ok().flatten();
+    match raw {
+        Some(serde_json::Value::Array(values)) => values
+            .into_iter()
+            .filter_map(|value| value.as_str().map(str::to_owned))
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 fn current_command_timestamp() -> String {

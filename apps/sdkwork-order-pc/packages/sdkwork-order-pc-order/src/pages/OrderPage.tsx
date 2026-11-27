@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   BadgeCheck,
   Clock3,
   ReceiptText,
 } from "lucide-react";
 import { Button, EmptyState, LoadingBlock, StatusNotice } from "@sdkwork/ui-pc-react";
+import { normalizeSdkworkOrderTag } from "@sdkwork/order-service";
 import type { SdkworkOrderMessagesOverrides } from "../order-copy";
 import type { SdkworkOrderController } from "../order-controller";
 import {
@@ -24,6 +25,7 @@ import {
   useSdkworkOrderIntl,
 } from "../order-intl";
 import { SdkworkOrderDetailDrawer } from "../components/order-detail-drawer";
+import { SdkworkOrderFacetFilter, type SdkworkOrderFacetFilterProps } from "../components/order-facet-filter";
 import { SdkworkOrderPagination } from "../components/order-pagination";
 import { SdkworkOrderStatGrid } from "../components/order-stat-grid";
 
@@ -74,6 +76,9 @@ function SdkworkOrderPageContent({
     formatTimestamp,
   } = useSdkworkOrderIntl();
   const filters = ["all", "pending-payment", "paid", "completed", "cancelled"] as const;
+  // Draft tag text is local: it only becomes a facet on Enter/comma so typing
+  // never fires a request per keystroke.
+  const [tagDraft, setTagDraft] = useState("");
   const heroHighlights = [
     {
       icon: ReceiptText,
@@ -225,6 +230,37 @@ function SdkworkOrderPageContent({
             <div className="border-b border-[var(--sdk-color-border-subtle)] px-6 py-5">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sdk-color-text-muted)]">{copy.views.eyebrow}</div>
               <h2 className="mt-2 text-xl font-semibold text-[var(--sdk-color-text-primary)]">{copy.views.title}</h2>
+              <div className="mt-4">
+                <SdkworkOrderFacetFilter
+                  disabled={state.isLoading}
+                  facets={state.facets}
+                  labels={{
+                    anyScene: copy.facets.anyScene,
+                    tagMatchAll: copy.facets.tagMatchAll,
+                    tagMatchAny: copy.facets.tagMatchAny,
+                    tagsEmpty: copy.facets.tagsEmpty,
+                    tagsPlaceholder: copy.facets.tagsPlaceholder,
+                    tagsTitle: copy.facets.tagsTitle,
+                  }}
+                  onChange={(next) => {
+                    void controller.setFacets(next);
+                  }}
+                  onCommitTag={() => {
+                    const tag = normalizeSdkworkOrderTag(tagDraft);
+                    setTagDraft("");
+                    if (!tag || state.facets.tags.includes(tag)) return;
+                    void controller.setFacets({ tags: [...state.facets.tags, tag] });
+                  }}
+                  onRemoveTag={(tag) => {
+                    void controller.setFacets({
+                      tags: state.facets.tags.filter((value) => value !== tag),
+                    });
+                  }}
+                  onTagDraftChange={setTagDraft}
+                  sceneLabels={copy.facets.scenes as SdkworkOrderFacetFilterProps["sceneLabels"]}
+                  tagDraft={tagDraft}
+                />
+              </div>
             </div>
 
             <div className="divide-y divide-[var(--sdk-color-border-subtle)]">

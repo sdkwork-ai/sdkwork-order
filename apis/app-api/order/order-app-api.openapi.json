@@ -509,6 +509,56 @@
             }
           },
           {
+            "name": "scene",
+            "in": "query",
+            "required": false,
+            "description": "Commerce scene facet. Accepts a canonical scene or a documented alias (pc/wap/miniprogram/...). `all` or `*` disables the filter. An unknown scene is rejected with 400 rather than silently ignored, so a filter can never appear applied while returning everything.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "web",
+                "h5",
+                "app",
+                "mini_program",
+                "cashier",
+                "membership",
+                "recharge",
+                "platform",
+                "default"
+              ]
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "description": "Tag facet. Accepts `tags=a,b`, `tags=a|b`, or repeated `tags=a&tags=b`. Values are canonicalized (lowercased, whitespace folded to `-`, deduplicated) before matching; at most 20 values and 32 characters per tag.",
+            "schema": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "string",
+                "maxLength": 32
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "tag_match",
+            "in": "query",
+            "required": false,
+            "description": "How multiple `tags` combine: `any` matches orders carrying at least one requested tag, `all` requires every requested tag.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "any",
+                "all"
+              ],
+              "default": "any"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "required": false,
@@ -532,11 +582,42 @@
         ],
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "Buyer order list",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SdkWorkListResponse"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "items",
+                            "pageInfo"
+                          ],
+                          "properties": {
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/components/schemas/OrderSummary"
+                              }
+                            },
+                            "pageInfo": {
+                              "$ref": "#/components/schemas/PageInfo"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -10889,6 +10970,111 @@
             }
           }
         ]
+      },
+      "OrderSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "orderSn",
+          "status",
+          "statusName",
+          "subject",
+          "totalAmount",
+          "quantity",
+          "createdAt",
+          "scene",
+          "tags"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "orderSn": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "statusName": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "type": "string"
+          },
+          "paidAmount": {
+            "type": "string"
+          },
+          "discountAmount": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "payTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expireTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paymentMethod": {
+            "type": "string"
+          },
+          "points": {
+            "type": "string",
+            "format": "int64",
+            "pattern": "^-?[0-9]+$",
+            "x-sdkwork-int64-string": true,
+            "description": "Token Bank quota credited for recharge orders."
+          },
+          "partnerId": {
+            "type": "string"
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "partnerLevelNo": {
+            "type": "string"
+          },
+          "scene": {
+            "type": "string",
+            "description": "Commerce scene the order was placed in.",
+            "enum": [
+              "web",
+              "h5",
+              "app",
+              "mini_program",
+              "cashier",
+              "membership",
+              "recharge",
+              "platform",
+              "default"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "description": "Canonical operator/attribution tags. Empty when untagged.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remark": {
+            "type": "string",
+            "description": "Operator note recorded beside the classification."
+          }
+        }
       }
     },
     "parameters": {

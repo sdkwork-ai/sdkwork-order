@@ -127,3 +127,141 @@ describe("createOrderAdminService", () => {
     expect(params).toEqual({ idempotencyKey: expect.any(String) });
   });
 });
+
+describe("order centre facets", () => {
+  function facetClient() {
+    const list = vi.fn().mockResolvedValue({
+      code: 0,
+      data: {
+        items: [],
+        pageInfo: { mode: "offset", page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+      },
+      traceId: "trace-f",
+    });
+    const facetList = vi.fn().mockResolvedValue({
+      code: 0,
+      data: {
+        item: {
+          scenes: [{ scene: "h5", count: "4" }],
+          tags: [{ tag: "vip", count: "2" }],
+          totalOrders: "6",
+        },
+      },
+      traceId: "trace-f2",
+    });
+    const classificationUpdate = vi.fn().mockResolvedValue({
+      code: 0,
+      data: {
+        item: { orderId: "o-1", scene: "h5", tags: ["vip"], updatedAt: "2026-07-20T00:00:00.000Z" },
+      },
+      traceId: "trace-f3",
+    });
+    const tagsCreate = vi.fn().mockResolvedValue({
+      code: 0,
+      data: { item: { orderId: "o-1", scene: "web", tags: ["vip", "risk"] } },
+      traceId: "trace-f4",
+    });
+    return {
+      list,
+      facetList,
+      classificationUpdate,
+      tagsCreate,
+      client: {
+        orders: {
+          admin: {
+            list,
+            retrieve: vi.fn(),
+            cancel: vi.fn(),
+            close: vi.fn(),
+            facets: { list: facetList },
+            classification: { update: classificationUpdate },
+            tags: { create: tagsCreate },
+          },
+        },
+      },
+    };
+  }
+
+  it("forwards scene and tag facets to the list endpoint", async () => {
+    const { client, list } = facetClient();
+    const service = createOrderAdminService(client as never);
+
+    await service.listOrders({ page: 1, pageSize: 20, scene: "h5", tags: ["vip", "risk"], tagMatch: "all" });
+
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({
+      scene: "h5",
+      tags: ["vip", "risk"],
+      tagMatch: "all",
+    }));
+  });
+
+  it("omits facet keys entirely when no facet is selected", async () => {
+    const { client, list } = facetClient();
+    const service = createOrderAdminService(client as never);
+
+    await service.listOrders({ page: 1, pageSize: 20 });
+
+    const sent = list.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty("scene");
+    expect(sent).not.toHaveProperty("tags");
+    expect(sent).not.toHaveProperty("tagMatch");
+  });
+
+  it("defaults the tag match mode to any when tags are present", async () => {
+    const { client, list } = facetClient();
+    const service = createOrderAdminService(client as never);
+
+    await service.listOrders({ page: 1, pageSize: 20, tags: ["vip"] });
+
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ tags: ["vip"], tagMatch: "any" }));
+  });
+
+  it("reads facet buckets from the envelope", async () => {
+    const { client } = facetClient();
+    const service = createOrderAdminService(client as never);
+
+    const facets = await service.getOrderFacets({ status: "paid" });
+
+    expect(facets.scenes).toEqual([{ scene: "h5", count: "4" }]);
+    expect(facets.tags).toEqual([{ tag: "vip", count: "2" }]);
+    expect(facets.totalOrders).toBe("6");
+  });
+
+  it("replaces the classification through the idempotent PUT", async () => {
+    const { client, classificationUpdate } = facetClient();
+    const service = createOrderAdminService(client as never);
+
+    const result = await service.replaceOrderClassification(
+      "o-1",
+      { tags: ["vip"], scene: "h5", remark: "  reviewed  " },
+      "key-1",
+    );
+
+    expect(classificationUpdate).toHaveBeenCalledWith(
+      "o-1",
+      { tags: ["vip"], scene: "h5", remark: "reviewed" },
+      { idempotencyKey: "key-1" },
+    );
+    expect(result.tags).toEqual(["vip"]);
+  });
+
+  it("never sends a scene on the add-tags endpoint", async () => {
+    const { client, tagsCreate } = facetClient();
+    const service = createOrderAdminService(client as never);
+
+    await service.addOrderTags("o-1", { tags: ["vip"], scene: "h5" }, "key-2");
+
+    const [, body] = tagsCreate.mock.calls[0] ?? [];
+    expect(body).toEqual({ tags: ["vip"] });
+  });
+
+  it("clears the remark when it is only whitespace", async () => {
+    const { client, classificationUpdate } = facetClient();
+    const service = createOrderAdminService(client as never);
+
+    await service.replaceOrderClassification("o-1", { tags: [], remark: "   " }, "key-3");
+
+    const [, body] = classificationUpdate.mock.calls[0] ?? [];
+    expect(body).toEqual({ tags: [] });
+  });
+});

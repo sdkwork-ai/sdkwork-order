@@ -39,6 +39,17 @@ export interface SdkworkOrderMessages {
     refunding: string;
     unknown: string;
   };
+  facets: {
+    /** Label for the "no scene filter" chip. */
+    anyScene: string;
+    /** Localized scene labels keyed by canonical scene value. */
+    scenes: Record<string, string>;
+    tagMatchAll: string;
+    tagMatchAny: string;
+    tagsEmpty: string;
+    tagsPlaceholder: string;
+    tagsTitle: string;
+  };
   items: {
     description: string;
     empty: string;
@@ -199,6 +210,25 @@ const EN_US_MESSAGES: SdkworkOrderMessages = {
     refunding: "Refunding",
     unknown: "Unknown",
   },
+  facets: {
+    anyScene: "All scenes",
+    scenes: {
+      app: "Mobile app",
+      cashier: "Cashier link",
+      default: "Unspecified",
+      h5: "H5",
+      membership: "Membership",
+      mini_program: "Mini program",
+      platform: "Platform placed",
+      recharge: "Account recharge",
+      web: "Web storefront",
+    },
+    tagMatchAll: "All tags",
+    tagMatchAny: "Any tag",
+    tagsEmpty: "No tag filter",
+    tagsPlaceholder: "Filter by tag and press Enter",
+    tagsTitle: "Tags",
+  },
   items: {
     description: "Ordered products and quantities.",
     empty: "No order items were returned for this order.",
@@ -328,6 +358,25 @@ const ZH_CN_MESSAGES: SdkworkOrderMessages = {
     refunded: "\u5df2\u9000\u6b3e",
     refunding: "\u9000\u6b3e\u4e2d",
     unknown: "\u672a\u77e5",
+  },
+  facets: {
+    anyScene: "\u5168\u90e8\u573a\u666f",
+    scenes: {
+      app: "\u79fb\u52a8 App",
+      cashier: "\u6536\u94f6\u53f0\u94fe\u63a5",
+      default: "\u672a\u6807\u6ce8",
+      h5: "H5",
+      membership: "\u4f1a\u5458\u8ba2\u9605",
+      mini_program: "\u5c0f\u7a0b\u5e8f",
+      platform: "\u5e73\u53f0\u4ee3\u4e0b\u5355",
+      recharge: "\u8d26\u6237\u5145\u503c",
+      web: "Web \u5546\u57ce",
+    },
+    tagMatchAll: "\u5168\u90e8\u6807\u7b7e",
+    tagMatchAny: "\u4efb\u4e00\u6807\u7b7e",
+    tagsEmpty: "\u672a\u6309\u6807\u7b7e\u7b5b\u9009",
+    tagsPlaceholder: "\u8f93\u5165\u6807\u7b7e\u540e\u56de\u8f66\u7b5b\u9009",
+    tagsTitle: "\u6807\u7b7e",
   },
   items: {
     description: "\u5df2\u4e0b\u5355\u7684\u5546\u54c1\u4e0e\u6570\u91cf\u660e\u7ec6\u3002",

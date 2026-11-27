@@ -19,14 +19,35 @@ import {
   type SdkworkOrderStatus,
   type SdkworkOrderSummary,
 } from "./order-service";
+import type {
+  SdkworkOrderScene,
+  SdkworkOrderTagMatchMode,
+} from "@sdkwork/order-service";
 
 export type SdkworkOrderFilter = "all" | SdkworkOrderStatus;
+
+/** Scene/tag facets selected on the buyer order centre. */
+export interface SdkworkOrderFacetSelection {
+  /** Selected scene, or `undefined` for "all scenes". */
+  scene?: SdkworkOrderScene;
+  /** Selected canonical tags; empty for "all tags". */
+  tags: string[];
+  /** How `tags` combine. */
+  tagMatch: SdkworkOrderTagMatchMode;
+}
+
+export const SDKWORK_ORDER_EMPTY_FACETS: SdkworkOrderFacetSelection = {
+  tags: [],
+  tagMatch: "any",
+};
 
 export interface SdkworkOrderControllerState {
   activeFilter: SdkworkOrderFilter;
   currentPage: number;
   dashboard: SdkworkOrderDashboardData;
   detail?: SdkworkOrderDetail;
+  /** Currently applied scene/tag facets. */
+  facets: SdkworkOrderFacetSelection;
   isBootstrapped: boolean;
   isDetailLoading: boolean;
   isDetailOpen: boolean;
@@ -47,6 +68,7 @@ export interface SdkworkOrderController {
   payOrder(input: SdkworkOrderPaymentInput): Promise<SdkworkOrderPaymentResult>;
   refresh(): Promise<SdkworkOrderControllerState>;
   service: SdkworkOrderService;
+  setFacets(facets: Partial<SdkworkOrderFacetSelection>): Promise<SdkworkOrderControllerState>;
   setFilter(filter: SdkworkOrderFilter): Promise<SdkworkOrderControllerState>;
   setPage(page: number): Promise<SdkworkOrderControllerState>;
   subscribe(listener: () => void): () => void;
@@ -94,6 +116,7 @@ export function createSdkworkOrderController(
     activeFilter: "all",
     currentPage: 1,
     dashboard: fallbackDashboard,
+    facets: { ...SDKWORK_ORDER_EMPTY_FACETS },
     isBootstrapped: false,
     isDetailLoading: false,
     isDetailOpen: false,
@@ -129,6 +152,10 @@ export function createSdkworkOrderController(
       page: state.currentPage,
       pageSize: state.pageSize,
       status: filter === "all" ? "all" : filter,
+      ...(state.facets.scene ? { scene: state.facets.scene } : {}),
+      ...(state.facets.tags.length > 0
+        ? { tags: state.facets.tags, tagMatch: state.facets.tagMatch }
+        : {}),
     };
   }
 
@@ -267,6 +294,21 @@ export function createSdkworkOrderController(
     },
 
     service,
+
+    async setFacets(facets) {
+      // Merging rather than replacing lets a caller flip one facet (say the
+      // scene) without re-sending the tag selection it did not touch. Facets
+      // change the row set, so the page resets to 1 and the dashboard reloads.
+      setState({
+        currentPage: 1,
+        facets: {
+          scene: facets.scene === undefined ? state.facets.scene : facets.scene || undefined,
+          tags: facets.tags === undefined ? state.facets.tags : [...facets.tags],
+          tagMatch: facets.tagMatch ?? state.facets.tagMatch,
+        },
+      });
+      return reload();
+    },
 
     async setFilter(filter) {
       if (filter === state.activeFilter) {

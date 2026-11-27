@@ -3,11 +3,13 @@ mod app_template;
 mod checkout;
 mod fulfillment;
 mod management;
+mod order_list_facets;
 mod owner;
 mod recharge;
 mod shipment;
 
 pub use app_template::{AppTemplateOrderListQuery, AppTemplateOrderPage, AppTemplateOrderSummary};
+pub use order_list_facets::{collect_repeated_query_values, OrderListFacets};
 
 pub use recharge::{
     AccountValueCatalogListQuery, AccountValueRequestDetailQuery, AccountValueRequestListQuery,
@@ -32,10 +34,12 @@ pub use fulfillment::{
     FulfillmentManagementListQuery, FulfillmentView,
 };
 pub use management::{
-    CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
-    OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
-    OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
-    OrderManagementListPage, OrderManagementListQuery,
+    AddOrderTagsCommand, CancelManagementOrderCommand, CloseManagementOrderCommand,
+    OrderCancellationListQuery, OrderCancellationPage, OrderCancellationView,
+    OrderClassificationView, OrderManagementDetailQuery, OrderManagementEventListQuery,
+    OrderManagementEventPage, OrderManagementEventView, OrderManagementFacetView,
+    OrderManagementListPage, OrderManagementListQuery, OrderSceneFacetView, OrderTagFacetView,
+    ReplaceOrderClassificationCommand,
 };
 pub use owner::{
     CancelOwnerOrderCommand, CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail,

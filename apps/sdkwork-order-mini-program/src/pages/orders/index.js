@@ -13,6 +13,24 @@ Page({
     loading: true,
     loadingMore: false,
     error: "",
+    // Scene/tag facets. Collapsed by default to keep the mobile viewport for
+    // the list; both dimensions match the other order-centre surfaces.
+    facetsOpen: false,
+    scenes: [
+      { code: "web", label: "Web 商城" },
+      { code: "h5", label: "H5" },
+      { code: "app", label: "移动 App" },
+      { code: "mini_program", label: "小程序" },
+      { code: "cashier", label: "收银台链接" },
+      { code: "membership", label: "会员订阅" },
+      { code: "recharge", label: "账户充值" },
+      { code: "platform", label: "平台代下单" },
+      { code: "default", label: "未标注" },
+    ],
+    activeScene: "",
+    activeTags: [],
+    tagMatch: "any",
+    tagDraft: "",
   },
 
   onLoad(options) {
@@ -51,13 +69,16 @@ Page({
   },
 
   async loadOrders(nextPage) {
-    const { activeTab, orders } = this.data;
+    const { activeTab, activeScene, activeTags, orders, tagMatch } = this.data;
     this.setData(nextPage === 1 ? { loading: true, error: "" } : { loadingMore: true });
     try {
       const result = await ordersService.listOrders({
         page: nextPage,
         pageSize: 20,
         status: activeTab,
+        scene: activeScene || undefined,
+        tags: activeTags,
+        tagMatch,
       });
       const rows = result.items.map((order) => ({
         orderId: order.orderId,
@@ -66,6 +87,7 @@ Page({
         statusText: order.statusName || orderStatusLabel(order.status),
         totalText: formatMinor(order.totalAmount),
         timeText: formatTime(order.createdAt),
+        tags: order.tags || [],
       }));
       const hasMore =
         result.pageInfo.hasMore !== undefined
@@ -93,6 +115,63 @@ Page({
       return;
     }
     this.setData({ activeTab: code, orders: [], hasMore: false });
+    this.loadOrders(1);
+  },
+
+  /** Expands/collapses the facet panel. */
+  toggleFacets() {
+    this.setData({ facetsOpen: !this.data.facetsOpen });
+  },
+
+  /**
+   * Selects one scene (or clears it when the active chip is tapped again).
+   * Changing a facet resets the list because the row set changes underneath.
+   */
+  selectScene(event) {
+    const code = event.currentTarget.dataset.code || "";
+    const next = this.data.activeScene === code ? "" : code;
+    this.setData({ activeScene: next, orders: [], hasMore: false });
+    this.loadOrders(1);
+  },
+
+  onTagInput(event) {
+    this.setData({ tagDraft: event.detail.value || "" });
+  },
+
+  /**
+   * Commits the typed tag using the same canonical form the API enforces:
+   * lowercase, whitespace/`_`/`.`/`-` folded to a single `-`, no leading or
+   * trailing separator. Input still containing a character the server rejects
+   * (punctuation, quotes) is dropped rather than sent to fail validation.
+   */
+  commitTag() {
+    const raw = String(this.data.tagDraft || "").trim();
+    this.setData({ tagDraft: "" });
+    const canonical = require("../../services/order-service").normalizeOrderTag(raw);
+    if (!canonical || this.data.activeTags.indexOf(canonical) !== -1) {
+      return;
+    }
+    this.setData({ activeTags: this.data.activeTags.concat([canonical]), orders: [], hasMore: false });
+    this.loadOrders(1);
+  },
+
+  removeTag(event) {
+    const tag = event.currentTarget.dataset.tag;
+    this.setData({
+      activeTags: this.data.activeTags.filter((value) => value !== tag),
+      orders: [],
+      hasMore: false,
+    });
+    this.loadOrders(1);
+  },
+
+  toggleTagMatch() {
+    this.setData({ tagMatch: this.data.tagMatch === "all" ? "any" : "all", orders: [], hasMore: false });
+    this.loadOrders(1);
+  },
+
+  clearFacets() {
+    this.setData({ activeScene: "", activeTags: [], tagMatch: "any", tagDraft: "", orders: [], hasMore: false });
     this.loadOrders(1);
   },
 

@@ -9,6 +9,57 @@
     >{{item.label}}</view>
   </scroll-view>
 
+  <!-- 场景 / 标签筛选：与 PC、H5、Flutter 订单中心使用同一套维度 -->
+  <view class="orders-facet">
+    <view class="orders-facet-head" bindtap="toggleFacets">
+      <text>筛选维度</text>
+      <text class="mp-muted">
+        {{activeScene || '全部场景'}}{{activeTags.length > 0 ? ' · ' + activeTags.length + ' 个标签' : ''}}{{facetsOpen ? ' 收起' : ' 展开'}}
+      </text>
+    </view>
+    <view wx:if="{{facetsOpen}}" class="orders-facet-body">
+      <view class="orders-facet-chips">
+        <view
+          class="orders-chip {{activeScene === '' ? 'orders-chip-active' : ''}}"
+          bindtap="selectScene"
+          data-code=""
+        >全部场景</view>
+        <view
+          class="orders-chip {{activeScene === item.code ? 'orders-chip-active' : ''}}"
+          wx:for="{{scenes}}"
+          wx:key="code"
+          bindtap="selectScene"
+          data-code="{{item.code}}"
+        >{{item.label}}</view>
+      </view>
+
+      <view class="orders-facet-tags" wx:if="{{activeTags.length > 0}}">
+        <view class="orders-tag" wx:for="{{activeTags}}" wx:key="*this">
+          <text>{{item}}</text>
+          <text class="orders-tag-remove" catchtap="removeTag" data-tag="{{item}}">×</text>
+        </view>
+        <view
+          wx:if="{{activeTags.length > 1}}"
+          class="orders-chip"
+          bindtap="toggleTagMatch"
+        >{{tagMatch === 'all' ? '全部标签' : '任一标签'}}</view>
+      </view>
+
+      <view class="orders-facet-input-row">
+        <input
+          class="orders-facet-input"
+          placeholder="输入标签后确认筛选"
+          value="{{tagDraft}}"
+          bindinput="onTagInput"
+          confirm-type="search"
+          bindconfirm="commitTag"
+        />
+        <view class="orders-chip" bindtap="commitTag">添加</view>
+        <view wx:if="{{activeScene || activeTags.length > 0}}" class="orders-chip" bindtap="clearFacets">清空</view>
+      </view>
+    </view>
+  </view>
+
   <view class="orders-stats mp-card" wx:if="{{statistics}}">
     <view class="orders-stat">
       <view class="orders-stat-num">{{statistics.pendingPayment}}</view>
@@ -41,6 +92,9 @@
       <view class="mp-flex-between orders-meta">
         <text class="mp-muted">{{item.timeText}}</text>
         <text class="mp-price">{{item.totalText}}</text>
+      </view>
+      <view class="orders-row-tags" wx:if="{{item.tags.length > 0}}">
+        <text class="orders-row-tag" wx:for="{{item.tags}}" wx:for-item="tag" wx:key="*this">{{tag}}</text>
       </view>
       <view class="orders-actions">
         <button

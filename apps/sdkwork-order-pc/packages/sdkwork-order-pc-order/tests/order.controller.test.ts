@@ -176,4 +176,115 @@ describe("sdkwork-order-pc-order controller", () => {
     expect(result.message).toContain("Cancel fallback from overrides");
     expect(controller.getState().lastError).toBe("Cancel fallback from overrides");
   });
+
+  it("forwards scene and tag facets to the dashboard query", async () => {
+    const emptyStatistics = {
+      completed: 0,
+      pendingPayment: 0,
+      pendingReceipt: 0,
+      pendingShipment: 0,
+      totalAmountCny: 0,
+      totalOrders: 0,
+    };
+    const getDashboard = vi.fn().mockResolvedValue({
+      orders: [],
+      pagination: emptyPagination,
+      statistics: emptyStatistics,
+    });
+    const controller = createSdkworkOrderController({
+      service: {
+        cancelOrder: vi.fn(),
+        getDashboard,
+        getEmptyDashboard: vi.fn().mockReturnValue({
+          orders: [],
+          pagination: emptyPagination,
+          statistics: emptyStatistics,
+        }),
+        getOrderDetail: vi.fn(),
+        payOrder: vi.fn(),
+      },
+    });
+
+    await controller.setFacets({ scene: "h5", tags: ["vip", "risk"], tagMatch: "all" });
+
+    expect(getDashboard).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 1,
+      scene: "h5",
+      tags: ["vip", "risk"],
+      tagMatch: "all",
+    }));
+  });
+
+  it("merges facet updates instead of dropping untouched dimensions", async () => {
+    const emptyStatistics = {
+      completed: 0,
+      pendingPayment: 0,
+      pendingReceipt: 0,
+      pendingShipment: 0,
+      totalAmountCny: 0,
+      totalOrders: 0,
+    };
+    const getDashboard = vi.fn().mockResolvedValue({
+      orders: [],
+      pagination: emptyPagination,
+      statistics: emptyStatistics,
+    });
+    const controller = createSdkworkOrderController({
+      service: {
+        cancelOrder: vi.fn(),
+        getDashboard,
+        getEmptyDashboard: vi.fn().mockReturnValue({
+          orders: [],
+          pagination: emptyPagination,
+          statistics: emptyStatistics,
+        }),
+        getOrderDetail: vi.fn(),
+        payOrder: vi.fn(),
+      },
+    });
+
+    await controller.setFacets({ scene: "h5", tags: ["vip"] });
+    // A later scene-only change must keep the tag selection.
+    await controller.setFacets({ scene: "app" });
+
+    expect(getDashboard).toHaveBeenLastCalledWith(expect.objectContaining({
+      scene: "app",
+      tags: ["vip"],
+    }));
+  });
+
+  it("omits facet keys when nothing is selected", async () => {
+    const emptyStatistics = {
+      completed: 0,
+      pendingPayment: 0,
+      pendingReceipt: 0,
+      pendingShipment: 0,
+      totalAmountCny: 0,
+      totalOrders: 0,
+    };
+    const getDashboard = vi.fn().mockResolvedValue({
+      orders: [],
+      pagination: emptyPagination,
+      statistics: emptyStatistics,
+    });
+    const controller = createSdkworkOrderController({
+      service: {
+        cancelOrder: vi.fn(),
+        getDashboard,
+        getEmptyDashboard: vi.fn().mockReturnValue({
+          orders: [],
+          pagination: emptyPagination,
+          statistics: emptyStatistics,
+        }),
+        getOrderDetail: vi.fn(),
+        payOrder: vi.fn(),
+      },
+    });
+
+    await controller.bootstrap();
+
+    const query = getDashboard.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(query).not.toHaveProperty("scene");
+    expect(query).not.toHaveProperty("tags");
+  });
 });

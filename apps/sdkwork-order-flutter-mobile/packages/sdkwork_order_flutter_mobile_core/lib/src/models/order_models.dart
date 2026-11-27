@@ -58,6 +58,8 @@ class Order {
     this.paymentMethod,
     this.outTradeNo,
     this.transactionId,
+    this.scene,
+    this.tags = const <String>[],
   });
 
   final String id;
@@ -83,6 +85,14 @@ class Order {
   final List<OrderItem> items;
   final String? outTradeNo;
   final String? transactionId;
+
+  /// Commerce scene the order was placed in (`web`, `h5`, `app`,
+  /// `mini_program`, ...). `null` when the gateway predates the facet
+  /// contract, so the UI hides the badge instead of claiming "unspecified".
+  final String? scene;
+
+  /// Canonical operator/attribution tags; empty when untagged.
+  final List<String> tags;
 
   bool get isPendingPayment => status.trim().toLowerCase() == 'pending_payment';
 
@@ -110,8 +120,18 @@ class Order {
       items: asList(wire['items']).map(OrderItem.fromWire).toList(),
       outTradeNo: _optional(wire, const ['outTradeNo']),
       transactionId: _optional(wire, const ['transactionId']),
+      scene: _optional(wire, const ['scene']),
+      tags: _stringList(wire['tags']),
     );
   }
+
+  /// Reads the tag array, dropping anything that is not a string.
+  static List<String> _stringList(Object? value) => value is List
+      ? value
+          .whereType<String>()
+          .where((tag) => tag.isNotEmpty)
+          .toList(growable: false)
+      : const <String>[];
 
   static String? _optional(Map<String, dynamic> wire, List<String> keys) {
     for (final key in keys) {

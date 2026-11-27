@@ -11,6 +11,12 @@ pub struct OrderOwnerListQuery {
     pub owner_user_id: String,
     pub status: Option<String>,
     pub subject: Option<String>,
+    /// Commerce scene facet; `None` disables the predicate.
+    pub scene: Option<crate::OrderScene>,
+    /// Tag facet values; empty disables the predicate.
+    pub tags: crate::OrderTagSet,
+    /// How [`Self::tags`] combine.
+    pub tag_match: crate::OrderTagMatchMode,
     pub page: i64,
     pub page_size: i64,
 }
@@ -163,6 +169,12 @@ pub struct OrderOwnerSummary {
     /// Partner facts snapshotted at order creation, when the order's customer
     /// was bound to a partner.
     pub partner: Option<crate::OrderPartnerSnapshot>,
+    /// Commerce scene the order was placed in.
+    pub scene: crate::OrderScene,
+    /// Operator/attribution tags (already canonical).
+    pub tags: Vec<String>,
+    /// Operator remark recorded beside the classification.
+    pub remark: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -220,9 +232,29 @@ impl OrderOwnerListQuery {
             owner_user_id: owner_user_id.trim().to_string(),
             status: optional_text(status),
             subject: optional_text(subject),
+            scene: None,
+            tags: crate::OrderTagSet::default(),
+            tag_match: crate::OrderTagMatchMode::default(),
             page,
             page_size,
         })
+    }
+
+    /// Attaches the scene and tag facets.
+    ///
+    /// Kept as a chainable setter so the existing six-argument constructor
+    /// (used by every surface that predates the facets) stays source-stable.
+    #[must_use]
+    pub fn with_facets(
+        mut self,
+        scene: Option<crate::OrderScene>,
+        tags: crate::OrderTagSet,
+        tag_match: crate::OrderTagMatchMode,
+    ) -> Self {
+        self.scene = scene;
+        self.tags = tags;
+        self.tag_match = tag_match;
+        self
     }
 
     pub fn limit(&self) -> i64 {

@@ -79,3 +79,91 @@
   font-size: 24rpx;
   padding: 8rpx 26rpx;
 }
+
+/* 场景 / 标签筛选（订单中心统一检索维度） */
+.orders-facet {
+  background: #fff;
+  border-bottom: 1rpx solid #eef0f3;
+}
+
+.orders-facet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  font-size: 26rpx;
+  color: #374151;
+}
+
+.orders-facet-body {
+  padding: 0 24rpx 20rpx;
+}
+
+.orders-facet-chips,
+.orders-facet-tags,
+.orders-facet-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.orders-facet-tags,
+.orders-facet-input-row {
+  margin-top: 12rpx;
+}
+
+.orders-chip {
+  padding: 8rpx 20rpx;
+  font-size: 24rpx;
+  color: #6b7280;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 999rpx;
+}
+
+.orders-chip-active {
+  color: #2f54eb;
+  border-color: #2f54eb;
+  background: #eef2ff;
+}
+
+.orders-tag {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 16rpx;
+  font-size: 24rpx;
+  color: #374151;
+  background: #f3f4f6;
+  border-radius: 999rpx;
+}
+
+.orders-tag-remove {
+  color: #9ca3af;
+  font-size: 26rpx;
+}
+
+.orders-facet-input {
+  flex: 1;
+  min-width: 240rpx;
+  height: 64rpx;
+  padding: 0 20rpx;
+  font-size: 26rpx;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 12rpx;
+}
+
+.orders-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 10rpx;
+}
+
+.orders-row-tag {
+  padding: 4rpx 14rpx;
+  font-size: 22rpx;
+  color: #6b7280;
+  background: #f3f4f6;
+  border-radius: 999rpx;
+}

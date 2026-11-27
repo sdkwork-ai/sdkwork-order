@@ -1,7 +1,7 @@
 import { backendApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { AdminCreateRefundRequest, CancelOrderRequest, CloseOrderRequest, ConfirmOrderPaymentRequest, OrderCancellation, OrderDetail, OrderEvent, OrderSummary, PageInfo, SdkWorkCommandData } from '../types';
+import type { AdminCreateRefundRequest, CancelOrderRequest, CloseOrderRequest, ConfirmOrderPaymentRequest, OrderCancellation, OrderClassification, OrderClassificationWriteBody, OrderDetail, OrderEvent, OrderFacet, OrderSummary, PageInfo, SdkWorkCommandData } from '../types';
 
 
 export interface OrderAdminOrdersOrdersPaymentConfirmationsCreateParams {
@@ -25,6 +25,81 @@ export class OrderAdminOrdersOrdersPaymentConfirmationsApi {
       {}
     );
     return this.client.request<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_confirmations`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
+  }
+}
+
+export interface OrderAdminOrdersOrdersAdminClassificationUpdateParams {
+  idempotencyKey: string;
+}
+
+export class OrderAdminOrdersOrdersAdminClassificationApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Replace an order's tag and scene classification */
+  async update(orderId: string, body: OrderClassificationWriteBody, params: OrderAdminOrdersOrdersAdminClassificationUpdateParams, requestOptions?: ApiRequestOptions): Promise<OrderClassification> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<OrderClassification>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/classification`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'PUT' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
+  }
+}
+
+export interface OrderAdminOrdersOrdersAdminTagsCreateParams {
+  idempotencyKey: string;
+}
+
+export class OrderAdminOrdersOrdersAdminTagsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Add tags to an order */
+  async create(orderId: string, body: OrderClassificationWriteBody, params: OrderAdminOrdersOrdersAdminTagsCreateParams, requestOptions?: ApiRequestOptions): Promise<OrderClassification> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<OrderClassification>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/tags`), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'POST' as any, body, contentType: 'application/json', ...(requestHeaders !== undefined ? { headers: requestHeaders } : {}), sdkworkUnwrapKind: 'item' });
+  }
+}
+
+export interface OrderAdminOrdersOrdersAdminFacetsListParams {
+  status?: string;
+  q?: string;
+  createdFrom?: string;
+  createdTo?: string;
+}
+
+export class OrderAdminOrdersOrdersAdminFacetsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** List order scene and tag facet buckets */
+  async list(params?: OrderAdminOrdersOrdersAdminFacetsListParams, requestOptions?: ApiRequestOptions): Promise<OrderFacet> {
+    const query = buildQueryString([
+      { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
+      { name: 'q', value: params?.q, style: 'form', explode: true, allowReserved: false },
+      { name: 'created_from', value: params?.createdFrom, style: 'form', explode: true, allowReserved: false },
+      { name: 'created_to', value: params?.createdTo, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.request<OrderFacet>(appendQueryString(backendApiPath(`/orders/facets`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -105,6 +180,9 @@ export interface OrderAdminOrdersOrdersAdminListParams {
   q?: string;
   createdFrom?: string;
   createdTo?: string;
+  scene?: 'web' | 'h5' | 'app' | 'mini_program' | 'cashier' | 'membership' | 'recharge' | 'platform' | 'default';
+  tags?: string[];
+  tagMatch?: 'any' | 'all';
   page?: string;
   pageSize?: string;
 }
@@ -122,12 +200,18 @@ export class OrderAdminOrdersOrdersAdminApi {
   public readonly cancellations: OrderAdminOrdersOrdersAdminCancellationsApi;
   public readonly refundRequests: OrderAdminOrdersOrdersAdminRefundRequestsApi;
   public readonly events: OrderAdminOrdersOrdersAdminEventsApi;
+  public readonly facets: OrderAdminOrdersOrdersAdminFacetsApi;
+  public readonly tags: OrderAdminOrdersOrdersAdminTagsApi;
+  public readonly classification: OrderAdminOrdersOrdersAdminClassificationApi;
 
   constructor(client: HttpClient) {
     this.client = client;
     this.cancellations = new OrderAdminOrdersOrdersAdminCancellationsApi(client);
     this.refundRequests = new OrderAdminOrdersOrdersAdminRefundRequestsApi(client);
     this.events = new OrderAdminOrdersOrdersAdminEventsApi(client);
+    this.facets = new OrderAdminOrdersOrdersAdminFacetsApi(client);
+    this.tags = new OrderAdminOrdersOrdersAdminTagsApi(client);
+    this.classification = new OrderAdminOrdersOrdersAdminClassificationApi(client);
   }
 
 
@@ -138,6 +222,9 @@ export class OrderAdminOrdersOrdersAdminApi {
       { name: 'q', value: params?.q, style: 'form', explode: true, allowReserved: false },
       { name: 'created_from', value: params?.createdFrom, style: 'form', explode: true, allowReserved: false },
       { name: 'created_to', value: params?.createdTo, style: 'form', explode: true, allowReserved: false },
+      { name: 'scene', value: params?.scene, style: 'form', explode: true, allowReserved: false },
+      { name: 'tags', value: params?.tags, style: 'form', explode: true, allowReserved: false },
+      { name: 'tag_match', value: params?.tagMatch, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);

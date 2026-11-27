@@ -5,7 +5,7 @@ use sdkwork_order_service::{
     CreateOwnerOrderOutcome, NoopOrderPartnerRelationPort, OrderOwnerDetail, OrderOwnerDetailQuery,
     OrderOwnerEventListQuery, OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerItem,
     OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerPaymentStatus, OrderOwnerStatistics,
-    OrderOwnerSummary, OrderPartnerRelationPort, OrderPartnerSnapshot,
+    OrderOwnerSummary, OrderPartnerRelationPort, OrderPartnerSnapshot, OrderScene,
 };
 use sdkwork_payment_service::{parse_scene_codes_csv, PaymentMethodItem, PaymentMethodListQuery};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -94,8 +94,9 @@ SELECT
     ) AS recharge_points,
     o.partner_id,
     o.partner_snapshot_json,
-    o.partner_id,
-    o.partner_snapshot_json,
+    o.scene_code,
+    o.tags,
+    o.remark,
     COUNT(*) OVER() AS total_count
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
@@ -113,9 +114,34 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND ($4 IS NULL OR o.status = $4)
   AND ($5 IS NULL OR o.subject = $5)
+  /* facets:scene */
+  /* facets:tags */
 ORDER BY o.created_at DESC, o.id DESC
 LIMIT $6 OFFSET $7
 "#;
+
+/// Substitutes the facet predicates into [`LIST_OWNER_ORDERS`].
+///
+/// The statement is a compile-time constant with two marker comments so the
+/// fixed SQL stays readable and greppable while the optional facets are
+/// composed at call time. Both arguments are either empty or an
+/// `AND ...` fragment produced by [`crate::order_facets`], which never embeds
+/// user text — only `$N` placeholders.
+fn render_owner_orders_sql(scene_predicate: &str, tags_predicate: &str) -> String {
+    LIST_OWNER_ORDERS
+        .replace("  /* facets:scene */\n", &facet_line(scene_predicate))
+        .replace("  /* facets:tags */\n", &facet_line(tags_predicate))
+}
+
+/// Formats a facet fragment as either nothing or a trimmed predicate line.
+fn facet_line(predicate: &str) -> String {
+    let trimmed = predicate.trim();
+    if trimmed.is_empty() {
+        String::new()
+    } else {
+        format!("  {trimmed}\n")
+    }
+}
 
 const LIST_OWNER_ORDER_EVENTS: &str = r#"
 SELECT
@@ -191,7 +217,10 @@ SELECT
     ) AS payment_method,
     COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
     COALESCE(NULLIF(pa.out_trade_no, ''), NULLIF(o.order_no, '')) AS out_trade_no,
-    CAST(pa.id AS TEXT) AS transaction_id
+    CAST(pa.id AS TEXT) AS transaction_id,
+    o.scene_code,
+    o.tags,
+    o.remark
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
@@ -442,14 +471,37 @@ impl PostgresCommerceOrderStore {
         &self,
         query: OrderOwnerListQuery,
     ) -> Result<OrderOwnerListPage, CommerceServiceError> {
-        let rows = sqlx::query(LIST_OWNER_ORDERS)
+        // Facet placeholders start after the seven fixed parameters
+        // ($1 tenant, $2 org, $3 owner, $4 status, $5 subject, $6 limit,
+        // $7 offset); the tag list may occupy any number of them.
+        let tag_literals = crate::order_facets::json_tag_literals(&query.tags);
+        let scene_predicate = crate::order_facets::order_scene_predicate(query.scene, 8);
+        let tags_predicate = crate::order_facets::order_tags_predicate(
+            &query.tags,
+            query.tag_match,
+            8 + usize::from(query.scene.is_some()),
+        );
+        let sql = render_owner_orders_sql(
+            scene_predicate.as_deref().unwrap_or_default(),
+            tags_predicate.as_deref().unwrap_or_default(),
+        );
+
+        let mut statement = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(&query.tenant_id)
             .bind(query.organization_id.as_deref())
             .bind(&query.owner_user_id)
             .bind(query.status.as_deref())
             .bind(query.subject.as_deref())
             .bind(query.limit())
-            .bind(query.offset())
+            .bind(query.offset());
+        if let Some(scene) = query.scene {
+            statement = statement.bind(scene.as_str());
+        }
+        for literal in &tag_literals {
+            statement = statement.bind(literal);
+        }
+
+        let rows = statement
             .fetch_all(&self.pool)
             .await
             .or_else(empty_rows_when_read_model_is_missing)
@@ -1325,7 +1377,37 @@ fn map_order_summary_row(
                     status: String::new(),
                 })
             }),
+        scene: map_scene_cell(row),
+        tags: map_tags_cell(row),
+        remark: optional_string_cell(row, "remark"),
     })
+}
+
+/// Reads `scene_code` back into the closed [`OrderScene`] set.
+///
+/// A stored value the current binary does not know about must not fail the
+/// whole page, so it degrades to `Default` rather than erroring; the row is
+/// still listable and the operator simply sees the fallback scene.
+fn map_scene_cell(row: &sqlx::postgres::PgRow) -> OrderScene {
+    optional_string_cell(row, "scene_code")
+        .as_deref()
+        .and_then(|value| OrderScene::parse(value).ok())
+        .unwrap_or_default()
+}
+
+/// Reads the JSONB tag array into canonical tag strings.
+///
+/// Malformed elements are dropped, not propagated: tags are a filter facet and
+/// a single bad token from a legacy writer must never hide an order.
+fn map_tags_cell(row: &sqlx::postgres::PgRow) -> Vec<String> {
+    let raw: Option<serde_json::Value> = row.try_get("tags").ok().flatten();
+    let Some(serde_json::Value::Array(values)) = raw else {
+        return Vec::new();
+    };
+    values
+        .into_iter()
+        .filter_map(|value| value.as_str().map(str::to_owned))
+        .collect()
 }
 
 fn positive_i64_cell(row: &sqlx::postgres::PgRow, column: &str) -> Option<i64> {

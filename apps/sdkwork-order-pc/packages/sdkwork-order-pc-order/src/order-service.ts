@@ -11,8 +11,12 @@ import {
   unwrapSdkworkOrderListPage,
   unwrapSdkworkOrderResponse,
   readSdkworkMediaResource,
+  normalizeSdkworkOrderScene,
+  toSdkworkOrderFacetParams,
   type SdkworkOrderAppService,
   type SdkworkMediaResource,
+  type SdkworkOrderScene,
+  type SdkworkOrderTagMatchMode,
 } from "@sdkwork/order-service";
 import {
   createSdkworkOrderMessages,
@@ -49,6 +53,10 @@ export interface SdkworkOrderSummary {
   quota: number | null;
   quantity: number;
   remark?: string;
+  /** Commerce scene the order was placed in (canonical value). */
+  scene: string;
+  /** Operator/attribution tags (canonical, empty when untagged). */
+  tags: string[];
   status: SdkworkOrderStatus;
   statusLabel: string;
   subject: string;
@@ -125,6 +133,18 @@ export interface SdkworkOrderDashboardQuery {
   pageSize?: number;
   /** Optional status filter forwarded to the backend `status` query param. */
   status?: SdkworkOrderStatus | "all";
+  /**
+   * Commerce scene facet (`web`, `h5`, `app`, `mini_program`, …).
+   *
+   * The same two facets exist on every order-centre surface (PC admin, PC
+   * buyer, H5, Flutter, mini program), so a buyer filtering "just my H5 orders"
+   * and an operator filtering the same thing see identical results.
+   */
+  scene?: SdkworkOrderScene;
+  /** Tag facet values (canonicalized before sending). */
+  tags?: readonly string[];
+  /** How `tags` combine. Defaults to `any` on the server. */
+  tagMatch?: SdkworkOrderTagMatchMode;
 }
 
 export interface SdkworkOrderPaymentInput {
@@ -190,9 +210,13 @@ interface RemoteOrder {
   points?: number | string;
   quantity?: number | string;
   remark?: string;
+  /** Commerce scene; absent on gateways that predate the facet contract. */
+  scene?: string;
   status?: string;
   statusName?: string;
   subject?: string;
+  /** Order tags; absent on gateways that predate the facet contract. */
+  tags?: unknown;
   totalAmount?: number | string;
 }
 
@@ -334,12 +358,24 @@ function createEmptyDashboard(): SdkworkOrderDashboardData {
 
 function normalizeDashboardQuery(
   query?: SdkworkOrderDashboardQuery,
-): { page: number; pageSize: number; status: string | undefined } {
+): {
+  page: number;
+  pageSize: number;
+  status: string | undefined;
+  facetParams: ReturnType<typeof toSdkworkOrderFacetParams>;
+} {
   const page = Math.max(1, Math.floor(toSdkworkOrderNumber(query?.page, 1) || 1));
   const pageSize = Math.min(200, Math.max(1, Math.floor(toSdkworkOrderNumber(query?.pageSize, 20) || 20)));
   const rawStatus = query?.status;
   const status = rawStatus && rawStatus !== "all" ? toApiOrderStatusWire(rawStatus) : undefined;
-  return { page, pageSize, status };
+  // Facets go through the shared normalizer so the buyer surface submits the
+  // same canonical scene/tag values the admin surface does.
+  const facetParams = toSdkworkOrderFacetParams({
+    scene: query?.scene,
+    tags: query?.tags,
+    tagMatch: query?.tagMatch,
+  });
+  return { page, pageSize, status, facetParams };
 }
 
 function mapOrderSummary(
@@ -363,6 +399,12 @@ function mapOrderSummary(
     quota: toNullableSdkworkOrderNumber(order.points),
     quantity: toSdkworkOrderNumber(order.quantity, 1),
     remark: toSdkworkOrderOptionalString(order.remark),
+    // Facets degrade gracefully: a gateway that predates them simply yields the
+    // neutral scene and no tags instead of failing the whole row.
+    scene: normalizeSdkworkOrderScene(order.scene) ?? "default",
+    tags: Array.isArray(order.tags)
+      ? (order.tags as unknown[]).filter((tag): tag is string => typeof tag === "string")
+      : [],
     status,
     statusLabel: toSdkworkOrderOptionalString(order.statusName) || formatStatusLabel(status, messages),
     subject: toSdkworkOrderOptionalString(order.subject) || copy.summaryFallbackSubject,
@@ -509,13 +551,14 @@ export function createSdkworkOrderService(
         return createEmptyDashboard();
       }
 
-      const { page, pageSize, status } = normalizeDashboardQuery(query);
+      const { page, pageSize, status, facetParams } = normalizeDashboardQuery(query);
 
       const [orderPagePayload, statisticsPayload] = await Promise.all([
         getOrderAppService().orders.list({
             page,
             pageSize,
             ...(status ? { status } : {}),
+            ...facetParams,
         }),
         getOrderAppService().orders.statistics.retrieve(),
       ]);

@@ -2,7 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use axum::extract::{Extension, Path, Query, State};
+use axum::extract::{Extension, Path, Query, RawQuery, State};
 use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::routing::{get, post};
@@ -129,6 +129,16 @@ struct OrderListQueryParams {
     page: Option<i64>,
     page_size: Option<i64>,
     status: Option<String>,
+    /// Commerce scene facet (`web`, `h5`, `app`, `mini_program`, …).
+    /// `all` or `*` disables the filter, so a UI can bind the value directly.
+    scene: Option<String>,
+    /// Tag facet, accepted both as `tags=vip,risk` and as repeated
+    /// `tags=vip&tags=risk`. Repeated keys are collected separately by
+    /// [`collect_repeated_query_values`] because `serde_urlencoded` keeps only
+    /// the last value for a repeated key.
+    tags: Option<String>,
+    /// `any` (default) or `all`.
+    tag_match: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,6 +189,13 @@ struct OrderSummaryResponse {
     payment_method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     remark: Option<String>,
+    /// Commerce scene the order was placed in (`web`, `h5`, `app`,
+    /// `mini_program`, …). Always present so a client can group without a
+    /// null check.
+    scene: String,
+    /// Operator/attribution tags. Always present (possibly empty) because an
+    /// empty list is meaningful: the order is untagged.
+    tags: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     payment_provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -422,12 +439,23 @@ async fn list_orders(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
+    RawQuery(raw_query): RawQuery,
     Query(params): Query<OrderListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
+    };
+    let repeated_tags = sdkwork_order_service::collect_repeated_query_values(raw_query.as_deref(), "tags");
+    let facets = match sdkwork_order_service::OrderListFacets::parse(
+        params.scene.as_deref(),
+        params.tags.as_deref(),
+        &repeated_tags,
+        params.tag_match.as_deref(),
+    ) {
+        Ok(facets) => facets,
+        Err(error) => return validation(ctx, error.message()),
     };
     let query = match OrderOwnerListQuery::new(
         &subject.tenant_id,
@@ -440,7 +468,8 @@ async fn list_orders(
     ) {
         Ok(query) => query,
         Err(error) => return map_service_error(ctx, error),
-    };
+    }
+    .with_facets(facets.scene, facets.tags, facets.tag_match);
 
     match state.store.list_owner_orders(query).await {
         Ok(page) => {
@@ -923,7 +952,7 @@ fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {
         pay_time: value.pay_time,
         expire_time: value.expire_time,
         payment_method: value.payment_method,
-        remark: None,
+        remark: value.remark,
         payment_provider: None,
         product_image: None,
         points: value.points,
@@ -936,6 +965,8 @@ fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {
             .partner
             .as_ref()
             .map(|partner| partner.level_no.clone()),
+        scene: value.scene.as_str().to_owned(),
+        tags: value.tags,
     }
 }
 

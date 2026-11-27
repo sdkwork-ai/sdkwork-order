@@ -2,6 +2,7 @@ import '../logic/cashier_logic.dart';
 import '../logic/envelope.dart';
 import '../logic/idempotency.dart';
 import '../models/account_value_models.dart';
+import '../models/order_facets.dart';
 import '../models/order_models.dart';
 import '../transport/order_transport.dart';
 
@@ -24,11 +25,18 @@ class OrderService {
 
   /// `GET /orders` — one server page (`status` omitted for the 全部 tab,
   /// matching the mobile-react `toOrderListStatusWire`).
+  ///
+  /// [facets] narrows the page by the same scene/tag dimensions every other
+  /// order-centre surface exposes, so a buyer filtering "H5 orders tagged vip"
+  /// on this app sees exactly what the PC client would show. Facet keys are
+  /// only sent when set, preserving the gateway's "everything" default.
   Future<OrderPage> listOrders({
     String? status,
     int page = 1,
     int pageSize = 20,
+    OrderListFacets facets = const OrderListFacets(),
   }) async {
+    final tags = facets.tags.where((tag) => tag.isNotEmpty).toList(growable: false);
     final data = await _transport.request(
       '/orders',
       query: {
@@ -36,6 +44,10 @@ class OrderService {
         'page_size': '$pageSize',
         if (status != null && status.isNotEmpty && status != 'all')
           'status': status,
+        if (facets.scene != null && facets.scene!.isNotEmpty)
+          'scene': facets.scene!,
+        if (tags.isNotEmpty) 'tags': tags.join(','),
+        if (tags.isNotEmpty) 'tag_match': facets.tagMatch.wire,
       },
     );
     return OrderPage(

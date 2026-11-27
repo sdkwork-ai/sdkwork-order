@@ -773,7 +773,7 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS commerce_order_event (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    organization_id TEXT,
+    organization_id TEXT NOT NULL DEFAULT '0',
     event_no TEXT NOT NULL,
     order_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -2839,3 +2839,102 @@ ALTER TABLE commerce_after_sales_request
 
 CREATE INDEX IF NOT EXISTS idx_after_sales_request_refund_request
     ON commerce_after_sales_request(tenant_id, refund_request_id);
+
+
+-- folded migration: migrations/postgres/0025_order_scene_tags.up.sql
+-- sdkwork:migration
+-- id: 0025_order_scene_tags
+-- engine: postgres
+-- module: sdkwork-order
+-- purpose: Give every order two classification facets that the order center
+--   can search and filter across all surfaces (PC admin, PC buyer, H5,
+--   Flutter, mini-program).
+--   `scene_code` records the commerce scenario the order was placed in
+--   (how the buyer reached checkout), which is what operations teams segment
+--   on when triaging funnel health and routing fulfilment.
+--   `tags` is a normalized free-form label set (lowercase, hyphenated,
+--   deduplicated, bounded) for risk/operation/campaign cohorts. Both are
+--   filter-only facets: they never change lifecycle state.
+--   `remark` is the operator note mirrored next to the classification so a tag
+--   decision has its rationale in the same record.
+-- reversible: true
+-- rollback: DROP COLUMN tags, scene_code, remark (additive, no data dependency)
+-- transactional: true
+-- lock: lightweight
+-- lock_timeout: 2s
+-- statement_timeout: 30s
+
+ALTER TABLE commerce_order
+    ADD COLUMN IF NOT EXISTS scene_code TEXT NOT NULL DEFAULT 'default';
+
+ALTER TABLE commerce_order
+    ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE commerce_order
+    ADD COLUMN IF NOT EXISTS remark TEXT;
+
+-- Tag payload is a JSON array of canonical lowercase strings. The check runs
+-- on write only; reading a malformed value is impossible because the default
+-- and every writer go through `OrderTag::normalize`.
+ALTER TABLE commerce_order
+    DROP CONSTRAINT IF EXISTS ck_commerce_order_tags_json;
+
+ALTER TABLE commerce_order
+    ADD CONSTRAINT ck_commerce_order_tags_json
+    CHECK (jsonb_typeof(tags) = 'array');
+
+-- Scene segmentation: operations lists "orders in this scene, newest first".
+CREATE INDEX IF NOT EXISTS idx_commerce_order_scene_list
+    ON commerce_order (tenant_id, organization_id, scene_code, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_commerce_order_scene_status_list
+    ON commerce_order (tenant_id, organization_id, scene_code, status, created_at DESC, id DESC);
+
+-- Buyer-facing ("my orders") scene filter.
+CREATE INDEX IF NOT EXISTS idx_order_owner_scene_list
+    ON commerce_order (tenant_id, organization_id, owner_user_id, scene_code, created_at DESC, id DESC);
+
+-- Tag containment search. JSONB GIN serves `tags @> '["vip"]'` (AND semantics);
+-- the expression index serves OR semantics through per-tag equality probes.
+CREATE INDEX IF NOT EXISTS idx_commerce_order_tags_gin
+    ON commerce_order USING GIN (tags jsonb_path_ops);
+
+COMMENT ON COLUMN commerce_order.scene_code IS
+    'Commerce scenario the order was placed in (checkout entry surface / business scenario).';
+COMMENT ON COLUMN commerce_order.tags IS
+    'Canonical lowercase order label set for operator cohorts, risk flags, and campaign attribution.';
+COMMENT ON COLUMN commerce_order.remark IS
+    'Operator note captured alongside the tag/classification decision.';
+
+
+-- folded migration: migrations/postgres/0026_order_event_organization_scope.up.sql
+-- sdkwork:migration
+-- id: 0026_order_event_organization_scope
+-- engine: postgres
+-- module: sdkwork-order
+-- purpose: Align `commerce_order_event.organization_id` with DATABASE_SPEC
+--   DB089, which requires the organization scope to be `NOT NULL DEFAULT '0'`
+--   (the platform sentinel) rather than nullable. A NULL scope forces every
+--   reader into the `(organization_id = $2 OR organization_id IS NULL)` fuzz,
+--   which can both hide events from an organization-scoped reader and let one
+--   organization's scope decorate another's timeline. The order centre renders
+--   this table as the order timeline, so the invariant matters there.
+-- reversible: false
+-- rollback: forward-fix (nulling the scope again would reintroduce the fuzzy
+--   matching this migration removes)
+-- transactional: true
+-- lock: lightweight
+-- lock_timeout: 2s
+-- statement_timeout: 30s
+
+-- Backfill first so the NOT NULL constraint can be added without a rewrite
+-- rewrite on a populated table.
+UPDATE commerce_order_event
+SET organization_id = '0'
+WHERE organization_id IS NULL;
+
+ALTER TABLE commerce_order_event
+    ALTER COLUMN organization_id SET DEFAULT '0';
+
+ALTER TABLE commerce_order_event
+    ALTER COLUMN organization_id SET NOT NULL;

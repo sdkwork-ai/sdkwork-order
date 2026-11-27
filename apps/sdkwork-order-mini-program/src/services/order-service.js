@@ -53,6 +53,16 @@ function mapOrderSummary(value) {
     paymentMethod: record.paymentMethod != null ? String(record.paymentMethod) : undefined,
     remark: record.remark != null ? String(record.remark) : undefined,
     points: record.points != null ? Number(record.points) : undefined,
+    /**
+     * Commerce scene the order was placed in. Kept undefined when the gateway
+     * predates the facet contract so the UI can hide the badge instead of
+     * claiming "unspecified".
+     */
+    scene: record.scene != null && String(record.scene).trim() !== "" ? String(record.scene) : undefined,
+    /** Canonical operator/attribution tags; always an array so callers can map it. */
+    tags: Array.isArray(record.tags)
+      ? record.tags.filter((tag) => typeof tag === "string" && tag.length > 0)
+      : [],
   };
 }
 
@@ -92,12 +102,60 @@ function mapOrderEvent(value) {
   };
 }
 
+/** Maximum length of one canonical tag (mirrors `ORDER_TAG_MAX_LENGTH`). */
+const ORDER_TAG_MAX_LENGTH = 32;
+
+/**
+ * Canonicalizes one order tag, mirroring the backend `OrderTag::normalize` and
+ * the TypeScript/Dart equivalents: lowercase, alphanumerics plus `-`, with
+ * whitespace/`_`/`.`/`-` folded into a single `-` and no leading or trailing
+ * separator. Returns "" for input that normalizes to nothing or contains a
+ * character the server would reject, so callers can drop the token silently.
+ */
+function normalizeOrderTag(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim();
+  let canonical = "";
+  let pendingSeparator = false;
+  for (const character of raw) {
+    if (/[\p{L}\p{N}]/u.test(character)) {
+      if (pendingSeparator && canonical.length > 0) {
+        canonical += "-";
+      }
+      canonical += character.toLowerCase();
+      pendingSeparator = false;
+      continue;
+    }
+    if (character === "_" || character === "-" || character === "." || /\s/u.test(character)) {
+      pendingSeparator = true;
+      continue;
+    }
+    return "";
+  }
+  if (!canonical) {
+    return "";
+  }
+  // Count code points, matching the server's `chars().count()` bound.
+  if ([...canonical].length > ORDER_TAG_MAX_LENGTH) {
+    return "";
+  }
+  return canonical;
+}
+
 /** Order status list endpoint (page_size/page). */
 async function listOrders(options = {}) {
+  // Facets mirror the other order-centre surfaces: `scene` narrows to one
+  // commerce scenario and `tags` narrows to tagged orders. Both are optional
+  // and only sent when set, so the gateway default stays "everything".
+  const tags = Array.isArray(options.tags)
+    ? options.tags.filter((tag) => typeof tag === "string" && tag.trim() !== "")
+    : [];
   const payload = await request({
     path: "/orders",
     query: {
       status: normalizeStatus(options.status),
+      scene: options.scene ? String(options.scene).trim() : undefined,
+      tags: tags.length > 0 ? tags.join(",") : undefined,
+      tag_match: tags.length > 0 ? (options.tagMatch === "all" ? "all" : "any") : undefined,
       page: options.page ?? 1,
       page_size: options.pageSize ?? 20,
     },
@@ -347,7 +405,9 @@ function pollPaymentSuccess(orderId, options = {}) {
 
 module.exports = {
   ORDER_TABS,
+  ORDER_TAG_MAX_LENGTH,
   CASHIER_TTL_MS,
+  normalizeOrderTag,
   listOrders,
   getStatistics,
   getOrderDetail,

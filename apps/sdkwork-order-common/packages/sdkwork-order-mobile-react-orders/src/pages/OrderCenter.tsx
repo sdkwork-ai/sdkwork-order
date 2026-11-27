@@ -6,10 +6,12 @@ import { PageLayout } from "@sdkwork/ui-mobile-react";
 
 import { OrderActionButtons } from "../components/OrderActionButtons";
 import { OrderCard } from "../components/OrderCard";
+import { OrderFacetBar } from "../components/OrderFacetBar";
 import { OrderTabsNav } from "../components/OrderTabsNav";
 import {
   OrderService,
   type Order,
+  type OrderListFacets,
   type OrderTab,
   type OrderTabId,
 } from "../services/OrderService";
@@ -59,6 +61,7 @@ export function OrderCenter({
 
   const [tabs, setTabs] = useState<readonly OrderTab[]>([]);
   const [orders, setOrders] = useState<readonly Order[]>([]);
+  const [facets, setFacets] = useState<OrderListFacets>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,7 +73,7 @@ export function OrderCenter({
       // seam so a future server-driven tab set needs no page change.
       const [tabList, pageOrders] = await Promise.all([
         OrderService.getOrderTabs(),
-        OrderService.getOrders(activeTab),
+        OrderService.getOrders(activeTab, facets),
       ]);
       setTabs(tabList);
       setOrders(pageOrders);
@@ -79,7 +82,7 @@ export function OrderCenter({
     } finally {
       setLoading(false);
     }
-  }, [activeTab, t]);
+  }, [activeTab, facets, t]);
 
   useEffect(() => {
     void load();
@@ -122,6 +125,18 @@ export function OrderCenter({
         }))}
         activeTab={activeTab}
         onTabChange={handleTabChange}
+      />
+      <OrderFacetBar
+        facets={facets}
+        labels={{
+          anyScene: t("orders.facet.anyScene", "全部场景"),
+          tagFilter: t("orders.facet.tagFilter", "筛选"),
+          tagMatchAll: t("orders.facet.tagMatchAll", "全部标签"),
+          tagMatchAny: t("orders.facet.tagMatchAny", "任一标签"),
+          tagsPlaceholder: t("orders.facet.tagsPlaceholder", "输入标签后回车筛选"),
+        }}
+        onChange={setFacets}
+        sceneLabel={(scene) => t(`orders.scene.${scene}`, scene)}
       />
       <div className="flex-1 overflow-y-auto px-3 py-3">
         {loading ? (

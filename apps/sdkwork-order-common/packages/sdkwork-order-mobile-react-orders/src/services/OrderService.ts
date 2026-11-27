@@ -173,6 +173,24 @@ export interface Order {
   readonly items: readonly OrderItem[];
   readonly outTradeNo?: string;
   readonly transactionId?: string;
+  /**
+   * Commerce scene the order was placed in (canonical). Absent only on
+   * gateways that predate the facet contract, where the buyer surface should
+   * treat the order as `default`.
+   */
+  readonly scene?: string;
+  /** Canonical operator/attribution tags; empty when untagged. */
+  readonly tags: readonly string[];
+}
+
+/** Facet selection accepted by [`OrderService.getOrders`]. */
+export interface OrderListFacets {
+  /** Commerce scene (`web`, `h5`, `app`, `mini_program`, …). */
+  readonly scene?: string;
+  /** Canonical tag values. */
+  readonly tags?: readonly string[];
+  /** `any` (default) or `all`. */
+  readonly tagMatch?: "any" | "all";
 }
 
 /** Result of `POST /app/v3/api/orders/{orderId}/payments`. */
@@ -490,6 +508,10 @@ function mapOrderSummary(value: Record<string, unknown>): Order {
     items: itemsValue.map((item) => mapOrderItem(item as Record<string, unknown>)),
     outTradeNo: toOptionalString(value.outTradeNo),
     transactionId: toOptionalString(value.transactionId),
+    scene: toOptionalString(value.scene),
+    tags: Array.isArray(value.tags)
+      ? value.tags.filter((tag): tag is string => typeof tag === "string")
+      : [],
   };
 }
 
@@ -540,12 +562,26 @@ export class OrderService {
     ];
   }
 
-  static async getOrders(tabId: OrderTabId | "all" = "all"): Promise<Order[]> {
+  /**
+   * Lists the buyer's orders.
+   *
+   * `facets` narrows the result by the same scene/tag dimensions every other
+   * order-centre surface (PC admin, PC buyer, mini program) exposes, so a buyer
+   * and an operator filtering "H5 orders tagged vip" get identical rows. Only
+   * set facets are sent, so the gateway default (no facet filter) is preserved.
+   */
+  static async getOrders(
+    tabId: OrderTabId | "all" = "all",
+    facets: OrderListFacets = {},
+  ): Promise<Order[]> {
     const { client } = requireOrderRuntime();
+    const tags = (facets.tags ?? []).filter((tag) => typeof tag === "string" && tag.length > 0);
     const page = await client.orderOrders.orders.list({
       status: toOrderListStatusWire(tabId),
       page: 1,
       pageSize: 50,
+      ...(facets.scene ? { scene: facets.scene as never } : {}),
+      ...(tags.length > 0 ? { tags: [...tags], tagMatch: facets.tagMatch ?? "any" } : {}),
     });
     return (page.items ?? []).map((item) => mapOrderSummary(item as Record<string, unknown>));
   }

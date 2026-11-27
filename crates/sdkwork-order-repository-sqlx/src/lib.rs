@@ -2,6 +2,7 @@ mod app_template_order_identity;
 mod membership_order_identity;
 mod money_amount;
 pub mod cashier_order;
+mod order_facets;
 pub mod order_lifecycle;
 pub mod order_limits;
 pub mod order_payment_settlement;

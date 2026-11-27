@@ -1,20 +1,22 @@
 use std::sync::Arc;
 
-use axum::extract::{Extension, Path, Query, State};
+use axum::extract::{Extension, Path, Query, RawQuery, State};
 use axum::http::HeaderMap;
 use axum::response::Response;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
 use sdkwork_order_service::{
-    AccountValueAssetCode, CancelManagementOrderCommand, CloseManagementOrderCommand,
-    CreateOrderRefundRequestCommand, OrderCancellationListQuery, OrderCancellationPage,
-    OrderCancellationView, OrderManagementDetailQuery, OrderManagementEventListQuery,
-    OrderManagementEventPage, OrderManagementEventView, OrderManagementListPage,
-    OrderManagementListQuery, OrderOwnerDetail, OrderOwnerSummary,
-    PhysicalInventoryReservationPort,
+    parse_optional_scene, AccountValueAssetCode, AddOrderTagsCommand, CancelManagementOrderCommand,
+    CloseManagementOrderCommand, CreateOrderRefundRequestCommand, OrderCancellationListQuery,
+    OrderCancellationPage, OrderCancellationView, OrderClassificationView,
+    OrderManagementDetailQuery, OrderManagementEventListQuery, OrderManagementEventPage,
+    OrderManagementEventView, OrderManagementFacetView, OrderManagementListPage,
+    OrderManagementListQuery, OrderOwnerDetail, OrderOwnerSummary, OrderTag, OrderTagSet,
+    PhysicalInventoryReservationPort, ReplaceOrderClassificationCommand,
+    ORDER_TAG_MAX_COUNT,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
@@ -61,8 +63,28 @@ struct OrderListParams {
     q: Option<String>,
     created_from: Option<String>,
     created_to: Option<String>,
+    /// Commerce scene facet; `all`/`*` disables the filter.
+    scene: Option<String>,
+    /// Tag facet; accepts `tags=a,b` and repeated `tags=a&tags=b`.
+    tags: Option<String>,
+    /// `any` (default) or `all`.
+    tag_match: Option<String>,
     page: Option<i64>,
     page_size: Option<i64>,
+}
+
+/// Body for the tag/classification write endpoints.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OrderClassificationBody {
+    /// Tags to add/remove, or the full replacement set. Accepts the raw
+    /// operator input; canonicalization happens in the service layer.
+    #[serde(default)]
+    tags: Vec<String>,
+    /// Replacement scene (`replace` only). Ignored by add/remove.
+    scene: Option<String>,
+    /// Operator note recorded beside the classification.
+    remark: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,6 +147,13 @@ struct OrderSummaryResponse {
     partner_level_no: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     partner_status: Option<String>,
+    /// Commerce scene the order was placed in.
+    scene: String,
+    /// Operator/attribution tags (canonical, possibly empty).
+    tags: Vec<String>,
+    /// Operator note recorded beside the classification.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remark: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -177,6 +206,39 @@ struct OrderCancellationResponse {
     created_at: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OrderClassificationResponse {
+    order_id: String,
+    scene: String,
+    tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remark: Option<String>,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OrderSceneFacetResponse {
+    scene: String,
+    count: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OrderTagFacetResponse {
+    tag: String,
+    count: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OrderFacetResponse {
+    scenes: Vec<OrderSceneFacetResponse>,
+    tags: Vec<OrderTagFacetResponse>,
+    total_orders: i64,
+}
+
 pub fn backend_order_admin_router_with_postgres_pool(
     pool: PgPool,
     inventory: Arc<dyn PhysicalInventoryReservationPort>,
@@ -213,11 +275,20 @@ fn build_backend_order_admin_router(
     };
     Router::new()
         .route("/backend/v3/api/orders", get(list_orders))
+        .route("/backend/v3/api/orders/facets", get(list_order_facets))
         .route(
             "/backend/v3/api/orders/cancellations",
             get(list_cancellations),
         )
         .route("/backend/v3/api/orders/{orderId}", get(retrieve_order))
+        .route(
+            "/backend/v3/api/orders/{orderId}/tags",
+            post(add_order_tags),
+        )
+        .route(
+            "/backend/v3/api/orders/{orderId}/classification",
+            put(replace_order_classification),
+        )
         .route(
             "/backend/v3/api/orders/{orderId}/cancel",
             post(cancel_order),
@@ -270,18 +341,57 @@ impl BackendManagementOrderStore {
             Self::Postgres(store) => store.list_order_cancellations(query).await,
         }
     }
+
+    async fn management_order_facets(
+        &self,
+        query: &OrderManagementListQuery,
+    ) -> Result<OrderManagementFacetView, CommerceServiceError> {
+        match self {
+            Self::Postgres(store) => store.management_order_facets(query).await,
+        }
+    }
+
+    async fn add_order_tags(
+        &self,
+        command: AddOrderTagsCommand,
+    ) -> Result<OrderClassificationView, CommerceServiceError> {
+        match self {
+            Self::Postgres(store) => store.add_management_order_tags(command).await,
+        }
+    }
+
+    async fn replace_order_classification(
+        &self,
+        command: ReplaceOrderClassificationCommand,
+    ) -> Result<OrderClassificationView, CommerceServiceError> {
+        match self {
+            Self::Postgres(store) => store.replace_management_order_classification(command).await,
+        }
+    }
 }
 
 async fn list_orders(
     State(state): State<BackendOrderAdminState>,
     Extension(runtime_context): Extension<IamAppContext>,
     request_context: Extension<WebRequestContext>,
+    RawQuery(raw_query): RawQuery,
     Query(params): Query<OrderListParams>,
 ) -> Response {
     let ctx = Some(&request_context.0);
     let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
         Err(response) => return *response,
+    };
+    let repeated_tags =
+        sdkwork_order_service::collect_repeated_query_values(raw_query.as_deref(), "tags");
+    let facets = match sdkwork_order_service::OrderListFacets::parse(
+        params.scene.as_deref(),
+        params.tags.as_deref(),
+        &repeated_tags,
+        params.tag_match.as_deref(),
+    ) {
+        Ok(facets) => facets,
+        Err(error) => return validation(ctx, error.message()),
     };
     let query = match OrderManagementListQuery::with_created_range(
         &subject.tenant_id,
@@ -295,7 +405,8 @@ async fn list_orders(
     ) {
         Ok(query) => query,
         Err(error) => return validation(ctx, error.message()),
-    };
+    }
+    .with_facets(facets.scene, facets.tags, facets.tag_match);
 
     match state.orders.list_management_orders(query.clone()).await {
         Ok(page) => {
@@ -307,6 +418,49 @@ async fn list_orders(
                 page_params,
             )
         }
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+/// Returns the scene/tag facet buckets for the current list scope.
+///
+/// This is what makes the filter bar honest: it shows how many orders sit in
+/// each bucket *before* the tag/scene narrowing, so an operator never clicks a
+/// filter that yields nothing when they could see the count upfront.
+async fn list_order_facets(
+    State(state): State<BackendOrderAdminState>,
+    Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
+    RawQuery(query_string): RawQuery,
+) -> Response {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    // The facet scope honours status/q/created_* but ignores tags/scene, so the
+    // same query string as the list request can be forwarded and only the
+    // narrowing facets are dropped.
+    let params = match parse_facet_scope_params(query_string.as_deref()) {
+        Ok(params) => params,
+        Err(message) => return validation(ctx, message),
+    };
+    let query = match OrderManagementListQuery::with_created_range(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        params.status.as_deref(),
+        params.q.as_deref(),
+        params.created_from.as_deref(),
+        params.created_to.as_deref(),
+        Some(1),
+        Some(1),
+    ) {
+        Ok(query) => query,
+        Err(error) => return validation(ctx, error.message()),
+    };
+
+    match state.orders.management_order_facets(&query).await {
+        Ok(facets) => success_item(ctx, map_order_facets(facets)),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -654,6 +808,210 @@ async fn list_cancellations(
     }
 }
 
+/// Parses the facet-scope subset of the order list query string.
+///
+/// Reuses the list handler's parameter shape so a client can forward the exact
+/// same query string to `/orders/facets`; the narrowing facets (`tags`,
+/// `scene`) and paging are deliberately ignored.
+fn parse_facet_scope_params(raw_query: Option<&str>) -> Result<OrderListParams, String> {
+    let mut params = OrderListParams {
+        status: None,
+        q: None,
+        created_from: None,
+        created_to: None,
+        scene: None,
+        tags: None,
+        tag_match: None,
+        page: None,
+        page_size: None,
+    };
+    for pair in raw_query.unwrap_or_default().split('&') {
+        let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
+        let value = percent_decode_query_value(value);
+        match name {
+            "status" => params.status = non_empty(value),
+            "q" => params.q = non_empty(value),
+            "created_from" => params.created_from = non_empty(value),
+            "created_to" => params.created_to = non_empty(value),
+            _ => {}
+        }
+    }
+    Ok(params)
+}
+
+fn non_empty(value: String) -> Option<String> {
+    if value.trim().is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+fn percent_decode_query_value(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => {
+                out.push(b' ');
+                index += 1;
+            }
+            b'%' if index + 2 < bytes.len() => {
+                let decode = |byte: u8| match byte {
+                    b'0'..=b'9' => Some(byte - b'0'),
+                    b'a'..=b'f' => Some(byte - b'a' + 10),
+                    b'A'..=b'F' => Some(byte - b'A' + 10),
+                    _ => None,
+                };
+                match (decode(bytes[index + 1]), decode(bytes[index + 2])) {
+                    (Some(high), Some(low)) => {
+                        out.push(high << 4 | low);
+                        index += 3;
+                    }
+                    _ => {
+                        out.push(b'%');
+                        index += 1;
+                    }
+                }
+            }
+            byte => {
+                out.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn parse_classification_tags(raw: &[String]) -> Result<Vec<OrderTag>, CommerceServiceError> {
+    // Operators paste lists as `a,b` or `a b`; split on the common separators
+    // before canonicalizing so the API accepts what the UI shows.
+    let flattened: Vec<String> = raw
+        .iter()
+        .flat_map(|value| value.split([',', '|']).map(str::to_owned).collect::<Vec<_>>())
+        .collect();
+    let set = OrderTagSet::parse_many(flattened, "tags", ORDER_TAG_MAX_COUNT)?;
+    Ok(set.as_slice().to_vec())
+}
+
+async fn add_order_tags(
+    State(state): State<BackendOrderAdminState>,
+    Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
+    headers: HeaderMap,
+    Path(order_id): Path<String>,
+    Json(body): Json<OrderClassificationBody>,
+) -> Response {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let _write_headers =
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("admin-order-tags-add-{order_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
+    let tags = match parse_classification_tags(&body.tags) {
+        Ok(tags) => tags,
+        Err(error) => return validation(ctx, error.message()),
+    };
+    let command = match AddOrderTagsCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &order_id,
+        tags,
+        body.remark.as_deref(),
+    ) {
+        Ok(command) => command,
+        Err(error) => return validation(ctx, error.message()),
+    };
+    match state.orders.add_order_tags(command).await {
+        Ok(view) => success_item(ctx, map_order_classification(view)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn replace_order_classification(
+    State(state): State<BackendOrderAdminState>,
+    Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
+    headers: HeaderMap,
+    Path(order_id): Path<String>,
+    Json(body): Json<OrderClassificationBody>,
+) -> Response {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
+    };
+    let _write_headers =
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("admin-order-classification-{order_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
+    let tags = match parse_classification_tags(&body.tags) {
+        Ok(tags) => tags,
+        Err(error) => return validation(ctx, error.message()),
+    };
+    let scene = match parse_optional_scene(body.scene.as_deref()) {
+        Ok(scene) => scene,
+        Err(error) => return validation(ctx, error.message()),
+    };
+    let command = match ReplaceOrderClassificationCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &order_id,
+        tags,
+        scene,
+        body.remark.as_deref(),
+    ) {
+        Ok(command) => command,
+        Err(error) => return validation(ctx, error.message()),
+    };
+    match state.orders.replace_order_classification(command).await {
+        Ok(view) => success_item(ctx, map_order_classification(view)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+fn map_order_classification(value: OrderClassificationView) -> OrderClassificationResponse {
+    OrderClassificationResponse {
+        order_id: value.order_id,
+        scene: value.scene.as_str().to_owned(),
+        tags: value.tags,
+        remark: value.remark,
+        updated_at: value.updated_at,
+    }
+}
+
+fn map_order_facets(value: OrderManagementFacetView) -> OrderFacetResponse {
+    OrderFacetResponse {
+        scenes: value
+            .scenes
+            .into_iter()
+            .map(|bucket| OrderSceneFacetResponse {
+                scene: bucket.scene.as_str().to_owned(),
+                count: bucket.count,
+            })
+            .collect(),
+        tags: value
+            .tags
+            .into_iter()
+            .map(|bucket| OrderTagFacetResponse {
+                tag: bucket.tag,
+                count: bucket.count,
+            })
+            .collect(),
+        total_orders: value.total_orders,
+    }
+}
+
 fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {
     OrderSummaryResponse {
         order_id: value.order_id,
@@ -681,6 +1039,9 @@ fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {
             .as_ref()
             .map(|partner| partner.level_no.clone()),
         partner_status: value.partner.as_ref().map(|partner| partner.status.clone()),
+        scene: value.scene.as_str().to_owned(),
+        tags: value.tags,
+        remark: value.remark,
     }
 }
 

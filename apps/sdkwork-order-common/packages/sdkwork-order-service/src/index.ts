@@ -1270,3 +1270,19 @@ export {
   createSdkworkIdempotencyParams,
   type SdkworkIdempotencyParams,
 } from "./idempotency.ts";
+
+export {
+  countSdkworkOrderActiveFacets,
+  isSdkworkOrderScene,
+  normalizeSdkworkOrderScene,
+  normalizeSdkworkOrderTag,
+  normalizeSdkworkOrderTags,
+  SDKWORK_ORDER_SCENES,
+  SDKWORK_ORDER_TAG_FILTER_MAX_COUNT,
+  SDKWORK_ORDER_TAG_MAX_COUNT,
+  SDKWORK_ORDER_TAG_MAX_LENGTH,
+  toSdkworkOrderFacetParams,
+  type SdkworkOrderListFacets,
+  type SdkworkOrderScene,
+  type SdkworkOrderTagMatchMode,
+} from "./order-facets.ts";

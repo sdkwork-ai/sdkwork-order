@@ -10,4 +10,6 @@ export interface CashierOrder {
   scene: string;
   allowedMethods: ('wechat_pay' | 'wechat_h5' | 'wechat_jsapi' | 'alipay' | 'alipay_wap')[];
   expireTime?: string | null;
+  /** Deadline after which this cashier session is no longer payable (earlier than expireTime when the order outlives the payment capability). */
+  capabilityExpiresAt: string;
 }

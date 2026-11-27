@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, OrdersDiscountCreateRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
+import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, OrdersDiscountCreateRequest, OrderSummary, PageInfo, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
 
 export interface OrderOrdersOrdersReceiptsCreateParams {
@@ -236,6 +236,9 @@ export class OrderOrdersOrdersDiscountApi {
 
 export interface OrderOrdersOrdersListParams {
   status?: string;
+  scene?: 'web' | 'h5' | 'app' | 'mini_program' | 'cashier' | 'membership' | 'recharge' | 'platform' | 'default';
+  tags?: string[];
+  tagMatch?: 'any' | 'all';
   page?: number;
   pageSize?: number;
 }
@@ -269,13 +272,16 @@ export class OrderOrdersOrdersApi {
 
 
 /** Orders list. */
-  async list(params?: OrderOrdersOrdersListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
+  async list(params?: OrderOrdersOrdersListParams, requestOptions?: ApiRequestOptions): Promise<{ items: OrderSummary[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
+      { name: 'scene', value: params?.scene, style: 'form', explode: true, allowReserved: false },
+      { name: 'tags', value: params?.tags, style: 'form', explode: true, allowReserved: false },
+      { name: 'tag_match', value: params?.tagMatch, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
+    return this.client.request<{ items: OrderSummary[]; pageInfo: PageInfo; }>(appendQueryString(appApiPath(`/orders`), query), { ...(requestOptions?.signal !== undefined ? { signal: requestOptions.signal } : {}), ...(requestOptions?.timeout !== undefined ? { timeout: requestOptions.timeout } : {}), method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Orders retrieve. */

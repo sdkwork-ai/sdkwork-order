@@ -1,5 +1,6 @@
 export * from "./components/OrderActionButtons";
 export * from "./components/OrderCard";
+export * from "./components/OrderFacetBar";
 export * from "./components/OrderInfoCards";
 export * from "./components/OrderItemsCard";
 export * from "./components/OrderShipmentCard";

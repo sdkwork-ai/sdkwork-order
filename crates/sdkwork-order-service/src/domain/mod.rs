@@ -4,6 +4,7 @@ mod cart;
 mod demand_claim;
 mod fulfillment;
 mod membership;
+mod order_classification;
 mod recharge;
 
 pub use cart::{
@@ -37,6 +38,11 @@ pub use demand_claim::{
 };
 pub use fulfillment::{FulfillPointsRechargeOrderOutcome, PointsRechargeFulfillmentContext};
 pub use membership::CreateMembershipOrderOutcome;
+pub use order_classification::{
+    normalize_order_remark, parse_optional_scene, OrderScene, OrderTag, OrderTagMatchMode,
+    OrderTagSet, ORDER_REMARK_MAX_LENGTH, ORDER_TAG_FILTER_MAX_COUNT, ORDER_TAG_MAX_COUNT,
+    ORDER_TAG_MAX_LENGTH,
+};
 pub use recharge::{
     CheckoutStatusSnapshot, CreatePointsRechargeOrderOutcome, RechargeGrantPreview,
     RechargePackageItem, RechargeSettingsSnapshot,

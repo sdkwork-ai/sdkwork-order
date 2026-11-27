@@ -54,12 +54,20 @@ import {
   getSdkworkOrderBackendSdkClient,
   type OrderDetail,
   type OrderEvent,
+  type OrderFacet,
   type OrderSummary,
   type ShipmentSummary,
 } from "@sdkwork/order-pc-admin-core";
 import { createOrderAdminService, type OrderAdminService } from "../order-admin-service";
 import { localizeSdkworkOrderSubject } from "@sdkwork/order-pc-core/subject";
 import { useOrderAdminLink } from "../navigation";
+import {
+  normalizeSdkworkOrderTags,
+  normalizeSdkworkOrderTag,
+  SDKWORK_ORDER_SCENES,
+  SDKWORK_ORDER_TAG_MAX_COUNT,
+  type SdkworkOrderScene,
+} from "@sdkwork/order-service";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -116,6 +124,23 @@ const STATUS_FILTER_OPTIONS = [
   { labelKey: "admin.orders.status.refunding", value: "refunding" },
   { labelKey: "admin.orders.status.refunded", value: "refunded" },
 ];
+
+/**
+ * Scene filter options, rendered in the order the shared vocabulary declares.
+ *
+ * `default` ("unspecified") is included on purpose: an order whose scene was
+ * never recorded is a real cohort operations needs to find.
+ */
+const SCENE_FILTER_OPTIONS = SDKWORK_ORDER_SCENES.map((scene) => ({
+  labelKey: `admin.orders.scene.${scene}`,
+  value: scene,
+}));
+
+/** Renders a scene value through the shared label table. */
+function resolveSceneLabel(scene: string | undefined, t: (key: string, fallback?: string) => string): string {
+  if (!scene) return "-";
+  return t(`admin.orders.scene.${scene}`, scene);
+}
 
 function formatAmount(value?: string, locale?: string, currencyCode?: string): string {
   if (!value) return "-";
@@ -232,6 +257,16 @@ function AdminOrdersPageInner({
   const [searchQuery, setSearchQuery] = useState("");
   const [createdFromFilter, setCreatedFromFilter] = useState("");
   const [createdToFilter, setCreatedToFilter] = useState("");
+  // Scene/tag facets. Draft values are what the filter bar edits; committed
+  // values are what the list query and the facet request use, so typing a tag
+  // never fires a request per keystroke.
+  const [draftScene, setDraftScene] = useState<SdkworkOrderScene | "">("");
+  const [draftTags, setDraftTags] = useState("");
+  const [draftTagMatch, setDraftTagMatch] = useState<"any" | "all">("any");
+  const [sceneFilter, setSceneFilter] = useState<SdkworkOrderScene | "">("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [tagMatchFilter, setTagMatchFilter] = useState<"any" | "all">("any");
+  const [facets, setFacets] = useState<OrderFacet | null>(null);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -262,6 +297,16 @@ function AdminOrdersPageInner({
   // submission so a double click can never create two refund requests.
   const [refundIdempotencyKey, setRefundIdempotencyKey] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  // Classification editor state for the open order: the drawer edits a local
+  // copy and only writes on save, so an operator can build a tag set without
+  // firing a command per keystroke.
+  const [classificationTags, setClassificationTags] = useState<string[]>([]);
+  const [classificationScene, setClassificationScene] = useState<SdkworkOrderScene>("default");
+  const [classificationRemark, setClassificationRemark] = useState("");
+  const [tagDraft, setTagDraft] = useState("");
+  const [classificationIdempotencyKey, setClassificationIdempotencyKey] = useState("");
+  const [classificationSaving, setClassificationSaving] = useState(false);
+  const [classificationError, setClassificationError] = useState<string | null>(null);
   const urlStatus = readOrdersUrlFilter("status");
   const urlQuery = readOrdersUrlFilter("q");
   useEffect(() => {
@@ -289,6 +334,9 @@ function AdminOrdersPageInner({
       q: searchQuery || undefined,
       createdFrom: createdFromFilter || undefined,
       createdTo: createdToFilter || undefined,
+      scene: sceneFilter || undefined,
+      tags: tagFilter,
+      tagMatch: tagMatchFilter,
     }).then((result) => {
       if (!active) return;
       setOrders(result.items);
@@ -303,7 +351,33 @@ function AdminOrdersPageInner({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [createdFromFilter, createdToFilter, page, pageSize, refreshKey, searchQuery, service, statusFilter, t]);
+  }, [createdFromFilter, createdToFilter, page, pageSize, refreshKey, sceneFilter, searchQuery, service, statusFilter, t, tagFilter, tagMatchFilter]);
+
+  // Facet buckets describe the current narrowing scope, so they are reloaded
+  // whenever the non-facet filters change (the facet predicates themselves are
+  // deliberately excluded: see the backend facet endpoint).
+  useEffect(() => {
+    let active = true;
+    // A host may inject an older partial service implementation; facets are a
+    // progressive enhancement, so their absence must not break the list.
+    if (typeof service.getOrderFacets !== "function") {
+      setFacets(null);
+      return () => { active = false; };
+    }
+    void service.getOrderFacets({
+      status: statusFilter || undefined,
+      q: searchQuery || undefined,
+      createdFrom: createdFromFilter || undefined,
+      createdTo: createdToFilter || undefined,
+    }).then((result) => {
+      if (active) setFacets(result);
+    }).catch(() => {
+      // A facet failure must never break the list; the filter bar simply falls
+      // back to free-text tag entry without suggestion counts.
+      if (active) setFacets(null);
+    });
+    return () => { active = false; };
+  }, [createdFromFilter, createdToFilter, refreshKey, searchQuery, service, statusFilter]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -325,6 +399,15 @@ function AdminOrdersPageInner({
       setDetail(value);
       setEvents(orderEvents);
       setShipments(orderShipments);
+      // Seed the editor from the freshly loaded order. A new idempotency key is
+      // minted per loaded order so retrying a save replays rather than
+      // re-applies, while a different order never shares a key.
+      setClassificationTags(Array.isArray(value.tags) ? [...value.tags] : []);
+      setClassificationScene((value.scene ?? "default") as SdkworkOrderScene);
+      setClassificationRemark(value.remark ?? "");
+      setTagDraft("");
+      setClassificationError(null);
+      setClassificationIdempotencyKey(uuid());
     }).catch(() => {
       if (!active) return;
       setDetail(null);
@@ -348,6 +431,11 @@ function AdminOrdersPageInner({
     // timestamps so the backend range comparison is inclusive.
     setCreatedFromFilter(draftCreatedFrom ? `${draftCreatedFrom}T00:00:00` : "");
     setCreatedToFilter(draftCreatedTo ? `${draftCreatedTo}T23:59:59` : "");
+    setSceneFilter(draftScene);
+    // Canonicalize with the same rule the server enforces, and drop tokens that
+    // normalize to nothing so a trailing comma never becomes an empty tag.
+    setTagFilter(normalizeSdkworkOrderTags(draftTags));
+    setTagMatchFilter(draftTagMatch);
     setRefreshKey((current) => current + 1);
   };
 
@@ -357,10 +445,40 @@ function AdminOrdersPageInner({
     setDraftQuery("");
     setDraftCreatedFrom("");
     setDraftCreatedTo("");
+    setDraftScene("");
+    setDraftTags("");
+    setDraftTagMatch("any");
     setStatusFilter("");
     setSearchQuery("");
     setCreatedFromFilter("");
     setCreatedToFilter("");
+    setSceneFilter("");
+    setTagFilter([]);
+    setTagMatchFilter("any");
+    setPage(1);
+    setRefreshKey((current) => current + 1);
+  };
+
+  /**
+   * Applies one tag facet value immediately.
+   *
+   * Clicking a suggestion chip is a complete filter action, so it commits
+   * without a separate "Query" click — that is what makes the facet buttons
+   * feel like the segmented controls operators expect.
+   */
+  const toggleTagFacet = (tag: string) => {
+    const next = tagFilter.includes(tag)
+      ? tagFilter.filter((value) => value !== tag)
+      : [...tagFilter, tag];
+    setTagFilter(next);
+    setDraftTags(next.join(","));
+    setPage(1);
+    setRefreshKey((current) => current + 1);
+  };
+
+  const selectSceneFacet = (scene: SdkworkOrderScene | "") => {
+    setSceneFilter(scene);
+    setDraftScene(scene);
     setPage(1);
     setRefreshKey((current) => current + 1);
   };
@@ -423,6 +541,8 @@ function AdminOrdersPageInner({
         t("admin.orders.column.order", "Order"),
         t("admin.orders.column.status", "Status"),
         t("admin.orders.column.amount", "Amount"),
+        t("admin.orders.column.scene", "Scene"),
+        t("admin.orders.column.tags", "Tags"),
         t("admin.orders.column.partner", "Partner"),
         t("admin.orders.column.createdAt", "Created at"),
       ],
@@ -430,6 +550,8 @@ function AdminOrdersPageInner({
         order.orderSn ?? order.orderId,
         resolveOrderStatusLabel(order.status, order.statusName, t),
         order.totalAmount,
+        resolveSceneLabel(order.scene, t),
+        (Array.isArray(order.tags) ? order.tags : []).join("|"),
         order.partnerName ?? order.partnerId ?? "",
         order.createdAt ?? "",
       ]),
@@ -437,6 +559,59 @@ function AdminOrdersPageInner({
   };
 
   useEffect(() => setPageInput(String(page)), [page]);
+
+  /** Adds the tag currently typed in the editor, if it is a legal tag. */
+  const commitTagDraft = () => {
+    const [next] = normalizeSdkworkOrderTags(tagDraft);
+    setTagDraft("");
+    if (!next) return;
+    setClassificationTags((current) => {
+      if (current.includes(next)) return current;
+      if (current.length >= SDKWORK_ORDER_TAG_MAX_COUNT) return current;
+      return [...current, next];
+    });
+  };
+
+  const removeClassificationTag = (tag: string) => {
+    setClassificationTags((current) => current.filter((value) => value !== tag));
+  };
+
+  /**
+   * Persists the classification through the idempotent replace endpoint.
+   *
+   * One PUT carries the whole desired state, so a save is naturally
+   * idempotent and the tag set can never drift from what the operator sees.
+   */
+  async function saveClassification() {
+    if (!detail) return;
+    setClassificationSaving(true);
+    setClassificationError(null);
+    try {
+      const updated = await service.replaceOrderClassification(
+        detail.orderId,
+        {
+          tags: classificationTags,
+          scene: classificationScene,
+          ...(classificationRemark.trim() ? { remark: classificationRemark } : {}),
+        },
+        classificationIdempotencyKey,
+      );
+      setDetail((current) => (current ? { ...current, ...updated } : current));
+      setClassificationTags([...updated.tags]);
+      setClassificationScene(updated.scene as SdkworkOrderScene);
+      setClassificationRemark(updated.remark ?? "");
+      setMessage(t("admin.orders.detail.classificationSaved", "Tags and scene for order {{label}} were updated.", {
+        label: detail.orderSn || detail.orderId,
+      }));
+      // A new key so the *next* edit is a new intent, not a replay.
+      setClassificationIdempotencyKey(uuid());
+      setRefreshKey((current) => current + 1);
+    } catch {
+      setClassificationError(t("admin.orders.detail.classificationFailed", "Saving tags and scene failed. Check the commerce.orders.manage permission."));
+    } finally {
+      setClassificationSaving(false);
+    }
+  }
 
   const copyValue = async (key: string, value: string) => {
     try {
@@ -589,6 +764,52 @@ function AdminOrdersPageInner({
         ),
     },
     {
+      id: "scene",
+      header: t("admin.orders.column.scene", "Scene"),
+      width: "14%",
+      cell: (order) => (
+        <span className="whitespace-nowrap text-sm text-[var(--sdk-color-text-secondary)]">
+          {resolveSceneLabel(order.scene, t)}
+        </span>
+      ),
+    },
+    {
+      id: "tags",
+      header: t("admin.orders.column.tags", "Tags"),
+      width: "20%",
+      cell: (order) => {
+        // Tolerate a row from an older gateway that predates the facet
+        // contract: an absent tag list is simply "untagged".
+        const tags = Array.isArray(order.tags) ? order.tags : [];
+        return (
+          <div className="flex flex-wrap items-center gap-1">
+            {tags.length === 0 ? (
+              <span className="text-sm text-[var(--sdk-color-text-muted)]">-</span>
+            ) : (
+              <>
+                {tags.slice(0, 3).map((tag) => (
+                  <span
+                    className="rounded-full border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-muted)] px-2 py-0.5 text-xs font-medium text-[var(--sdk-color-text-secondary)]"
+                    key={tag}
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {tags.length > 3 ? (
+                  <span
+                    className="text-xs tabular-nums text-[var(--sdk-color-text-muted)]"
+                    title={tags.join(", ")}
+                  >
+                    +{tags.length - 3}
+                  </span>
+                ) : null}
+              </>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       id: "createdAt",
       header: t("admin.orders.column.createdAt", "Created at"),
       width: "28%",
@@ -600,7 +821,7 @@ function AdminOrdersPageInner({
     },
   ], [locale, t]);
 
-  const activeFilterCount = Number(Boolean(statusFilter)) + Number(Boolean(searchQuery)) + Number(Boolean(createdFromFilter)) + Number(Boolean(createdToFilter));
+  const activeFilterCount = Number(Boolean(statusFilter)) + Number(Boolean(searchQuery)) + Number(Boolean(createdFromFilter)) + Number(Boolean(createdToFilter)) + Number(Boolean(sceneFilter)) + Number(tagFilter.length > 0);
 
   return (
     <div aria-label={t("admin.orders.title", "Order supervision")} className="flex min-h-0 flex-1 flex-col">
@@ -677,6 +898,84 @@ function AdminOrdersPageInner({
                 onChange={(event) => setDraftCreatedTo(event.target.value)}
               />
             </label>
+          </FilterBarSection>
+          {/* Scene / tag facets: the same two dimensions every order-centre
+              surface filters on (PC admin, PC buyer, H5, Flutter, mini
+              program), so operators and buyers share one vocabulary. */}
+          <FilterBarSection>
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.orders.filter.scene", "Scene")}</span>
+              <select
+                aria-label={t("admin.orders.filter.scene", "Scene")}
+                className="h-9 w-36 rounded-[var(--sdk-radius-field)] border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] px-2.5 text-sm text-[var(--sdk-color-text-primary)] outline-none transition-colors focus-visible:border-[var(--sdk-color-brand-primary)]"
+                value={draftScene}
+                onChange={(event) => setDraftScene(event.target.value as SdkworkOrderScene | "")}
+              >
+                <option value="">{t("admin.orders.filter.sceneAll", "All scenes")}</option>
+                {SCENE_FILTER_OPTIONS.map((option) => {
+                  // Bucket counts come from the facet endpoint; an absent bucket
+                  // means zero orders in that scene for the current scope.
+                  const bucket = facets?.scenes.find((item) => item.scene === option.value);
+                  return (
+                    <option key={option.value} value={option.value}>
+                      {t(option.labelKey, option.value)}
+                      {bucket ? ` (${bucket.count})` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.orders.filter.tags", "Tags")}</span>
+              <div className="w-56">
+                <Input
+                  aria-label={t("admin.orders.filter.tags", "Tags")}
+                  placeholder={t("admin.orders.filter.tagsPlaceholder", "Enter tags, comma separated")}
+                  value={draftTags}
+                  onChange={(event) => setDraftTags(event.target.value)}
+                />
+              </div>
+            </label>
+            <label className="flex shrink-0 items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+              <span className="whitespace-nowrap">{t("admin.orders.filter.tagMatch", "Tag match")}</span>
+              <select
+                aria-label={t("admin.orders.filter.tagMatch", "Tag match")}
+                className="h-9 w-28 rounded-[var(--sdk-radius-field)] border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] px-2.5 text-sm text-[var(--sdk-color-text-primary)] outline-none transition-colors focus-visible:border-[var(--sdk-color-brand-primary)]"
+                value={draftTagMatch}
+                onChange={(event) => setDraftTagMatch(event.target.value === "all" ? "all" : "any")}
+              >
+                <option value="any">{t("admin.orders.filter.tagMatchAny", "Any tag")}</option>
+                <option value="all">{t("admin.orders.filter.tagMatchAll", "All tags")}</option>
+              </select>
+            </label>
+            {facets && facets.tags.length > 0 ? (
+              <div
+                aria-label={t("admin.orders.filter.tagSuggestions", "Common tags")}
+                className="flex min-w-0 flex-wrap items-center gap-1.5"
+                role="group"
+              >
+                {facets.tags.slice(0, 8).map((bucket) => {
+                  const selected = tagFilter.includes(bucket.tag);
+                  return (
+                    <button
+                      aria-pressed={selected}
+                      className={
+                        selected
+                          ? "rounded-full border border-[var(--sdk-color-brand-primary)] bg-[var(--sdk-color-brand-primary-soft)] px-2.5 py-1 text-xs font-medium text-[var(--sdk-color-brand-primary)]"
+                          : "rounded-full border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] px-2.5 py-1 text-xs font-medium text-[var(--sdk-color-text-secondary)] transition-colors hover:border-[var(--sdk-color-border-focus)]"
+                      }
+                      key={bucket.tag}
+                      title={t("admin.orders.filter.tagSuggestionCount", "{{tag}} ({{count}})", { tag: bucket.tag, count: bucket.count })}
+                      type="button"
+                      onClick={() => toggleTagFacet(bucket.tag)}
+                    >
+                      {bucket.tag}
+                      <span className="ml-1 tabular-nums text-[var(--sdk-color-text-muted)]">{bucket.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </FilterBarSection>
           <FilterBarActions>
             <Button aria-label={t("admin.orders.export", "Export")} disabled={loading} size="icon" title={t("admin.orders.export", "Export")} type="button" variant="outline" onClick={handleExport}>
@@ -855,6 +1154,130 @@ function AdminOrdersPageInner({
                   {detail.expireTime ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.expireTime", "Expires at")}</dt><dd className="mt-1 text-sm text-[var(--sdk-color-text-primary)]">{formatTimestamp(detail.expireTime, locale)}</dd></div> : null}
                   {detail.partnerName ? <div><dt className="text-xs font-medium text-[var(--sdk-color-text-muted)]">{t("admin.orders.detail.partner", "Partner")}</dt><dd className="mt-1 text-sm text-[var(--sdk-color-text-primary)]">{detail.partnerName}</dd></div> : null}
                 </dl>
+
+                {capabilities.canManageOrders ? (
+                  <section>
+                    <h4 className="mb-1 text-sm font-semibold text-[var(--sdk-color-text-primary)]">
+                      {t("admin.orders.detail.classification", "Tags and scene")}
+                    </h4>
+                    <p className="mb-3 text-xs text-[var(--sdk-color-text-muted)]">
+                      {t("admin.orders.detail.classificationDescription", "Tags group orders for risk, operations, and campaigns. The scene records where the order originated and is used for search and reporting only.")}
+                    </p>
+                    {classificationError ? <StatusNotice tone="danger">{classificationError}</StatusNotice> : null}
+                    <div className="space-y-4 rounded-lg border border-[var(--sdk-color-border-default)] p-4">
+                      <label className="flex flex-wrap items-center gap-2 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+                        <span className="whitespace-nowrap">{t("admin.orders.detail.scene", "Order scene")}</span>
+                        <select
+                          aria-label={t("admin.orders.detail.scene", "Order scene")}
+                          className="h-9 w-52 rounded-[var(--sdk-radius-field)] border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] px-2.5 text-sm text-[var(--sdk-color-text-primary)] outline-none transition-colors focus-visible:border-[var(--sdk-color-brand-primary)]"
+                          disabled={classificationSaving}
+                          value={classificationScene}
+                          onChange={(event) => setClassificationScene(event.target.value as SdkworkOrderScene)}
+                        >
+                          {SCENE_FILTER_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{t(option.labelKey, option.value)}</option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+                            {t("admin.orders.detail.tags", "Order tags")}
+                          </span>
+                          <span className="text-xs tabular-nums text-[var(--sdk-color-text-muted)]">
+                            {classificationTags.length}/{SDKWORK_ORDER_TAG_MAX_COUNT}
+                          </span>
+                        </div>
+                        {classificationTags.length === 0 ? (
+                          <p className="mt-2 text-xs text-[var(--sdk-color-text-muted)]">
+                            {t("admin.orders.detail.tagsEmpty", "This order has no tags yet")}
+                          </p>
+                        ) : (
+                          <ul aria-label={t("admin.orders.detail.tags", "Order tags")} className="mt-2 flex flex-wrap gap-1.5">
+                            {classificationTags.map((tag) => (
+                              <li key={tag}>
+                                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-muted)] py-0.5 pl-2.5 pr-1 text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+                                  {tag}
+                                  <button
+                                    aria-label={t("admin.orders.detail.removeTag", "Remove tag {{tag}}", { tag })}
+                                    className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[var(--sdk-color-text-muted)] transition-colors hover:bg-[var(--sdk-color-surface-panel)] hover:text-[var(--sdk-color-state-danger)]"
+                                    disabled={classificationSaving}
+                                    title={t("admin.orders.detail.removeTag", "Remove tag {{tag}}", { tag })}
+                                    type="button"
+                                    onClick={() => removeClassificationTag(tag)}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        <div className="mt-2">
+                          <Input
+                            aria-label={t("admin.orders.detail.addTagPlaceholder", "Type a tag and press Enter")}
+                            disabled={classificationSaving || classificationTags.length >= SDKWORK_ORDER_TAG_MAX_COUNT}
+                            placeholder={t("admin.orders.detail.addTagPlaceholder", "Type a tag and press Enter")}
+                            value={tagDraft}
+                            onChange={(event) => setTagDraft(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === ",") {
+                                event.preventDefault();
+                                commitTagDraft();
+                              }
+                            }}
+                          />
+                        </div>
+                        {facets && facets.tags.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            {facets.tags
+                              .filter((bucket) => !classificationTags.includes(bucket.tag))
+                              .slice(0, 6)
+                              .map((bucket) => (
+                                <button
+                                  className="rounded-full border border-dashed border-[var(--sdk-color-border-default)] px-2.5 py-1 text-xs font-medium text-[var(--sdk-color-text-secondary)] transition-colors hover:border-[var(--sdk-color-border-focus)]"
+                                  disabled={classificationSaving}
+                                  key={bucket.tag}
+                                  title={t("admin.orders.filter.tagSuggestionCount", "{{tag}} ({{count}})", { tag: bucket.tag, count: bucket.count })}
+                                  type="button"
+                                  onClick={() => setClassificationTags((current) => (
+                                    current.includes(bucket.tag)
+                                      ? current
+                                      : [...current, bucket.tag].slice(0, SDKWORK_ORDER_TAG_MAX_COUNT)
+                                  ))}
+                                >
+                                  + {bucket.tag}
+                                </button>
+                              ))}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <label className="block text-xs font-medium text-[var(--sdk-color-text-secondary)]">
+                        <span>{t("admin.orders.detail.remark", "Operator note")}</span>
+                        <textarea
+                          className="mt-1.5 min-h-16 w-full rounded-[var(--sdk-radius-field)] border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] px-3 py-2 text-sm text-[var(--sdk-color-text-primary)] outline-none transition-colors focus-visible:border-[var(--sdk-color-brand-primary)]"
+                          disabled={classificationSaving}
+                          maxLength={500}
+                          placeholder={t("admin.orders.detail.remarkPlaceholder", "Why this classification was applied (optional)")}
+                          value={classificationRemark}
+                          onChange={(event) => setClassificationRemark(event.target.value)}
+                        />
+                      </label>
+
+                      <div className="flex justify-end">
+                        <Button
+                          disabled={classificationSaving || !detail}
+                          type="button"
+                          onClick={() => void saveClassification()}
+                        >
+                          {t("admin.orders.detail.saveClassification", "Save tags and scene")}
+                        </Button>
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
 
                 {detail.items.length > 0 ? (
                   <section>

@@ -9,6 +9,7 @@ export 'src/logic/money.dart';
 export 'src/logic/payment_launch.dart';
 export 'src/models/account_value_models.dart';
 export 'src/models/fulfillment_models.dart';
+export 'src/models/order_facets.dart';
 export 'src/models/order_models.dart';
 export 'src/models/recharge_models.dart';
 export 'src/services/order_service.dart';
