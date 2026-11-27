@@ -134,7 +134,16 @@ impl HttpAccountPointsCreditAdapter {
             "requestNo": request.request_no,
             "idempotencyKey": request.idempotency_key,
         });
-        let url = format!("{}/backend/v3/api/wallet/adjustments/points", self.origin);
+        let url = format!(
+            "{}/backend/v3/api/wallet/adjustments/points",
+            // APP_SDK_INTEGRATION_SPEC.md §5.2.2: the account backend is another
+            // SDKWork surface, so it resolves through the shared registry
+            // component with the configured origin as the degradation tier.
+            sdkwork_utils_rust::service_base_url::registry_base_url_or(
+                "sdkwork-account",
+                &self.origin,
+            )
+        );
 
         if self.auth_token.is_none()
             && std::env::var("SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE").as_deref() != Ok("1")
@@ -208,7 +217,15 @@ impl HttpAccountPointsCreditAdapter {
             "requestNo": command.request_no,
             "idempotencyKey": command.idempotency_key,
         });
-        let url = format!("{}{}", self.origin, path);
+        let url = format!(
+            "{}{}",
+            // §5.2.2: another SDKWork surface -> registry-first resolution.
+            sdkwork_utils_rust::service_base_url::registry_base_url_or(
+                "sdkwork-account",
+                &self.origin,
+            ),
+            path
+        );
 
         if self.auth_token.is_none()
             && std::env::var("SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE").as_deref() != Ok("1")
@@ -324,7 +341,15 @@ impl HttpAccountPointsCreditAdapter {
         path: String,
         body: serde_json::Value,
     ) -> Result<AccountValueLedgerOutcome, CommerceServiceError> {
-        let url = format!("{}{}", self.origin, path);
+        let url = format!(
+            "{}{}",
+            // §5.2.2: another SDKWork surface -> registry-first resolution.
+            sdkwork_utils_rust::service_base_url::registry_base_url_or(
+                "sdkwork-account",
+                &self.origin,
+            ),
+            path
+        );
         if self.auth_token.is_none()
             && std::env::var("SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE").as_deref() != Ok("1")
         {
